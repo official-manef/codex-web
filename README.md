@@ -21,8 +21,10 @@ They share a design language and a workspace model, and nothing else. Do not exp
 repository to run a local agent: it is the console, and the bridge pattern in
 [docs/terminal.md](docs/terminal.md) is how execution reaches your own machine.
 
+Live: **https://ai.manef.dev**
+
 [Laya parity and provenance](docs/laya-parity.md) · [Rebuild plan](docs/REBUILD-PLAN-laya-parity.md)
-· [Contract](CONTRACT.md) · [UI/UX](UIUX.md) · [Changelog](CHANGELOG.md)
+· [Contract](CONTRACT.md) · [UI/UX](UIUX.md) · [Changelog](CHANGELOG.md) · [Progress](docs/progress.md)
 
 ## What this is
 
@@ -257,7 +259,7 @@ but are unused by the MVP shell.
 
 ```text
 ├── slices/                      # workspace-shell (vendored) + workspace-surface
-├── src/routes/                  # thin adapters for /workspace, /capabilities, /settings
+├── src/routes/                  # thin adapters: page, auth, API, crawler documents
 ├── src/lib/components/          # shadcn/ui + app-ui primitives
 ├── src/lib/config/              # public identity, locale, metadata
 ├── src/convex/                  # backend (wired, unused by the MVP shell)

@@ -7,6 +7,7 @@ bun.lockb
 
 # Local agent state and evidence
 .agent/
+.vps-agent/
 
 # Miscellaneous
 /static/
