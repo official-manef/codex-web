@@ -43,14 +43,65 @@ cannot be redirected. Custom endpoints require HTTPS. Contract, limits and the d
 
 Svelte 5 Runes · SvelteKit 2.70 · Bun 1.4.2 · Tailwind 4 + shadcn-svelte · TypeScript 6
 
+Exact versions and the reason each dependency is pinned: [TECHSTACK.md](TECHSTACK.md).
+
 ```bash
 bun install --frozen-lockfile
 bun run dev
 bun run verify           # check + lint + unit + build
-bunx playwright test     # 390 / 768 / 1440
 bun run test:dev         # dev hydration smoke
 DEPLOY_TARGET=node node scripts/smoke-node.mjs
 ```
+
+`bunx playwright test` currently runs only `tests/dev-smoke.e2e.ts`. The AC01–AC18
+acceptance suites named in the PRD do not exist in this tree; see
+[progress](docs/progress.md#correction--the-ac-test-suites-do-not-exist).
+
+## How it works
+
+One SvelteKit page, one shell. `src/routes/+page.svelte` mounts a composition root and
+nothing else — the shell owns navigation, tabs and overlays as state, so a feature is a
+`src/lib/registry.ts` entry with a lazy `loadScreen`, not its own route.
+
+```text
+/                                → workspace shell: rail, sidebar, chat, tabbed output
+src/lib/http.ts                  → re-exports src/lib/http.local.ts  ← the one swap point
+src/lib/registry.ts              → feature catalogue: id, label, icon, group, loadScreen
+slices/workspace-shell/**        → navigation, region layout, tabs, overlays (vendored)
+slices/workspace-surface/**      → composition root, runtime, persistence
+src/lib/views/**                 → screens, lazily imported
+```
+
+Data flows through `src/lib/http.ts`. In this template it re-exports an in-browser store
+(`http.local.ts`), which is why a clean clone runs with no credentials and no network. A
+product replaces that one re-export with a real client; no view changes.
+
+Server-side capability routes are separate opt-ins, each off by default and each guarded
+by session or operator token plus an origin check:
+
+| Route             | Purpose                                     | Flag                 |
+| ----------------- | ------------------------------------------- | -------------------- |
+| `/api/ai/*`       | streamed BYOK chat, provider config         | `AI_ENABLED`         |
+| `/api/mcp/tools`  | outbound MCP client, allowlisted tools only | `MCP_CLIENT_ENABLED` |
+| `/api/mcp/server` | inbound read-only MCP endpoint              | `MCP_SERVER_ENABLED` |
+| `/api/manef/*`    | loopback MANEF hub bridge, three paths only | `MANEF_HUB_URL`      |
+| `/auth/*`         | Google OIDC login, callback, logout, token  | `AUTH_ENABLED`       |
+
+Nothing above is reachable until its flag is set, and setting a flag still requires the
+matching credential per request. Boundaries and limits: [architecture](docs/architecture.md),
+[AI/MCP](docs/ai-mcp.md), [auth](docs/auth.md).
+
+### Default model
+
+`nine-router` is the built-in self-hosted gateway. Its default catalog entry is
+`ctx/conextlab/ollama/deepseek-v4.1-flash:cloud` on priority 0, so that is the model a new
+session picks. Chat, shell execution and MCP all work through it.
+
+It cannot do sub-agents: the gateway flattens a non-OpenAI upstream's `collaboration`
+namespace into one opaque function before the model sees it, so `spawn_agent` never
+arrives. `cx/gpt-6.1-sol` is the one upstream where sub-agents pass — switch to it when you
+need them, at the cost of a larger per-turn token count. Evidence and the failure
+signature: [progress](docs/progress.md), [AI/MCP](docs/ai-mcp.md).
 
 ## MANEF AI console
 

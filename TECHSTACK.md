@@ -17,6 +17,43 @@ for version numbers rather than maintaining another version list here.
 | Optional auth / AI  | Google OIDC (`openid-client`, `jose`), Vercel AI SDK provider clients and official MCP SDK |
 | Optional transports | DOKU Checkout and Resend using server-side fetch and Node crypto where needed              |
 
+## Three engines, one shell
+
+The workspace can execute a turn three ways. All three render the same shell, so switching
+one does not change any layout code.
+
+| Engine   | Executes where                           | Needs an account | Needs a provider key | Implemented in                   |
+| -------- | ---------------------------------------- | ---------------- | -------------------- | -------------------------------- |
+| `local`  | the browser only, no network             | no               | no                   | `src/lib/http.local.ts`          |
+| `device` | a paired runtime you own (NPU box, host) | yes, to pair     | no                   | `src/lib/device_tools.svelte.ts` |
+| `cloud`  | a Convex action using **your** key       | yes              | yes                  | `src/convex/`, `slices/cloud/`   |
+
+`local` is not a stripped-down fallback. With `PUBLIC_CONVEX_URL` unset the sign-in routes
+404, `cloud` reports `unsupported`, and the app is exactly the local template. Nothing
+degrades silently: the unsupported engine is reported as unsupported.
+
+The surface (`local` or `cloud`) selects which tools start enabled, not what is permitted.
+It is presentation state derived from the page origin unless `PUBLIC_SURFACE` pins it; no
+server handler reads it. Authority is enforced separately, per request, on the server.
+
+## Two backend paths, deliberately duplicated
+
+Provider definitions exist twice:
+
+| Path            | File                          | Reaches              |
+| --------------- | ----------------------------- | -------------------- |
+| `cloud` engine  | `src/convex/providers.ts`     | Convex actions       |
+| SvelteKit route | `src/lib/server/ai/config.ts` | `/api/ai/*` handlers |
+
+`src/convex/` cannot import from `src/lib/`: the Convex runtime bundles its own module
+graph. A shared constant would need a build step that the template does not justify.
+Both files pin the same host, so a divergence would show up as a key posted to the wrong
+origin. Change one, change the other, then run `vitest run src/convex src/lib/server/ai`.
+
+The `nine-router` slug is the clearest case: a self-hosted OpenAI-compatible gateway at
+`https://router.antinrml.com/v1`. It is a built-in provider on both paths, which means its
+key is host-pinned exactly like OpenAI's and cannot be redirected.
+
 ## Compatibility and updates
 
 Core framework dependencies remain pinned. Review official compatibility before a

@@ -72,6 +72,51 @@ Routes stay thin: `src/routes/+page.svelte` mounts the composition root and noth
 The shell owns navigation, so a feature does **not** get its own SvelteKit route; it gets a
 registry entry and a hash destination. See [docs/laya-parity.md](laya-parity.md).
 
+## How a request reaches a provider
+
+Three paths, one contract. The browser never learns a provider host.
+
+```text
+browser
+  └─ src/lib/http.ts ──────────────► re-export of http.local.ts (in-browser store, no network)
+        │
+        ├─ POST /api/ai/config ────► aiSettings(env): which providers/models are approved
+        │
+        └─ POST /api/ai/chat ──────► chatResponse(): AI SDK stream to the pinned host
+                                       │
+                                       ├─ provider id → host from config.ts / providers.ts
+                                       ├─ key from the request body, held in memory only
+                                       └─ SSE back to the browser: text | error | done
+```
+
+Order of checks on `/api/ai/chat`, all server-side, in this order:
+
+1. `requireCapabilityAccess(event)` — Google session or `CAPABILITY_ACCESS_TOKEN`.
+2. `parseChat(env, body)` — zod: provider in the enum, model in the approved list for that
+   provider, 1–16 messages, ≤32,000 total characters, final message from the user.
+3. `chatResponse` — resolves the pinned base URL for that provider id, streams with a
+   60-second deadline, one attempt, no retries.
+
+A key is never persisted on this path: it arrives in the request, lives in the handler, and
+is redacted out of any error text that echoes upstream. The one exception is per-user MCP in
+`src/convex/mcp.ts`, where a stored connection must survive between discoveries and is
+therefore encrypted with AES-256-GCM under `MODELS_ENC_KEY`.
+
+Optional local activity logging sits beside this and records metadata only — see
+[environment](environment.md#local-activity-log).
+
+## Why the provider list exists twice
+
+| Path             | File                          | Used by        |
+| ---------------- | ----------------------------- | -------------- |
+| `cloud` engine   | `src/convex/providers.ts`     | Convex actions |
+| SvelteKit routes | `src/lib/server/ai/config.ts` | `/api/ai/*`    |
+
+`src/convex/` cannot import from `src/lib/`: the Convex runtime bundles its own module
+graph, so a shared constant would require a build step the template does not justify. Both
+pin the same host per provider, so a divergence is visible as a key sent to the wrong
+origin. Change one, change the other, then run `vitest run src/convex src/lib/server/ai`.
+
 ## Convex and authorization
 
 `convex.json` selects `src/convex/`; the root layout sets up the client only when

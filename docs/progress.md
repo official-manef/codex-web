@@ -5,6 +5,30 @@ commit named at the top. If a line here disagrees with the code, the code wins �
 
 Baseline: `d839f75`, `main`, 2026-10-31.
 
+## Default model: `ctx/conextlab/ollama/deepseek-v4.1-flash:cloud`
+
+The `nine-router` catalog shipped in the companion Codex setup now puts
+`ctx/conextlab/ollama/deepseek-v4.1-flash:cloud` on priority 0, so it is what a new session
+picks. Measured 2026-11-01 against `https://router.antinrml.com/v1`:
+
+| probe                    | result                                         |
+| ------------------------ | ---------------------------------------------- |
+| chat                     | pass, reply exact                              |
+| shell execution          | pass                                           |
+| `apply_patch`            | pass, verified on disk                         |
+| MCP tool call            | pass                                           |
+| token cost, trivial exec | 15,558                                         |
+| **sub-agents**           | **fail** — the upstream has no `collaboration` |
+
+Sub-agents are the one capability this model cannot carry. The gateway's Responses→Chat
+translator flattens a non-OpenAI upstream's `collaboration` namespace into a single opaque
+function, so `spawn_agent`, `wait_agent` and the other five members never reach the model;
+it calls `collaboration` and the router answers `unsupported call: collaboration`.
+`cx/gpt-6.1-sol` is OpenAI-native, survives the translation intact, and is the only
+catalog entry where sub-agents pass. Switch priority 0 back to it when sub-agents matter
+more than the cheaper default. Setting `DEFAULT_MODEL` when regenerating the catalog pins
+whichever slug you choose.
+
 ## Where we are
 
 | Area                       | State                       | Evidence                                                       |
@@ -41,10 +65,11 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 ## Gates, measured on this commit
 
 ```
-vitest run          27 files / 138 tests passed
+vitest run          28 files / 143 tests passed
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
+tsc -p src/convex   clean
 ```
 
 Playwright is **not** green and cannot be claimed: see the correction below.
