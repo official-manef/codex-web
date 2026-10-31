@@ -152,9 +152,11 @@ through state, not routes. There is deliberately no `/workspace`, `/capabilities
 | `bun run assets:generate`         | Generate placeholders/manifest, keep custom art      |
 | `bun run assets:check`            | Validate asset outputs                               |
 
-`bunx playwright test` runs `tests/workspace.e2e.ts` (AC01, AC02, AC04, AC07, AC08, AC10,
-AC16) and `tests/acceptance.e2e.ts` (AC03, AC05, AC06, AC09, AC11–AC15, AC17, AC18);
-`bun run test:dev` runs `tests/dev-smoke.e2e.ts`.
+`bun run test:dev` runs `tests/dev-smoke.e2e.ts` — hydration, a local send, the settings
+window, and rail navigation over three viewports. That is the only browser suite in the
+tree. The AC01–AC18 suites the PRD names were removed by `6ed1f3e` and never replaced; see
+[progress](docs/progress.md#correction--the-ac-test-suites-do-not-exist) before claiming
+any acceptance coverage.
 
 Optional Convex commands (`bun run convex:dev`, `bun run convex:codegen`) stay available
 but are unused by the MVP shell.
