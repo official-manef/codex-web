@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AiProvider, ChatMessage } from './contracts';
+import { textOf } from './contracts';
 import type { IntegrationEnv } from '../integrations/config';
 
 const modelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/);
@@ -18,23 +19,79 @@ const keySchema = z
 	.min(8)
 	.max(4096)
 	.regex(/^[!-~]+$/);
+
+const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function decodedBase64Size(data: string): number {
+	const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+	return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
+}
+
+const textPartSchema = z
+	.object({
+		type: z.literal('text'),
+		text: z.string().max(8000)
+	})
+	.strict();
+
+const imagePartSchema = z
+	.object({
+		type: z.literal('image'),
+		mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp']),
+		data: z
+			.string()
+			.regex(base64Regex)
+			.refine((data) => decodedBase64Size(data) <= 4 * 1024 * 1024, {
+				message: 'Image decoded size exceeds 4 MB'
+			})
+	})
+	.strict();
+
+const partSchema = z.discriminatedUnion('type', [textPartSchema, imagePartSchema]);
+
+const userContentSchema = z.union([z.string().min(1).max(8000), z.array(partSchema).min(1).max(4)]);
+
+const assistantContentSchema = z.union([
+	z.string().min(1).max(32000),
+	z.array(partSchema).min(1).max(4)
+]);
+
 const chatSchema = z
 	.object({
 		provider: z.enum(['openai', 'anthropic', 'google', 'nine-router']),
 		model: modelName,
 		apiKey: keySchema,
 		memory: z.string().max(2000).optional(),
+		toolUse: z.boolean().default(false),
 		messages: z
 			.array(
 				z.discriminatedUnion('role', [
-					z.object({ role: z.literal('user'), content: z.string().min(1).max(8000) }).strict(),
-					z.object({ role: z.literal('assistant'), content: z.string().min(1).max(32000) }).strict()
+					z.object({ role: z.literal('user'), content: userContentSchema }).strict(),
+					z.object({ role: z.literal('assistant'), content: assistantContentSchema }).strict()
 				])
 			)
 			.min(1)
 			.max(16)
 	})
-	.strict();
+	.strict()
+	.superRefine((data, ctx) => {
+		let imageCount = 0;
+		for (const msg of data.messages) {
+			if (Array.isArray(msg.content)) {
+				for (const part of msg.content) {
+					if (part.type === 'image') {
+						imageCount++;
+					}
+				}
+			}
+		}
+		if (imageCount > 2) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: 'At most 2 image parts per request'
+			});
+		}
+	});
 
 export function flag(value: string | undefined, name: string) {
 	if (!value || value === 'false') return false;
@@ -69,6 +126,7 @@ export function parseChat(
 	apiKey: string;
 	messages: ChatMessage[];
 	memory?: string;
+	toolUse: boolean;
 } {
 	const settings = aiSettings(env);
 	if (!settings.enabled) throw new Error('AI is disabled');
@@ -81,7 +139,7 @@ export function parseChat(
 		throw new Error('Model is not approved');
 	if (
 		input.messages.at(-1)?.role !== 'user' ||
-		input.messages.reduce((size, message) => size + message.content.length, 0) > 32000
+		input.messages.reduce((size, message) => size + textOf(message.content).length, 0) > 32000
 	)
 		throw new Error('Conversation exceeds the limit or has no final user message');
 	return input;

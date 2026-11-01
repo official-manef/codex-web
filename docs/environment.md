@@ -63,6 +63,9 @@ The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 | `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                        |
 | `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                            |
 | `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                    |
+| `GIT_POLICY_JSON`         | Empty   | Per-verb decision for `git_diff`/`git_stage`/`git_commit`/`git_worktree`. Empty or malformed denies every write.               |
+| `AI_TOOLS_ENABLED`        | `false` | Lets a BYOK turn use the tool loop at all. The request must also ask, and the policy must allow the verb.                      |
+| `AI_POLICY_JSON`          | Empty   | Per-verb decision for `read_file`/`write_file`/`apply_patch`/`exec`/`mcp_app`. Empty or malformed denies every verb.           |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.
