@@ -315,12 +315,17 @@ status stay open because they cannot write. Push and PR review remain absent: no
 credential is in reach, so claiming them would repeat the AC mistake this document exists to
 correct. Full phase-by-phase status: `docs/parity-checklist-2026-11-02.md` §6 and §7.
 
-Two validation findings worth keeping: `chat.ts` used to index the policy by tool name rather
-than policy verb, and three auth assertions had no `expect` at all — they only ever passed while
-the Convex deployment was empty. `bin/gate` now carries the probed deployment URL into vitest so
-the script and the spec cannot disagree about which backend they mean; before that, the gate
-reported UNPROVEN against another project's backend on 3210 while this checkout's own deployment
-answered correctly on 3214.
+Two validation findings worth keeping, both from the second batch:
+
+- `chat.ts` indexed the policy by tool name rather than policy verb. `read_file` and `exec` share
+  a name so it looked correct; `apply_patch` would have read `undefined` and denied for the wrong
+  reason. Fixed through `TOOL_MAP`.
+- Three auth assertions had no `expect` of their own, so with `requireAssertions` they failed the
+  moment a real deployment answered — they could only ever pass while the backend was empty. The
+  skip branch is what hid it. Resolved upstream in `30c6096`, which asserts
+  `classifyAuthFailure(...)` explicitly and also removes the hardcoded `3210` default in favour of
+  `scripts/convex-local.mjs`; the reader-injection variant this batch wrote was dropped in the
+  rebase because that version covers the same ground without a per-caller parameter.
 
 Out of scope unless a product decision changes it: parallel chat orchestration, Computer
 Use, mobile remote relay, MCP 2.0 events.

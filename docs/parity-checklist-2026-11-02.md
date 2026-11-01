@@ -338,9 +338,12 @@ Two bugs the batches themselves could not see, found while validating:
    fallen to deny for the wrong reason. Fixed through `TOOL_MAP`.
 2. **Three auth tests had no `expect` at all.** `requireAssertions: true` made them fail the moment
    a real Convex deployment answered — they could only ever pass while the backend was empty, and
-   the skip branch hid that. `assertRefused` now returns its verdict so the spec asserts on it.
+   the skip branch hid that.
 
 The second one is the more interesting failure: the gate was green _because_ it was not testing
-anything. It was found by pointing the probe at this checkout's own deployment (port 3214) instead
-of the machine default (3210, owned by another project), and then by making `bin/gate` carry the
-probed URL into vitest so the script and the spec cannot disagree about which backend they mean.
+anything. It surfaced only once the probe pointed at this checkout's own backend instead of the
+machine default on 3210, which belongs to another project on this machine. Upstream fixed the same
+class of problem in `30c6096` — `classifyAuthFailure(...)` is now asserted explicitly, and the
+hardcoded `3210` default is gone in favour of `scripts/convex-local.mjs`. That version was kept
+over this batch's reader-injection variant during the rebase: one resolution point at
+`vite.config.ts` is less machinery than a parameter threaded through every caller.
