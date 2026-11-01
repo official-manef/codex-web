@@ -34,6 +34,7 @@
   import { Pencil, Trash2 } from "@lucide/svelte";
   import SpeechControls from "#lib/SpeechControls.svelte";
   import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
+  import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -1222,9 +1223,9 @@
     const providerEntry = serverAiConfig?.providers?.[0];
     const provider: AiProvider = (providerEntry?.id as AiProvider) ?? "openai";
     const chosenModel = providerEntry?.models?.[0] ?? modelId;
-    const apiKey =
-      readDraft<string>("byok-key", "") ||
-      (typeof localStorage !== "undefined" ? localStorage.getItem("byok-key") ?? "" : "");
+    // Tab-scoped only. The old `localStorage` fallback meant any key this origin had ever
+    // persisted was picked up and sent on the user's behalf.
+    const apiKey = readProviderKey();
 
     activeAbortController = new AbortController();
     const startMs = Date.now();

@@ -90,20 +90,24 @@ never on the app server. One file, no build step, no native dependency.
 BRIDGE_TOKEN=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=') node bridge/terminal-bridge.mjs
 ```
 
-| Setting                  | Default     | Meaning                                                                                                   |
-| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
-| `BRIDGE_TOKEN`           | none        | Required, ≥16 chars, `A-Z a-z 0-9 . _ ~ -` only. Compared in constant time, never logged.                 |
-| `BRIDGE_PORT`            | `8649`      | Listening port.                                                                                           |
-| `BRIDGE_HOST`            | `127.0.0.1` | Loopback by default. Expose it with `tailscale serve`, not by binding `0.0.0.0`.                          |
-| `BRIDGE_ALLOW_ORIGIN`    | empty       | Comma-separated exact origins allowed to open a socket. Empty means same-host only, which suits a tunnel. |
-| `BRIDGE_SHELL`           | `bash`      | `powershell.exe` on Windows.                                                                              |
-| `BRIDGE_CWD`             | `$HOME`     | Starting directory of the shell.                                                                          |
-| `BRIDGE_MAX_CONNECTIONS` | `8`         | Concurrent sockets. Over the limit the handshake gets `503`.                                              |
+| Setting                  | Default     | Meaning                                                                                                                                                                     |
+| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BRIDGE_TOKEN`           | none        | Required, ≥16 chars, `A-Z a-z 0-9 . _ ~ -` only. Compared in constant time, never logged, and removed from the shell's environment.                                         |
+| `BRIDGE_PORT`            | `8649`      | Listening port.                                                                                                                                                             |
+| `BRIDGE_HOST`            | `127.0.0.1` | Loopback by default. Expose it with `tailscale serve`, not by binding `0.0.0.0`.                                                                                            |
+| `BRIDGE_ALLOW_ORIGIN`    | empty       | Comma-separated exact origins allowed to open a socket. Empty means this bridge's own loopback origins only — a proxy sends the browser's real origin, so it needs listing. |
+| `BRIDGE_SHELL`           | `bash`      | `powershell.exe` on Windows.                                                                                                                                                |
+| `BRIDGE_CWD`             | `$HOME`     | Starting directory of the shell.                                                                                                                                            |
+| `BRIDGE_MAX_CONNECTIONS` | `8`         | Concurrent sockets. Over the limit the handshake gets `503`. Must be a positive whole number or the bridge refuses to start.                                                |
 
 Behaviour worth knowing:
 
 - A foreign `Origin` gets `403` during the upgrade, so another site cannot open a socket with
-  a token the user pasted into this page.
+  a token the user pasted into this page. With no `BRIDGE_ALLOW_ORIGIN` the allowed set comes
+  from `BRIDGE_HOST`/`BRIDGE_PORT`, never from the request's `Host` header — a client sets both
+  headers, so agreeing with itself proves nothing.
+- The shell does not inherit `BRIDGE_TOKEN`: `BRIDGE_*` variables are stripped from the child
+  environment, so a transcript or an `env` cannot reveal the credential that opened the socket.
 - Binary frames close the socket with `1003`, because the client refuses them anyway.
 - `{"type":"resize","cols":N,"rows":N}` is accepted and clamped to 500×300. Without `node-pty`
   there is no real terminal sizing — the bridge signals the child instead — so a program that
@@ -113,7 +117,9 @@ Behaviour worth knowing:
 
 `src/lib/runtime/terminal-bridge.spec.ts` starts this bridge on a random port and speaks the
 protocol at it: health with a good and a bad token, a shell that keeps state between frames,
-a handshake with no subprotocol, a foreign origin, and a binary frame. Six tests, no mocks.
+a handshake with no subprotocol, a foreign origin, a binary frame, the token's absence from the
+shell environment, a forged `Host` against the same-host rule, and a non-numeric connection cap.
+No mocks.
 
 ## What the bridge still does not do
 

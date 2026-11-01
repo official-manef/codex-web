@@ -33,6 +33,12 @@ test('endpoint must be a public HTTPS URL with no embedded credential', () => {
 		'https://localhost/mcp',
 		'https://box.local/mcp',
 		'https://box.localhost/mcp',
+		// A trailing dot is the same name to the resolver. Without stripping it, `localhost.`
+		// and `127.0.0.1.` slipped past the denylist as "public" hosts.
+		'https://localhost./mcp',
+		'https://box.local./mcp',
+		'https://box.localhost./mcp',
+		'https://127.0.0.1./mcp',
 		'',
 		undefined
 	])

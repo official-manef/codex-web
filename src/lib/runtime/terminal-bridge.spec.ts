@@ -142,4 +142,97 @@ describe('terminal socket', () => {
 		});
 		expect(code).toBe(1003);
 	});
+
+	test('the shell it hands out does not carry the token that opened it', async () => {
+		// BRIDGE_TOKEN is the credential for this shell. Inheriting `process.env` put it in
+		// every transcript and every `env` a command printed.
+		const line = await new Promise<string>((resolve, reject) => {
+			const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/terminal`, [`bearer.${TOKEN}`], {
+				headers: { origin: 'https://app.example' }
+			});
+			let out = '';
+			ws.on('open', () => ws.send('printf "tok=[%s]\\n" "$BRIDGE_TOKEN"\n'));
+			ws.on('message', (data) => {
+				out += data.toString();
+				const match = /tok=\[([^\]]*)\]/.exec(out);
+				if (match) {
+					ws.close();
+					resolve(match[1]);
+				}
+			});
+			ws.on('error', reject);
+			setTimeout(() => reject(new Error(`timeout: ${JSON.stringify(out)}`)), 10_000);
+		});
+		expect(line).not.toContain(TOKEN);
+	});
+});
+
+/**
+ * Same-host mode, with no `BRIDGE_ALLOW_ORIGIN`, is the documented default for a tunnel.
+ * It used to compare `Origin` against the request's own `Host`, which the client controls:
+ * set both to the same attacker host and the check passes. This instance proves the fix.
+ */
+describe('same-host origin check', () => {
+	let own: ChildProcess;
+	let ownPort: number;
+
+	beforeAll(async () => {
+		ownPort = await freePort();
+		own = spawn(process.execPath, [SCRIPT], {
+			env: {
+				...process.env,
+				BRIDGE_TOKEN: TOKEN,
+				BRIDGE_PORT: String(ownPort),
+				BRIDGE_HOST: '127.0.0.1',
+				BRIDGE_ALLOW_ORIGIN: ''
+			},
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+		await waitForLine(own.stdout!, 'terminal bridge on');
+	}, 20_000);
+
+	afterAll(() => own?.kill());
+
+	function handshake(headers: Record<string, string>) {
+		return new Promise<number>((resolve) => {
+			const ws = new WebSocket(`ws://127.0.0.1:${ownPort}/v1/terminal`, [`bearer.${TOKEN}`], {
+				headers
+			});
+			ws.on('open', () => {
+				ws.close();
+				resolve(101);
+			});
+			ws.on('unexpected-response', (_request, response) => resolve(response.statusCode ?? -1));
+			ws.on('error', () => resolve(-1));
+		});
+	}
+
+	test('accepts the bridge origin itself', async () => {
+		expect(await handshake({ origin: `http://127.0.0.1:${ownPort}` })).toBe(101);
+	});
+
+	test('refuses an origin that merely agrees with a forged Host header', async () => {
+		const forged = `http://evil.example:${ownPort}`;
+		expect(await handshake({ origin: forged, host: `evil.example:${ownPort}` })).toBe(403);
+	});
+});
+
+test('a non-numeric connection cap refuses to start instead of removing the limit', async () => {
+	const port = await freePort();
+	const child = spawn(process.execPath, [SCRIPT], {
+		env: {
+			...process.env,
+			BRIDGE_TOKEN: TOKEN,
+			BRIDGE_PORT: String(port),
+			BRIDGE_MAX_CONNECTIONS: 'not-a-number'
+		},
+		stdio: ['ignore', 'pipe', 'pipe']
+	});
+	const [code, stderr] = await new Promise<[number | null, string]>((resolve) => {
+		let err = '';
+		child.stderr!.on('data', (chunk: Buffer) => (err += chunk.toString()));
+		child.on('exit', (exit) => resolve([exit, err]));
+	});
+	expect(code).toBe(1);
+	expect(stderr).toContain('BRIDGE_MAX_CONNECTIONS');
 });

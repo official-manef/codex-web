@@ -46,7 +46,9 @@ export function validPublicMcpUrl(input: unknown): string | null {
 	if (url.protocol !== 'https:') return null;
 	if (url.username || url.password) return null;
 	if (url.hash) return null;
-	const host = url.hostname;
+	// A trailing dot is the same DNS name: `localhost.` resolves to loopback exactly like
+	// `localhost`. Strip it before the denylist runs, or the check is decorative.
+	const host = url.hostname.replace(/\.$/, '');
 	if (!host) return null;
 	if (host.startsWith('[') || IP_LITERAL.test(host)) return null;
 	if (LOCAL_HOST.test(host)) return null;
