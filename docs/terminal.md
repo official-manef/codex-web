@@ -1,8 +1,8 @@
 # Terminal panel
 
-The right-hand canvas can open a real shell on a machine the user paired. The panel is only
-the **client half**; the bridge on that machine is the user's own service and is not part of
-this template.
+The right-hand canvas can open a real shell on a machine the user paired. The panel is the
+**client half**. The half that runs on the paired machine is the user's own service — see
+"The bridge that ships here" below for the reference implementation this repo includes.
 
 ## What the panel does
 

@@ -138,23 +138,17 @@ runs on their own machine, never a route in this app. No `ssh -L`, `tailscale se
 
 ## 7. Verification
 
-| Check        | Command                      | Result                                       |
-| ------------ | ---------------------------- | -------------------------------------------- |
-| Convex types | `tsc --noEmit -p src/convex` | clean                                        |
-| App types    | `bun run check`              | 0 errors, 0 warnings                         |
-| Unit         | `bun run test:unit`          | 138 passed (27 files)                        |
-| Build        | `bun run build`              | ok                                           |
-| Browser      | `bunx playwright test`       | **not run** — see [progress.md](progress.md) |
+This section once held a fourth copy of the gate table. Gate results live in **one** place:
+[progress.md](progress.md) §"Gates, measured on this commit". That table went `95` → `138`
+→ `194` → `197` passed while three documents kept asserting different numbers; restating it
+here is how that happened.
 
-> The unit count above was 95 when this table was written and the browser row claimed 12
-> passed. Both went stale: `6ed1f3e` deleted the acceptance suites with the route family
-> they targeted, so there is no browser proof of AC01–AC18 today. Numbers here are measured
-> on `d839f75`; `docs/progress.md` is the authoritative gate list.
-
-Not verified: a live Convex deployment, a real provider call, a real NPU device, a real
-bridge, and every `ssh -L` / `tailscale serve` / `tailscale funnel` command shown in the
-Devices screen. Those need credentials and hardware the template deliberately does not
-contain.
+What this document does claim, and what is unverified about it: the browser never holds a
+provider key (§1), the `cloud` engine is the only path that touches a key, and every provider
+slug is host-pinned. **Not verified here:** a live Convex deployment, a real provider call, a
+real NPU device, a real bridge, and every `ssh -L` / `tailscale serve` / `tailscale funnel`
+command shown in the Devices screen. Those need credentials and hardware the template
+deliberately does not contain.
 
 **Generated types.** `src/convex/_generated/api.d.ts` lists the modules by hand because
 `convex codegen` needs a deployment. `api.js` uses `anyApi`, so runtime is unaffected. Run
