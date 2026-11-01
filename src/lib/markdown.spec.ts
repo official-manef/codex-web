@@ -26,14 +26,15 @@ test('safeLink allows only http(s) and mailto, and never a script or data URL', 
 		expect(safeLink(value), value).toBeNull();
 });
 
-test('safeLink keeps userinfo, and the host is still what the browser will contact', () => {
-	// A `user:pass@host` link is left intact: the parser only decides "may this href exist".
-	// It is worth knowing that the credentials are visible in the anchor, not that the parser
-	// rewrites them — the renderer prints `href` verbatim.
-	expect(safeLink('http://user:pass@example.com')).toBe('http://user:pass@example.com');
-	// The host is authoritative: everything before `@` is userinfo, so this points at evil.
-	expect(safeLink('https://example.com@evil.example/x')).toBe('https://example.com@evil.example/x');
-	expect(new URL(safeLink('https://example.com@evil.example/x')!).hostname).toBe('evil.example');
+test('safeLink refuses a userinfo prefix, because the visible text and the destination differ', () => {
+	// `https://example.com@evil.example/x` reads as example.com and the browser contacts
+	// evil.example. Model-written markdown is untrusted input, so an href whose host is not
+	// what a reader sees is refused rather than rendered. `mailto:` still carries its user.
+	expect(safeLink('http://user:pass@example.com')).toBeNull();
+	expect(safeLink('https://example.com@evil.example/x')).toBeNull();
+	expect(safeLink('https://a@b@evil.example/')).toBeNull();
+	expect(safeLink('mailto:user@example.com')).toBe('mailto:user@example.com');
+	expect(new URL('https://example.com@evil.example/x').hostname).toBe('evil.example');
 });
 
 test('safeLink returns the original string, not a normalised URL', () => {

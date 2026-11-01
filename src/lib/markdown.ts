@@ -21,6 +21,10 @@ export function safeLink(value: string): string | null {
   try {
     const url = new URL(value);
     if (url.protocol === "mailto:") return url.pathname ? value : null;
+    // `https://example.com@evil.example/x` reads as example.com and connects to evil.example:
+    // everything before `@` is userinfo, not the host. Refuse it rather than render a link
+    // whose visible text and destination disagree.
+    if (url.username || url.password) return null;
     return url.hostname ? value : null;
   } catch {
     return null;
