@@ -548,9 +548,9 @@ function stubResponse(path: string): Record<string, unknown> {
 		case '/api/workflows/runs':
 			return { workflows: [], runs: [], catalogue: [], stub: true, reason };
 
-		// Snake/Performance read `data.benchmarks`.
+		// SnakeHistory reads `data.runs`; the stub ships no recordings.
 		case '/api/benchmarks':
-			return { benchmarks: [], stub: true, reason };
+			return { runs: [], stub: true, reason };
 
 		case '/api/mcp/status':
 			return { connections: [], stub: true, reason };

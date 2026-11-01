@@ -94,12 +94,17 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 ## Gates, measured on this commit
 
 ```
-vitest run          29 files / 149 tests passed
+vitest run          36 files / 194 passed / 3 skipped
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
 tsc -p src/convex   clean
 ```
+
+The 3 skips are `src/convex/deployment.spec.ts`, and they are now explained in the output
+rather than silently counted: this machine's local deployment is reachable but has **zero
+functions pushed**, so the anonymous-refusal assertions cannot run. See "The auth boundary is
+unproven" below.
 
 Playwright is **not** green and cannot be claimed: see the correction below.
 
@@ -122,6 +127,50 @@ primitives only — an object or array is dropped rather than serialized — `re
 `sk-`, `Bearer ` and `x-api-key` shapes plus URL query strings, records are capped at 4 KiB,
 and a write failure is swallowed. It is a developer aid, not an audit trail or a second
 source of truth: nothing in the app reads the file.
+
+## The auth boundary is unproven, not proven
+
+`docs/auth.md` used to say the anonymous-refusal assertions were covered. On this machine they
+are not, and the difference matters because the failure and the proof look alike.
+
+The deployment on `127.0.0.1:3210` answers, so it is not absent — but it has no functions:
+
+```
+$ curl -s http://127.0.0.1:3210/version
+unknown
+
+$ curl -s -X POST http://127.0.0.1:3210/api/query -H 'Content-Type: application/json' \
+    -d '{"path":"devices:list","args":{},"format":"json"}'
+{"status":"error","errorMessage":"[Request ID: ...] Server Error
+Could not find public function for 'devices:list'."}
+```
+
+`Server Error` is not a refusal. Pointing `CONVEX_URL` at 3210 therefore produced two failures
+(`queries refuse an anonymous caller`, `mutations refuse an anonymous caller`) whose assertion
+expected `/[Ss]ign in|not_authenticated|Unauthorized|Not authenticated/`. The cause was a
+missing backend, not a broken auth boundary — and a gate that reads only "failed" cannot tell
+those apart either.
+
+What changed, all of it in `src/convex/deployment_probe.ts` + `deployment.spec.ts`:
+
+- The probe classifies the deployment as `absent`, `empty` or `ready`. A skip is only allowed
+  for the first two, and the skip reason names the state, the URL and the missing thing.
+- `assertRefused` throws on `Could not find public function` and on any unrecognised
+  rejection. A plain `Server Error` can no longer pass as "the boundary held".
+- `src/convex/deployment_probe.spec.ts` pins all three states against fake responses, so the
+  guard runs in CI with no backend. It also fails if the spec regains a dead port or an
+  unconditional skip.
+
+**Current verdict for the auth boundary: unproven.** Run `npx convex dev` to push schema and
+functions; the same `npx vitest run` then reports 0 skips in that file and the three auth assertions
+run for real.
+
+A sibling gate (`bin/codex-clone-quicktest` in the other repo) pinned
+`CONVEX_URL="${CONVEX_URL:-http://127.0.0.1:9999}"`. Port 9999 is dead, so that gate forced the
+skip forever while the live deployment on 3210 was ignored — a green run that had silently
+dropped four tests. `bin/` in this worktree holds only `codex-cli.mjs`, so there is nothing to
+fix here; if that gate is ever used against this repo it must probe 3210 and report
+`skipped: functions not pushed`.
 
 ## Correction — the AC test suites do not exist
 
@@ -184,6 +233,14 @@ They target the pre-`6ed1f3e` route family (`/workspace`, `/capabilities`, `/set
 they will not run as-is: the shell now owns navigation and `/` mounts the workspace. Treat
 them as the scenario list, not as runnable tests, and re-point each at the current
 selectors before claiming the AC. Do not restore the files and call the gate green.
+
+> **Done 2026-11-02.** `tests/acceptance.e2e.ts` is back with 14 criteria driving the current
+> shell (composer, hash navigation, settings window, output tabs, timeline). AC05, AC09,
+> AC13 and AC16 are recorded as **no longer applicable** instead of tested: the deleted route
+> family owned the `offline` retry path, the dirty-tab contract, the capability catalog and
+> the composer's authorization input. AC03, AC06 and AC12 assert only the part of their
+> scenario this build performs. Details, selectors and the cost of a full pass:
+> [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
 
 ## How to update this file
 

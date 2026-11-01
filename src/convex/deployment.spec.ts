@@ -7,61 +7,81 @@
  *      issue — the boundary the whole schema relies on.
  *
  * This talks to the deployment named by CONVEX_URL (the local one) rather than convex-test, so
- * it also proves the schema pushed and the functions deployed. Skipped when no deployment is
- * reachable, because a template clone without a backend should still pass `vitest run`.
+ * it also proves the schema pushed and the functions deployed.
+ *
+ * Three deployment states exist and each is reported as itself (`deployment_probe.ts`):
+ *
+ *   absent  nothing answers            -> the three auth assertions skip, reason says a deployment is missing
+ *   empty   answers, no functions      -> the three auth assertions skip, reason says "functions NOT pushed"
+ *   ready   answers, functions pushed  -> the three auth assertions RUN and must pass
+ *
+ * Only the first two may skip, and neither may skip silently: the state test below always
+ * executes and prints what it measured. `deployment_probe.spec.ts` pins that a reachable
+ * deployment with functions can never take a skip branch.
  */
 import { ConvexHttpClient } from 'convex/browser';
 import { describe, expect, test } from 'vitest';
 import { api } from './_generated/api';
+import {
+	assertRefused,
+	attempt,
+	classifyAuthFailure,
+	probeDeployment,
+	skipReason,
+	type DeploymentProbe
+} from './deployment_probe';
 
-const RAW_URL = process.env.CONVEX_URL ?? process.env.PUBLIC_CONVEX_URL ?? 'http://127.0.0.1:3210';
+const probe: DeploymentProbe = await probeDeployment();
+const reason = skipReason(probe);
+const ready = probe.state === 'ready';
 
-async function reachable(url: string): Promise<boolean> {
-	try {
-		const response = await fetch(`${url.replace(/\/$/, '')}/version`, {
-			signal: AbortSignal.timeout(3000)
-		});
-		return response.ok;
-	} catch {
-		return false;
-	}
-}
-
-const live = await reachable(RAW_URL);
-const REFUSED = /[Ss]ign in|not_authenticated|Unauthorized|Not authenticated/;
-
-describe.skipIf(!live)('convex deployment: auth boundary', () => {
-	const client = new ConvexHttpClient(RAW_URL);
-
-	test('the deployment answers', async () => {
-		const response = await fetch(`${RAW_URL.replace(/\/$/, '')}/version`);
-		expect(response.status).toBe(200);
-		// A local anonymous deployment answers the literal text `unknown` here rather than a
-		// JSON body; either shape proves the backend is up and serving.
-		const body = await response.text();
-		expect(body.length).toBeGreaterThan(0);
+describe('convex deployment: auth boundary', () => {
+	// Never skipped. This is the line that makes the skip count explainable instead of
+	// mysterious: it is the one test that always runs and states what the probe measured.
+	test('the deployment state is classified, not assumed', () => {
+		expect(['absent', 'empty', 'ready']).toContain(probe.state);
+		expect(probe.detail.length).toBeGreaterThan(0);
+		expect(probe.url.startsWith('http')).toBe(true);
+		if (ready) {
+			expect(reason).toBeNull();
+		} else {
+			// An absent or empty deployment must say which of the two it is.
+			expect(reason).toMatch(probe.state === 'absent' ? /no Convex deployment/ : /NOT proven/);
+			console.warn(`[convex] ${reason}`);
+		}
 	});
 
-	test('queries refuse an anonymous caller', async () => {
-		await expect(client.query(api.devices.list, {})).rejects.toThrow(REFUSED);
+	const client = new ConvexHttpClient(probe.url);
+
+	test('queries refuse an anonymous caller', async (ctx) => {
+		if (!ready) ctx.skip(reason ?? 'deployment not ready');
+		const rejection = await attempt(() => client.query(api.devices.list, {}));
+		assertRefused(rejection, 'query', probe.url);
 	});
 
-	test('mutations refuse an anonymous caller', async () => {
-		await expect(
+	test('mutations refuse an anonymous caller', async (ctx) => {
+		if (!ready) ctx.skip(reason ?? 'deployment not ready');
+		const rejection = await attempt(() =>
 			client.mutation(api.devices.register, {
 				name: 'probe',
 				kind: 'terminal',
 				tokenHash: 'a'.repeat(64),
 				endpoint: 'http://127.0.0.1:8649'
 			})
-		).rejects.toThrow(REFUSED);
+		);
+		assertRefused(rejection, 'mutation', probe.url);
 	});
 
-	test('a caller cannot forge an identity through the client', async () => {
+	test('a caller cannot forge an identity through the client', async (ctx) => {
+		if (!ready) ctx.skip(reason ?? 'deployment not ready');
 		// The identity is server-assigned; a token the deployment's auth provider did not issue
 		// must not authenticate anything.
-		const forged = new ConvexHttpClient(RAW_URL);
+		const forged = new ConvexHttpClient(probe.url);
 		forged.setAuth('not-a-real-jwt');
-		await expect(forged.query(api.devices.list, {})).rejects.toThrow();
+		const rejection = await attempt(() => forged.query(api.devices.list, {}));
+
+		// A missing function answers nothing about the token, so it is not evidence either way.
+		expect(classifyAuthFailure(rejection)).not.toBe('missing-functions');
+		expect(rejection, 'a forged token authenticated a protected query').not.toBeNull();
 	});
 });

@@ -9,14 +9,36 @@ roles, account linking, invitations or an account-deletion workflow.
 
 Two specs answer that, and both are part of `vitest run`:
 
-| Spec                            | Runs against                          | Proves                                                                                                           |
-| ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `src/convex/store.spec.ts`      | in-memory deployment                  | a signed-in owner writes and reads their own row; a second owner sees nothing; a malformed token hash is refused |
-| `src/convex/deployment.spec.ts` | the deployment in `PUBLIC_CONVEX_URL` | anonymous queries and mutations are refused; a forged token authenticates nothing                                |
+| Spec                            | Runs against                   | Proves                                                                                                           |
+| ------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `src/convex/store.spec.ts`      | in-memory deployment           | a signed-in owner writes and reads their own row; a second owner sees nothing; a malformed token hash is refused |
+| `src/convex/deployment.spec.ts` | the deployment in `CONVEX_URL` | anonymous queries and mutations are refused; a forged token authenticates nothing                                |
 
-The second one skips itself when no deployment answers, so a clone without a backend still
-passes. It is worth keeping: three of the four assertions are security boundaries, and a
-type-level check cannot catch one of them coming loose.
+The second one reports which of three states the deployment is in, from `deployment_probe.ts`:
+`absent` (nothing answers), `empty` (answers, functions not pushed) or `ready` (functions
+pushed). Only `absent` and `empty` skip, and both say which they are, naming the URL and what
+is missing. `ready` never skips.
+
+Why that distinction is not pedantry: with an empty deployment, `devices:list` is answered with
+`Server Error\nCould not find public function for 'devices:list'.` — which looks like a refusal
+but proves nothing about auth. `assertRefused` therefore fails loudly on that answer instead of
+counting it as a passed security test. `src/convex/deployment_probe.spec.ts` pins all of this
+with fake responses, so the guard runs in CI without a backend.
+
+**Measured state on 2026-11-02:** the local deployment on `127.0.0.1:3210` is `empty`. Evidence:
+
+```
+$ curl -s http://127.0.0.1:3210/version
+unknown
+$ curl -s -X POST http://127.0.0.1:3210/api/query -H 'Content-Type: application/json' \
+    -d '{"path":"devices:list","args":{},"format":"json"}'
+{"status":"error","errorMessage":"[Request ID: ...] Server Error
+Could not find public function for 'devices:list'."}
+```
+
+So the anonymous-refusal claim is **unproven, not proven**. Run `npx convex dev` to push the
+schema and functions, then `npx vitest run` should report 0 skips in this file. An older gate
+pinned `CONVEX_URL=http://127.0.0.1:9999`, a dead port, which is what made the skip permanent.
 
 Convex needs **Node 22 or 24**, not 26 — it refuses to deploy `'use node'` actions otherwise,
 with `DeploymentNotConfiguredForNodeActions`. If `node -v` is 26, point the CLI at the version

@@ -119,8 +119,9 @@
       <div>
         <dt>Benchmark measurements</dt>
         <dd>
-          This template ships no saved measurements. Run local benchmarks on your machine to
-          measure actual device latency. <a class="text-link" href="#performance">See benchmarks</a>.
+          This template ships no saved measurements and has no benchmark screen. Compare engines on
+          your own machine in <a class="text-link" href="#playground">Decision simulation</a>; each
+          run reports the device it used and the time it took.
         </dd>
       </div>
     </dl>

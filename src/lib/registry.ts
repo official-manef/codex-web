@@ -112,14 +112,6 @@ export const SECTIONS = [
 		loadScreen: () => import('#lib/views/Embeddings.svelte')
 	},
 	{
-		id: 'performance',
-		label: 'Benchmarks',
-		icon: 'gauge',
-		group: 'Explore',
-		navigationRole: 'explore',
-		loadScreen: () => import('#lib/views/Performance.svelte')
-	},
-	{
 		id: 'setup',
 		label: 'Setup check',
 		icon: 'check',
@@ -150,14 +142,6 @@ export const SECTIONS = [
 		group: 'Settings & help',
 		navigationRole: 'settings',
 		loadScreen: () => import('#lib/views/Pricing.svelte')
-	},
-	{
-		id: 'parameters',
-		label: 'Model parameters',
-		icon: 'sliders',
-		group: 'Settings & help',
-		navigationRole: 'settings',
-		loadScreen: () => import('#lib/views/Parameters.svelte')
 	},
 	{
 		id: 'keys',

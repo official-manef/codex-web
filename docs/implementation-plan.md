@@ -195,6 +195,13 @@ passes 4.5:1.
 > (`git show ad4a909:tests/acceptance.e2e.ts`) and re-point it at current selectors before
 > claiming the AC; see [progress.md](progress.md).
 
+> **Recovery (2026-11-02).** That re-pointing is done for 14 of the 18 criteria in
+> `tests/acceptance.e2e.ts`. AC05, AC09, AC13 and AC16 are marked **no longer applicable**:
+> the deleted route family took the `offline` retry path, the dirty-tab contract, the
+> capability catalog and the composer's authorization input with it. Read
+> [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md) before treating §5 as a green bar —
+> AC03, AC06 and AC12 are also narrower than their text.
+
 Playwright selects by role/name. No snapshot-only assertions. Add one test per AC that is
 not already covered by unit tests.
 

@@ -162,6 +162,14 @@ Collection counts are data (24 recent items, 16/6/5 settings categories), not co
 > scenario text above is still the acceptance bar; see [progress.md](progress.md) for what
 > closing it costs.
 
+> **Recovery (2026-11-02).** `tests/acceptance.e2e.ts` is back, re-pointed at the current
+> single-route shell: 14 of the 18 criteria now drive the shipped UI. AC05, AC09, AC13 and
+> AC16 are recorded as **no longer applicable** rather than tested, because the surface each
+> one names was deleted with the route family (`offline` retry, dirty output tabs, the
+> capability catalog, an authorization input in the composer). AC03, AC06 and AC12 assert
+> only the part of their scenario this build performs. Per-criterion reasoning, selectors
+> and what a full pass would cost: [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
+
 ## 8. Release evidence
 
 ```bash

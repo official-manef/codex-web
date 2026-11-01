@@ -58,7 +58,6 @@ src/lib/laya_workspace_layout.ts
 src/lib/laya_workspace_persistence.ts
 src/lib/laya_workspace_routes.ts
 src/lib/markdown.ts
-src/lib/measured.ts
 src/lib/recording.ts
 src/lib/recovery.ts
 src/lib/reference_workspace.ts
