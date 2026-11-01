@@ -13,7 +13,7 @@ in-browser store. Enabled capabilities: none.
 /                     → app-shell chrome + Chat (primary) + tabbed output region (secondary)
 
 hash routes           → #apps #transcribe #files #browser #terminal #chat … (rail/launcher destinations)
-                        → #models #setup #backends #providers #pricing #parameters #faq
+                        → #models #setup #backends #providers #pricing #faq
                           (navigationRole: settings → SettingsWindow, not the primary region)
 
 src/lib/http.ts       → re-exports src/lib/http.local.ts (in-browser store)

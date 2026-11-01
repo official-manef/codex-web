@@ -157,7 +157,6 @@ export default defineConfig(
 			'src/lib/file_canvas_tabs.ts',
 			'src/lib/laya_*.ts',
 			'src/lib/markdown.ts',
-			'src/lib/measured.ts',
 			'src/lib/recording.ts',
 			'src/lib/recovery.ts',
 			'src/lib/reference_workspace.ts',
