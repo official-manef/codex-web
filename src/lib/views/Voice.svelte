@@ -105,9 +105,9 @@
 </script>
 
 <View
-  title="Voice"
+  title="Voice to action"
   icon="mic"
-  subtitle="Any audio file in, one decision out. Whisper transcribes, Laya decides, a Python rule table picks the action. Nothing leaves the machine."
+  subtitle="A recording in, a decision out: speech to text, then a classification, then a rule that picks the next step. This browser build has neither model, so the panels report that instead of pretending."
 >
   {#snippet actions()}
     <select
@@ -120,13 +120,13 @@
         <option value={t.id}>{t.label}</option>
       {/each}
     </select>
-    <span class="chip mono">{device}</span>
+    <span class="chip mono">{device || "no device"}</span>
   {/snippet}
   <div class="mb-3">
     <SpeechControls bind:device bind:language status={meta?.asr} disabled={busy} />
     <p class="mb-3 text-[12px] text-ink-2">
-      Speech language can vary; Laya's decision checkpoint expects English text. Review a
-      non-English transcript before using its decision.
+      The speech language can differ from the decision language. The decision checkpoint expects
+      English, so read a non-English transcript before trusting the decision that follows it.
     </p>
     <Recorder
       {active}
@@ -152,11 +152,11 @@
     </div>{/if}
 
   <div class="mb-3 flex shrink-0 flex-wrap items-center gap-1.5">
-    {#each ["whisper", "laya", "policy"] as stage, i}
+    {#each ["transcribe", "decide", "policy"] as stage, i}
       <span class="chip mono">{i + 1}. {stage}</span>
-      {#if i < 2}<span class="text-[10px] text-ink-3">→</span>{/if}
+      {#if i < 2}<span class="text-[10px] text-ink-3">then</span>{/if}
     {/each}
-    <span class="chip ml-auto">all local</span>
+    <span class="chip ml-auto">local in the desktop app</span>
   </div>
 
   <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
@@ -230,8 +230,8 @@
         <Icon name="mic" size={24} />
         <p class="mt-3 text-[13px]">Drop a voice note</p>
         <p class="mt-1 text-[11.5px] text-ink-3">
-          {meta?.asr?.formats?.join(", ") ?? "Loading formats…"}. Up to {meta?.asr?.max_mb ?? "…"} MB
-          and {meta?.asr?.max_seconds ?? "…"} seconds.
+          {meta?.asr?.formats?.join(", ") ?? "Waiting for the supported formats"}. Up to
+          {meta?.asr?.max_mb ?? "…"} MB and {meta?.asr?.max_seconds ?? "…"} seconds.
         </p>
         <button
           class="btn btn-solid mt-4"
@@ -239,7 +239,7 @@
           onclick={() => fileInput?.click()}>Choose file</button
         >
         {#if meta?.asr?.present === false}<p class="mt-2 text-[12px]">
-            Install the speech model from Transcribe first.
+            No speech model is loaded in this build. The desktop app reads one from Transcribe.
           </p>{/if}
       {/if}
     </div>

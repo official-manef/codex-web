@@ -8,19 +8,19 @@ export function recoveryFor(message: string): {
 } {
   if (/recording limit.*reach/i.test(message))
     return {
-      hint: "Choose an old run in Saved recordings and use Delete recording. Confirm only after reviewing it, then start a new run.",
+      hint: "Pick an old run in Saved recordings and press Delete recording after you have read it, then start a new run.",
       links: [],
       reload: false,
     };
   if (/captcha|automated.traffic|consent prompt|google.*blocked/i.test(message))
     return {
-      hint: "The external site blocked this browser run. Review the recording, try again later, or choose Windows RPA for the installed Solitaire app.",
+      hint: "The external site blocked this browser run. Read the recording, try again later, or use Windows RPA for the installed Solitaire app in the desktop app.",
       links: [],
       reload: false,
     };
   if (/native|Solitaire|local OCR|Windows.*app|observed Hint|accessibility tree/i.test(message))
     return {
-      hint: "Open the Windows game, dismiss any prompt yourself, and keep its window visible. Review the captured frame before starting a new attempt. Uncertain observations stop without a click.",
+      hint: "Open the Windows game, dismiss any prompt yourself, and keep its window visible. Read the captured frame before starting another attempt. An uncertain observation stops without a click.",
       links: [{ label: "Windows RPA", href: "#apps" }],
       reload: false,
     };
@@ -32,8 +32,8 @@ export function recoveryFor(message: string): {
     )
   )
     return {
-      hint: "Check the server connection. If this is an old test tab, open the installed app.",
-      links: [{ label: "Open installed app", href: "http://127.0.0.1:8649/" }],
+      hint: "Reload the page. If that does not clear it, this build has no runtime to reconnect to; the desktop app is the build that has one.",
+      links: [{ label: "Paired devices", href: "#devices" }],
       reload: true,
     };
   if (
@@ -42,7 +42,7 @@ export function recoveryFor(message: string): {
     )
   )
     return {
-      hint: "Check the selected model and device. A different device is used only when you choose it.",
+      hint: "Read the selected model and device. The app only switches device when you choose one.",
       links: [
         { label: "Compute & devices", href: "#backends" },
         { label: "Setup check", href: "#setup" },
@@ -53,10 +53,10 @@ export function recoveryFor(message: string): {
     /not installed|missing|pip install|openvino|numpy|tokenizer|not set|no .*model/i.test(message)
   )
     return {
-      hint: "Open Setup to install missing packages and check model files, then restart Laya.",
+      hint: "Setup check names which piece is missing. Installing it is the desktop app's job: this build has no package manager and no model directory.",
       links: [
-        { label: "Fix setup", href: "#setup" },
-        { label: "Decision models", href: "#models" },
+        { label: "Setup check", href: "#setup" },
+        { label: "Models & downloads", href: "#models" },
       ],
       reload: false,
     };
@@ -80,7 +80,7 @@ export function recoveryFor(message: string): {
     };
   if (/context|token.*limit|too many messages|conversation.*full/i.test(message))
     return {
-      hint: "Shorten the message or start a new chat. Your saved conversation is preserved.",
+      hint: "Shorten the message or start a new chat. The saved chat keeps every turn you already sent.",
       links: [{ label: "Open Chat", href: "#chat" }],
       reload: false,
     };

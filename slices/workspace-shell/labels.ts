@@ -140,7 +140,7 @@ export const defaultWorkspaceLabels: Readonly<WorkspaceLabels> = {
   visibleWorkspaceRegion: "Visible workspace region",
   output: "Output",
   reconnect: "Reconnect",
-  outputWorkspace: "Output workspace",
+  outputWorkspace: "Output panel",
   openOutputTabs: "Open output tabs",
   keptTab: "Kept tab",
   workingTabDescription: "Working tab: menu selections reuse this tab",

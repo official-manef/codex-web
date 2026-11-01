@@ -31,7 +31,7 @@
       byokKey = "";
       onPick("byok");
       endpointMessage =
-        "Connected for decisions and workflows. Workflows ask before sending data. The server forgets this key when restarted.";
+        "Endpoint accepted for this run. Workflows ask before sending data to it.";
     } catch (e: any) {
       endpointMessage = e.message ?? "Enter a valid endpoint URL.";
     } finally {
@@ -46,10 +46,9 @@
       if (result.error) throw new Error(result.error);
       configureEndpoint("", "", "");
       byokKey = "";
-      endpointMessage =
-        "Connection removed from memory. Any server environment configuration is now used.";
+      endpointMessage = "Endpoint cleared. No credential is kept.";
     } catch (e: any) {
-      endpointMessage = e.message ?? "Could not remove the connection. Try again.";
+      endpointMessage = e.message ?? "Could not remove the endpoint. Try again.";
     } finally {
       endpointBusy = false;
     }
@@ -63,7 +62,7 @@
       .catch(
         () =>
           (drv = {
-            error: "Cannot read driver status. Reconnect the local server and reload this page.",
+            error: "Driver status did not load. Reload the page to try again.",
           }),
       );
   });
@@ -109,10 +108,17 @@
 </script>
 
 <View
-  title="Compute"
+  title="Compute & devices"
   icon="cpu"
-  subtitle="The same decision head, four ways to run it. Pick where the forward pass happens: on this machine's NPU, GPU or CPU, or on an endpoint you already pay for."
+  subtitle="Where the forward pass would run: this machine's NPU, GPU or CPU, or an endpoint you supply. This browser build reports no local device and no driver; the desktop app is the build that has them."
 >
+
+  {#if !local.length}
+    <p class="mb-3 text-[12.5px] leading-relaxed text-ink-2" role="status">
+      No local device is detected. <a class="text-link" href="#setup">Setup check</a> names what is
+      missing: the runtime, the decision model or the NPU driver.
+    </p>
+  {/if}
   <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
     {#each local as b}
       <button
@@ -135,6 +141,8 @@
           </span>
           {#if backend === b.id}
             <span class="chip mono">selected</span>
+          {:else if (b as any).stub}
+            <span class="chip">stub · not configured</span>
           {:else if !b.present}
             <span class="chip">absent</span>
           {/if}
@@ -155,7 +163,16 @@
     {/each}
   </div>
 
-  <span class="label mt-6 mb-2 block">Bring your own key</span>
+  <span class="label mt-6 mb-2 block">Your own endpoint</span>
+
+  {#if !hosted.length}
+    <p class="text-[11.5px] leading-relaxed text-ink-2" role="status">
+      No endpoint row is configured. In the desktop app you enter a URL, a model and a key here and
+      the server keeps them in memory. This build has no transport to send a request through, so
+      there is nothing to connect and the form stays closed rather than accepting input it would
+      drop.
+    </p>
+  {/if}
 
   {#each hosted as b}
     <div class="card p-4">
@@ -198,7 +215,8 @@
           >Forget connection</button
         >
         <span class="text-[11px] text-ink-3">
-          The key is forwarded server-side and never written to disk or echoed back.
+          This build has no endpoint transport, so a key you paste is dropped rather than stored.
+          Nothing is written to disk or echoed back.
         </span>
       </div>
       {#if endpointMessage}<p class="mt-2 text-[12px] text-ink-2" role="status">
@@ -211,7 +229,7 @@
 
   <div class="card p-4">
     {#if !drv}
-      <p class="text-[11.5px] text-ink-3">checking…</p>
+      <p class="text-[11.5px] text-ink-3">Checking the driver…</p>
     {:else if drv.error}
       <p class="message-error" role="alert">{drv.error}</p>
     {:else if !drv.present}
@@ -220,7 +238,7 @@
         <span class="text-[12.5px]">No Intel NPU detected</span>
       </div>
       <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
-        {drv.reason ?? "The app runs on GPU or CPU instead."}
+        {drv.reason ?? "The app falls back to GPU or CPU, or to no device at all in this build."}
       </p>
     {:else}
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -250,8 +268,8 @@
           Download driver
         </a>
         <p class="mt-1.5 text-[10.5px] leading-relaxed text-ink-3">
-          Installs with administrator rights and needs a reboot. On an OEM laptop the vendor build
-          is often the tested one — that is why this is a link, not an automatic download.
+          Installing one needs administrator rights and a reboot. On an OEM laptop the vendor build
+          is often the tested one, which is why this is a link and not an automatic download.
         </p>
       {/if}
     {/if}
@@ -261,9 +279,9 @@
 
   <div class="card p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <span class="mono text-[15px] font-semibold">{dev?.id ?? "—"}</span>
+      <span class="mono text-[15px] font-semibold">{dev?.id ?? "Unavailable"}</span>
       <div class="flex gap-1.5">
-        <button class="btn h-6 text-[10.5px]" onclick={copyId}>
+        <button class="btn h-6 text-[10.5px]" onclick={copyId} disabled={!dev?.id}>
           {copied ? "copied" : "copy id"}
         </button>
         {#if dev?.linked_at}
@@ -273,8 +291,13 @@
     </div>
 
     <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
-      Paste this ID into the portal to make this machine visible in the registry. It is a hash of a
-      machine identifier — no name, no path, no key.
+      {#if (dev as any)?.stub}
+        This build reports a placeholder device id because no runtime answers it. The desktop app
+        derives a real id from a machine identifier, with no name, path or key in it.
+      {:else}
+        Paste this ID into the portal to make this machine visible in the registry. It is a hash of
+        a machine identifier, with no name, path or key in it.
+      {/if}
     </p>
 
     <div class="mt-3 flex flex-wrap items-end gap-2">
@@ -301,8 +324,8 @@
   <div class="card mt-4 p-4">
     <span class="label">Hardware measurements</span>
     <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-2">
-      This template ships no saved measurements for this machine. Configure and run local
-      benchmarks to measure actual NPU, GPU and CPU latency.
+      This build ships no measurements. The desktop app reports measured NPU, GPU and CPU latency
+      from its own benchmark run; nothing here can produce one.
     </p>
   </div>
 </View>

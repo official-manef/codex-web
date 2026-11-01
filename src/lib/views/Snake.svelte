@@ -92,7 +92,7 @@
         if (data.error) throw new Error(data.error);
         const value = data.benchmarks?.max_steps;
         if (!Number.isInteger(value) || value < 1)
-          throw new Error("Snake step limits are unavailable. Reconnect to the local server.");
+          throw new Error("Snake step limits did not load. Reload the page to try again.");
         maxSteps = value;
       })
       .catch((e) => {
@@ -407,7 +407,7 @@
 <View
   title="Snake demo"
   icon="play"
-  subtitle="Run at device speed, inspect the timing, or replay the same board states across your selected engines."
+  subtitle="Run a round at device speed, read the timing per device, or replay a saved round frame by frame. This build has no model and no device, so a run stops and says so."
 >
   <div class="demo">
     <div class="toolbar">
@@ -479,11 +479,11 @@
     </div>
     <p class="mode-note">
       Food is sampled from empty cells using the saved seed. Reuse a seed for a repeatable
-      trajectory; select Compare to give every engine the same board and food at each step. A round
+      trajectory; select Compare to give every device the same board and food at each step. A round
       may end before its step limit when no legal move remains.
     </p>
     {#if !engines.length}<p class="error">
-        Choose a local CPU, NPU or GPU engine in the header to record a Snake run.
+        Choose a CPU, NPU or GPU device in the header to record a Snake run.
       </p>{/if}
     <p class="mode-note">
       {#if comparison}Comparing {engines.map(label).join(" + ") || "no engines selected"}. All
@@ -561,7 +561,7 @@
             <strong>{last.policy.direction || "Stop"}</strong>. {last.policy.reason}
           </p>
           <details>
-            <summary>Text every engine received</summary>
+            <summary>Text every device received</summary>
             <p>{last.text}</p>
           </details>{/if}
         <p class="hint">
@@ -577,13 +577,13 @@
     </div>
     <section class="engine-results" aria-labelledby="snake-engines-title">
       <h3 id="snake-engines-title">
-        {comparison ? "Selected engine comparison" : "Selected engine"}
+        {comparison ? "Selected device comparison" : "Selected device"}
       </h3>
       <div class="table-wrap">
         <table>
           <thead
             ><tr
-              ><th>Engine</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
+              ><th>Device</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
                 >HTTP mean</th
               ><th>Last answer</th></tr
             ></thead
@@ -607,7 +607,7 @@
         <div class="table-wrap">
           <table>
             <thead
-              ><tr><th>Engine</th><th>Server mean</th><th>Queue mean</th><th>Warmup HTTP</th></tr
+              ><tr><th>Device</th><th>Server mean</th><th>Queue mean</th><th>Warmup HTTP</th></tr
               ></thead
             ><tbody
               >{#each engines as id}{@const row = stats[id]}<tr

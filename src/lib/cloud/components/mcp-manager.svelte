@@ -28,7 +28,7 @@
 	 * The browser posts the credential once to `mcp.connect`, which encrypts it under
 	 * `MODELS_ENC_KEY`; everything after that works from an alias. Discovery and every call are
 	 * checked against the stored allowlist server-side. The confirmation below shows the exact
-	 * snapshot a one-shot approval carries, and the token is redeemable once for 120 seconds —
+	 * snapshot a one-shot approval carries, and the token is redeemable once, for 120 seconds.
 	 * single-use, not a promise of exactly-once delivery.
 	 */
 	const cloudUrl = env.PUBLIC_CONVEX_URL;

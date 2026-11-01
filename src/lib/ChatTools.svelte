@@ -418,7 +418,7 @@
                   >
                 </article>{/each}
             </div>{:else}<p class="inspector-description">
-              No installed skill guidance is available. Refresh after adding a project skill.
+              No skill guidance is installed. Refresh after adding one to the project.
             </p>{/if}
         {:else}
           <div class="mcp-view-switch">
@@ -434,10 +434,15 @@
           </div>
           {#if connectionSettings}
             <p class="inspector-description">
-              Connect a Streamable HTTP MCP server. Credentials stay in server memory. Tool calls
-              always require your approval.
+              Connect a Streamable HTTP MCP server. Credentials stay in memory for this run. Every
+              tool call waits for your approval.
             </p>
             <div class="mcp-connections">
+              {#if !status?.connections?.length}<p class="inspector-description">
+                  No MCP server is connected. A connection added below appears in this list, and
+                  this build keeps no connections between reloads.
+                </p>
+              {/if}
               {#each status?.connections ?? [] as item}<div>
                   <strong>{item.name}</strong><span>{item.url}</span><small
                     >{item.state ?? "Connected"} · {item.tool_count ?? 0} tools</small
@@ -495,7 +500,7 @@
               <summary>Use Laya from another MCP client</summary>
               <p>Connect your agent to this app’s HTTP MCP endpoint:</p>
               <code class="break-all"
-                >{status?.incoming?.url ?? "Start the local server to see its URL."}</code
+                >{status?.incoming?.url ?? "No endpoint is configured in this build."}</code
               >{#if status?.incoming?.stdio}<pre>{JSON.stringify(
                     status.incoming.stdio,
                     null,

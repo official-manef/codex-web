@@ -171,7 +171,7 @@ export const SECTIONS = [
 	},
 	{
 		id: 'devices',
-		label: 'Devices & compute',
+		label: 'Paired devices',
 		icon: 'cpu',
 		group: 'Settings & help',
 		navigationRole: 'settings',

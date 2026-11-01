@@ -118,7 +118,7 @@
 <View
   title="Transcribe"
   icon="mic"
-  subtitle="Whisper int8, running locally. No API key, no per-minute cost, nothing leaves the machine. Feed it wav, mp3, m4a, ogg, flac or webm — the converter ships with the app."
+  subtitle="Speech to text from a recording. The desktop app runs Whisper int8 on the device you pick, with no API key and no per-minute cost. This browser build has no speech model, so the panel stays closed and says why."
 >
   {#snippet actions()}
     <button
@@ -126,9 +126,10 @@
       disabled={busy || available?.present === false}
       onclick={() => fileInput?.click()}>Choose audio file</button
     >
-    {#if available}<span class="chip mono">{available.present ? "model ready" : "no model"}</span
+    {#if available}<span class="chip mono"
+        >{available.present ? "model ready" : "no speech model"}</span
       >{/if}
-    <span class="chip mono">{device}</span>
+    <span class="chip mono">{device || "no device"}</span>
   {/snippet}
   <div class="mb-3">
     <SpeechControls bind:device bind:language status={available} disabled={busy} />
@@ -137,11 +138,11 @@
       disabled={busy || !available?.devices?.includes(device) || available?.present === false}
       onRecorded={upload}
       maxSeconds={available?.max_seconds ?? 300}
-      label="Record & transcribe"
+      label="Record and transcribe"
     />
   </div>
   {#if result?.restored}<p class="mb-3 text-[12px] text-ink-2">
-      Transcript draft restored after refresh. Re-select the audio file if you want to play it
+      Transcript draft restored after a refresh. Re-select the audio file if you want to play it
       again.
     </p>{/if}
 
@@ -154,20 +155,17 @@
     class="hidden"
   />
   {#if audioUrl}<div class="mb-3">
-      <p class="mb-2 text-[12px] text-ink-2">Listen to {fileName}</p>
+      <p class="mb-2 text-[12px] text-ink-2">Playing {fileName}</p>
       <audio controls src={audioUrl} class="w-full" aria-label="Uploaded audio playback"></audio>
     </div>{/if}
 
   {#if available && !available.present}
     <div class="card mb-3 p-4">
-      <span class="label">No transcription model installed</span>
+      <span class="label">No speech model in this build</span>
       <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-2">
-        Download whisper-base int8 (85 MB) and point the app at it:
-      </p>
-      <pre
-        class="mono mt-2 overflow-auto rounded border border-line-2 bg-panel-2 p-2.5 text-[10.5px] text-ink-2">python -c "from huggingface_hub import snapshot_download; snapshot_download('OpenVINO/whisper-base-int8-ov', local_dir=r'C:\Users\you\models\whisper-base-int8')"</pre>
-      <p class="mt-2 text-[11px] text-ink-3">
-        Then add <code class="mono">WHISPER_MODEL</code> to <code class="mono">.env</code> and restart.
+        The desktop app downloads whisper-base int8 and points an environment variable at it. Those
+        steps apply to that build only: there is no filesystem and no runtime here to run them
+        against.
       </p>
     </div>
   {/if}
@@ -189,7 +187,7 @@
       <Icon name="mic" size={26} />
       <p class="mt-3 text-[13px]">Transcribing {fileName}…</p>
       <p class="mt-1 text-[11.5px] text-ink-3">
-        Using {device} locally. First use may take longer while the model compiles.
+        On {device}. A first run compiles the model, so it takes longer than the rest.
       </p>
     {:else if result}
       <div class="w-full max-w-[720px] text-left">
@@ -209,21 +207,22 @@
           rows="7"
           bind:value={result.text}></textarea>
         <p class="mt-2 text-[12px] text-ink-2">
-          Your edits are included when you download the text.
+          Your edits are included in the downloaded text.
         </p>
       </div>
     {:else}
       <Icon name="mic" size={26} />
       <p class="mt-3 text-[13px]">Drop an audio file here</p>
-      <p class="mt-1 text-[11.5px] text-ink-3">or pick one</p>
+      <p class="mt-1 text-[11.5px] text-ink-3">or choose one</p>
       <button
         class="btn btn-solid mt-4"
         disabled={available?.present === false}
         onclick={() => fileInput?.click()}>Choose file</button
       >
       <p class="mt-2 text-[11.5px] text-ink-3">
-        Up to {available?.max_mb ?? "…"} MB and {available?.max_seconds ?? "…"} seconds. Your audio stays
-        on this laptop.
+        {available
+          ? `Up to ${available.max_mb ?? "…"} MB and ${available.max_seconds ?? "…"} seconds.`
+          : "Waiting for the speech model status. Nothing is sent anywhere in this build."}
       </p>
     {/if}
   </div>
@@ -233,9 +232,10 @@
   {/if}
 
   <div class="card mt-3 p-4">
-    <span class="label">Benchmark notes</span>
+    <span class="label">About the timings</span>
     <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-2">
-      This template ships no saved measurements for speech inference. The transcription display above shows actual timing for your audio file when processed on your selected device.
+      This build ships no saved speech measurements. When a transcript does come back, the numbers
+      above describe that one file on that one device, not a benchmark.
     </p>
   </div>
 </View>

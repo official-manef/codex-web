@@ -43,7 +43,10 @@
       aria-label="Find a local tool"
     /></label
   >
-  <p class="launcher-note mb-4 text-[12px] text-ink-3">Workspace launcher navigation. Displays registered in-memory tools; no backend data source.</p>
+  <p class="launcher-note mb-4 text-[12px] text-ink-3">
+    Every tool this build registers. Opening one changes which screen you see; none of them reaches
+    a server.
+  </p>
   {#if query.trim()}<h2>Search results</h2>
     <div class="launcher-list">
       {#each matches as row}<button onclick={() => onOpen(row.id)}
@@ -53,7 +56,7 @@
           /></button
         >{/each}
     </div>
-    {#if !matches.length}<p>No matching tool. Try another name.</p>{/if}
+    {#if !matches.length}<p>No tool matches that name. Clear the search to see the full list.</p>{/if}
   {:else}<h2>Tools</h2>
     <div class="launcher-quick">
       {#each quick as row}<button onclick={() => onOpen(row.id)}
@@ -75,7 +78,7 @@
                 >{recentLabel}</small
               >{/if}</button
           >{/each}
-      </div>{:else}<p>Tools you open in this workspace appear here.</p>{/if}
+      </div>{:else}<p>No tool has been opened yet. Whatever you open next appears here.</p>{/if}
   {/if}
 </section>
 

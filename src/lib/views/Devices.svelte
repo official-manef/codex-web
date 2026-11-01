@@ -187,9 +187,9 @@
 </script>
 
 <View
-  title="Devices & compute"
+  title="Paired devices"
   icon="cpu"
-  subtitle="Pair your own machine so tools that cannot run in a browser — terminal and the existing browser canvas — can use it over a bridge you host."
+  subtitle="Pair a machine you own so the tools a browser cannot run can use it: the Terminal, and a browser session driven from that machine. The bridge on it is yours to host; this build ships no bridge and cannot pair anything."
 >
   <section class="mb-6" aria-labelledby={`${uid}-browser`}>
     <h2 id={`${uid}-browser`} class="mb-2 text-[13px] font-semibold">This browser</h2>
@@ -201,8 +201,8 @@
           <span class="text-ink-3">Endpoint: {displayEndpoint(origin)}</span>
         {/if}
         <span class="text-ink-3">
-          Runs the shell in this tab. Anything that needs a shell command or a real browser
-          session has to run on a paired device.
+          Runs this workspace in the tab you have open. A shell command or a driven browser session
+          has to run on a paired device, and nothing is paired in this build.
         </span>
       </li>
     </ul>
@@ -232,8 +232,8 @@
       <p class="text-[12.5px] text-ink-3">Loading paired devices…</p>
     {:else if devices.length === 0}
       <p class="text-[12.5px] leading-relaxed text-ink-2">
-        No paired devices. A device row stores only the SHA-256 of its pairing token and the
-        validated endpoint origin.
+        No paired devices. A row stores the SHA-256 of its pairing token and the validated endpoint
+        origin, and nothing else.
       </p>
     {:else}
       <ul class="flex flex-col gap-2">
@@ -293,7 +293,7 @@
             {#if endpointCheck.kind === "invalid"}
               <span class="text-red-400">{endpointCheck.reason}</span>
             {:else}
-              {displayEndpoint(endpointCheck.origin ?? "")} — the bridge must answer
+              {displayEndpoint(endpointCheck.origin ?? "")}. The bridge must answer
               <code>/v1/health</code> and <code>/v1/terminal</code> on this origin.
             {/if}
           </span>

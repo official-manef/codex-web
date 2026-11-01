@@ -61,7 +61,7 @@
     } catch {
       if (mounted && request === statusRequest && !restarting) {
         runtime = null;
-        statusError = "The local server could not be reached. Reconnect to check it again.";
+        statusError = "No runtime answered. This build has none; reload the page to try again.";
       }
     }
   }
@@ -142,8 +142,8 @@
       </div>
       {#if runtime}<p>Running · {Math.floor((runtime.uptime_s ?? 0) / 60)} min uptime</p>
         <p>
-          Restart reloads the local runtime. Saved chats and recordings stay on this laptop. Copy
-          any unsent text before restarting.
+          Restart reloads the local runtime. Saved chats and recordings are unaffected. Copy any
+          unsent text before restarting.
         </p>
         {#if runtime.blockers?.length}<p class="blocked">
             Finish or stop: {runtime.blockers.map((b: any) => b.label).join(", ")}.
@@ -155,8 +155,8 @@
           >{restarting ? "Restarting…" : "Restart Laya"}</button
         >
       {:else}<p>
-          Server controls are unavailable. Open the installed app or start laya-npu.cmd, then
-          reconnect.
+          Server controls are unavailable, because this build has no runtime to restart. The
+          desktop app is the build that has one.
         </p>
         <a class="btn" href="http://127.0.0.1:8649/">Open installed app</a><button
           class="btn"

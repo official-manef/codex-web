@@ -291,7 +291,7 @@
 <View
   title="Terminal"
   icon="code"
-  subtitle="Runs a real shell on a device you paired. The bridge on that machine is yours; this panel only implements the client half."
+  subtitle="A shell on a device you paired. The bridge on that machine is yours to run; this panel is the client half of it, and nothing is paired in this build."
 >
   {#if !ready}
     <p class="text-[12.5px] leading-relaxed text-ink-2">
@@ -299,16 +299,16 @@
         Reading paired devices…
       {:else if !cloudUrl}
         No terminal can open yet: this build has no backend, so no device can be paired. Set
-        <code>PUBLIC_CONVEX_URL</code> and pair a terminal device on
-        <a class="underline" href="#devices">Devices</a>, then enable the tool in
+        <code>PUBLIC_CONVEX_URL</code>, pair a terminal device on
+        <a class="underline" href="#devices">Paired devices</a>, then enable the tool in
         <a class="underline" href="#tools">Tools</a>.
       {:else if toolMissing && pairingMissing}
         No terminal can open yet: you have not paired a terminal device on
-        <a class="underline" href="#devices">Devices</a>, and the Terminal switch is off in
+        <a class="underline" href="#devices">Paired devices</a>, and the Terminal switch is off in
         <a class="underline" href="#tools">Tools</a>.
       {:else if pairingMissing}
         No terminal can open yet: no device of kind <code>terminal</code> is paired. Pair one on
-        <a class="underline" href="#devices">Devices</a>.
+        <a class="underline" href="#devices">Paired devices</a>.
       {:else}
         No terminal can open yet: the Terminal switch is off. Turn it on in
         <a class="underline" href="#tools">Tools</a>.
@@ -413,7 +413,7 @@
           Clear
         </Button>
         <span class="text-[11px] text-ink-3">
-          Clear empties this panel only; the remote shell keeps its scrollback.
+          Clear empties this panel only. The remote shell keeps its own scrollback.
         </span>
       </div>
 

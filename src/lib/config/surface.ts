@@ -83,6 +83,6 @@ export function detectSurface(input: { url: string | null; override?: string | n
 /** User-facing reason for the current surface, shown above the Tools toggles. */
 export function surfaceReason(surface: Surface): string {
 	return surface === 'cloud'
-		? 'This is a hosted build, so tools that need your own machine or a paired device stay hidden until you turn them on here.'
-		: 'This build runs on your own machine, so every tool can reach the local runtime.';
+		? 'This build is served from a public host, so tools that need your own machine or a paired device stay hidden until you turn them on here.'
+		: 'This build is served from a local address. A tool that needs a runtime still has none until one is configured; the switch only decides whether the tool appears.';
 }
