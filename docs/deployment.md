@@ -36,6 +36,63 @@ DEPLOY_TARGET=node bun run verify
 HOST=127.0.0.1 PORT=3000 ORIGIN=http://localhost:3000 node build
 ```
 
+### Automated install on a VPS
+
+`scripts/install.mjs` does the steps above and writes `.env` for you. It is a CLI and not a
+setup screen for one structural reason: **`PUBLIC_CONVEX_URL` and `PUBLIC_SITE_URL` are read at
+build time** by Vite and baked into the bundle. An app that has not been built cannot render a
+form to collect a value it needed before it could start. A frontend wizard can only ever change
+runtime values, and those are the wrong ones.
+
+```sh
+# interactive
+bun run install:host
+
+# or fully non-interactive on a fresh box
+node scripts/install.mjs --yes \
+  --site https://app.example.com \
+  --convex https://your-deployment.convex.cloud \
+  --generate-secrets --auth --client-id <id> --client-secret <secret>
+
+# inspect first; writes nothing, masks every secret
+node scripts/install.mjs --dry-run --site https://app.example.com --convex https://x.convex.cloud
+```
+
+| Flag                 | Effect                                                                          |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `--site <origin>`    | `PUBLIC_SITE_URL`. Must be a bare origin: no path, query, fragment or userinfo. |
+| `--convex <url>`     | `PUBLIC_CONVEX_URL`. Omit for the unlinked, local-only mode.                    |
+| `--auth`             | Turn on Google sign-in and collect the OAuth client values.                     |
+| `--generate-secrets` | Generate `AUTH_SESSION_SECRET` instead of asking.                               |
+| `--target <t>`       | `node` (default) or `vercel`.                                                   |
+| `--deploy-convex`    | Also run `convex deploy`. Requires `--convex`.                                  |
+| `--env <path>`       | Write somewhere other than `./.env`.                                            |
+| `--yes`              | Non-interactive; every prompt takes its default.                                |
+| `--dry-run`          | Print the plan and the file, change nothing.                                    |
+
+It refuses rather than guessing: a URL with a path or credentials, an `AUTH_SESSION_SECRET`
+that is not 43 base64url characters, or Node older than 22 all stop the install.
+
+#### Convex cloud
+
+For a hosted backend, create the project once from a machine with a browser:
+
+```sh
+npx convex login
+npx convex dev          # creates the deployment, links it, prints the URL
+```
+
+Then either deploy from CI with a deploy key, or run the installer with `--deploy-convex`.
+`MODELS_ENC_KEY` belongs on the deployment, never in `.env`:
+
+```sh
+npx convex env set MODELS_ENC_KEY "$(openssl rand -base64 32)"
+npx convex env set AUTH_CLIENT_ID <same-id-as-the-frontend>
+```
+
+Node 22 or 24 is required for `'use node'` actions; a newer major fails with
+`DeploymentNotConfiguredForNodeActions`. See [auth](auth.md).
+
 For a separate runtime directory, ship `build/`, `package.json` and `bun.lock`, then
 install production dependencies with
 `bun install --production --frozen-lockfile --ignore-scripts`. The ignore flag avoids

@@ -45,6 +45,8 @@
 		"test": "bun run test:unit",
 		"convex:dev": "convex dev",
 		"convex:codegen": "convex codegen",
+		"convex:deploy": "convex deploy",
+		"install:host": "node scripts/install.mjs",
 		"build:deploy": "bun scripts/deploy.mjs",
 		"version:bump": "node scripts/version.mjs",
 		"verify": "bun run check && bun run lint && bun run test && bun run build"
