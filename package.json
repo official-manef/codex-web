@@ -22,6 +22,9 @@
 		"ui"
 	],
 	"type": "module",
+	"bin": {
+		"codex-cli": "./bin/codex-cli.mjs"
+	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
 		"#lib/*": "./src/lib/*"

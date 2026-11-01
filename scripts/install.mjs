@@ -147,12 +147,18 @@ const site = normaliseOrigin(
 	'PUBLIC_SITE_URL'
 );
 
-// Either point at an existing Convex deployment or leave it empty for the unlinked local mode.
+// Convex is required, not optional. This project stores user rows and provider keys, so a
+// throwaway local backend is the wrong default; there is no empty fallback.
 const convexRaw =
 	value('convex') ||
 	existing.PUBLIC_CONVEX_URL ||
-	(await ask('Convex deployment URL (blank = local only)', ''));
-const convex = convexRaw ? normaliseOrigin(convexRaw, 'PUBLIC_CONVEX_URL') : '';
+	(await ask('Convex deployment URL (required)', ''));
+if (!convexRaw)
+	fail(
+		'PUBLIC_CONVEX_URL is required. Create a deployment with `npx convex login && npx convex dev` ' +
+			'on a machine with a browser, then pass --convex https://<deployment>.convex.cloud'
+	);
+const convex = normaliseOrigin(convexRaw, 'PUBLIC_CONVEX_URL');
 
 const enableAuth =
 	flag('auth') || (await ask('Enable Google sign-in? (y/N)', 'n')).toLowerCase().startsWith('y');
@@ -181,9 +187,7 @@ const lines = [
 	`# Read at build time by Vite. Editing PUBLIC_* here requires a rebuild.`,
 	'',
 	`PUBLIC_SITE_URL=${site}`,
-	convex
-		? `PUBLIC_CONVEX_URL=${convex}`
-		: '# PUBLIC_CONVEX_URL=  (unlinked: the app runs local-only)',
+	`PUBLIC_CONVEX_URL=${convex}`,
 	'',
 	`AUTH_ENABLED=${enableAuth ? 'true' : 'false'}`,
 	'AUTH_PROVIDER=google',
@@ -198,7 +202,7 @@ const lines = [
 
 heading('Plan');
 note(`site          ${site}`);
-note(`convex        ${convex || '(none — local-only mode)'}`);
+note(`convex        ${convex}`);
 note(`auth          ${enableAuth ? 'Google OIDC' : 'disabled'}`);
 note(`target        ${deployTarget}`);
 note(`env file      ${ENV_PATH}`);

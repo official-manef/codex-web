@@ -23,8 +23,9 @@ as the root directory. Install with `bun install --frozen-lockfile`; build with
 Select a supported Node major with the minimum patch listed in `engines.node` and
 `.node-version`.
 
-Leave `PUBLIC_CONVEX_URL` unset for the unlinked scaffold or select an already-deployed
-backend. This build does not deploy Convex and needs no credentials for the unlinked app.
+A Convex deployment is required for anything that stores data: this app keeps user rows and
+provider keys, so there is no anonymous-backend mode. Create one with `npx convex login` and
+`npx convex dev`, then pass its URL as `PUBLIC_CONVEX_URL`.
 
 ## Standalone Node and Docker
 
@@ -61,7 +62,7 @@ node scripts/install.mjs --dry-run --site https://app.example.com --convex https
 | Flag                 | Effect                                                                          |
 | -------------------- | ------------------------------------------------------------------------------- |
 | `--site <origin>`    | `PUBLIC_SITE_URL`. Must be a bare origin: no path, query, fragment or userinfo. |
-| `--convex <url>`     | `PUBLIC_CONVEX_URL`. Omit for the unlinked, local-only mode.                    |
+| `--convex <url>`     | `PUBLIC_CONVEX_URL`. Required; there is no local fallback.                      |
 | `--auth`             | Turn on Google sign-in and collect the OAuth client values.                     |
 | `--generate-secrets` | Generate `AUTH_SESSION_SECRET` instead of asking.                               |
 | `--target <t>`       | `node` (default) or `vercel`.                                                   |

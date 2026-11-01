@@ -22,6 +22,76 @@ re-hosts it with a local stub backend so it boots with zero credentials.
 The shell's own README (`slices/workspace-shell/README.md`) documents the consumer contract in
 full. This repository is one working consumer of it.
 
+## Install in one command
+
+On any Linux host — VPS, container, laptop — with Node 22/24 and Bun installed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rahmanef63/codex-clone-placeholder/main/scripts/install.sh \
+  | bash -s -- --site https://app.example.com --convex https://<deployment>.convex.cloud
+```
+
+Or from a checkout, if you would rather read what runs:
+
+```sh
+git clone https://github.com/rahmanef63/codex-clone-placeholder
+cd codex-clone-placeholder
+node scripts/install.mjs --site https://app.example.com --convex https://<deployment>.convex.cloud
+```
+
+Both paths end the same way: a mode-600 `.env`, installed dependencies, a verified build, and
+the exact start command printed. Add `--generate-secrets --auth --client-id … --client-secret …`
+to turn on Google sign-in in the same run, or `--dry-run` to see the plan without writing
+anything (secrets masked).
+
+**A Convex deployment is required.** This app stores user rows and provider keys, so there is no
+anonymous-backend mode. Create one once from a machine with a browser:
+
+```sh
+npx convex login
+npx convex dev      # prints https://<deployment>.convex.cloud
+```
+
+Then set the two values Convex itself needs:
+
+```sh
+npx convex env set MODELS_ENC_KEY "$(openssl rand -base64 32)"
+npx convex env set AUTH_CLIENT_ID <same id as the frontend>
+```
+
+Why this is a CLI and not a setup screen: `PUBLIC_CONVEX_URL` and `PUBLIC_SITE_URL` are read at
+**build** time and baked into the bundle, so an app that has not been built cannot render a form
+to collect them. Full reference: [deployment](docs/deployment.md), [auth](docs/auth.md).
+
+## Command line
+
+`codex-cli` ships with the repo and speaks to the app you installed, over the same routes and
+the same access checks as the browser. No second permission model.
+
+```sh
+export CODEX_CLI_URL=https://app.example.com
+export CODEX_CLI_TOKEN=<CAPABILITY_ACCESS_TOKEN>
+
+codex-cli doctor                  # check every endpoint before relying on it
+codex-cli config                  # enabled providers, models, MCP servers
+codex-cli ask "summarise this"    # one streamed turn
+codex-cli tools                   # remote MCP tools
+codex-cli run <alias> <tool> '{}' # one allowlisted tool call
+codex-cli shell                   # interactive shell on your own bridge
+```
+
+`shell` needs a bridge on your machine and two more variables:
+
+```sh
+export CODEX_CLI_BRIDGE=http://127.0.0.1:8649
+export CODEX_CLI_BRIDGE_TOKEN=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
+node bridge/terminal-bridge.mjs   # run this where the shell should live
+codex-cli shell
+```
+
+The token alphabet is restricted on purpose: a WebSocket subprotocol cannot carry `+`, `/` or
+`=`, so plain base64 would fail every handshake. See [terminal](docs/terminal.md).
+
 ## Three engines, one template
 
 | Engine   | Runs where                                  | Account      | Key |
@@ -30,9 +100,8 @@ full. This repository is one working consumer of it.
 | `device` | a runtime you paired (your own NPU box)     | yes, to pair | no  |
 | `cloud`  | a Convex action using **your** provider key | yes          | yes |
 
-Local mode is not a fallback that gets removed when you configure cloud: with no
-`PUBLIC_CONVEX_URL` the sign-in routes 404, the cloud engine reports `unsupported`, and the
-workspace is exactly the local template. `.env` is optional either way.
+`local` needs no backend and stays useful without one: with no `PUBLIC_CONVEX_URL` the sign-in
+routes 404 and the workspace is exactly the local template. A deployment install uses `cloud`.
 
 **BYOK.** A key is posted once, encrypted with AES-256-GCM (`MODELS_ENC_KEY`) and never
 returned to a browser. A built-in provider's key is pinned to that provider's host, so it

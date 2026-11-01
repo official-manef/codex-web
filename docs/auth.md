@@ -9,18 +9,18 @@ roles, account linking, invitations or an account-deletion workflow.
 
 Two specs answer that, and both are part of `vitest run`:
 
-| Spec                            | Runs against                   | Proves                                                                                                           |
-| ------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `src/convex/store.spec.ts`      | in-memory deployment           | a signed-in owner writes and reads their own row; a second owner sees nothing; a malformed token hash is refused |
-| `src/convex/deployment.spec.ts` | the real deployment on `:3210` | anonymous queries and mutations are refused; a forged token authenticates nothing                                |
+| Spec                            | Runs against                          | Proves                                                                                                           |
+| ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `src/convex/store.spec.ts`      | in-memory deployment                  | a signed-in owner writes and reads their own row; a second owner sees nothing; a malformed token hash is refused |
+| `src/convex/deployment.spec.ts` | the deployment in `PUBLIC_CONVEX_URL` | anonymous queries and mutations are refused; a forged token authenticates nothing                                |
 
 The second one skips itself when no deployment answers, so a clone without a backend still
 passes. It is worth keeping: three of the four assertions are security boundaries, and a
 type-level check cannot catch one of them coming loose.
 
-Running a local backend needs **Node 22 or 24**, not 26 — Convex refuses to deploy `'use node'`
-actions otherwise, with `DeploymentNotConfiguredForNodeActions`. If `node -v` is 26, point the
-CLI at the version named in `.node-version`:
+Convex needs **Node 22 or 24**, not 26 — it refuses to deploy `'use node'` actions otherwise,
+with `DeploymentNotConfiguredForNodeActions`. If `node -v` is 26, point the CLI at the version
+named in `.node-version`:
 
 ```sh
 export PATH="$HOME/.nvm/versions/node/v22.23.2/bin:$PATH"
