@@ -25,7 +25,11 @@ test('MCP config is off by default and permits only configured HTTPS aliases and
 		'https://127.0.0.1/mcp',
 		'https://localhost/mcp',
 		'https://a:b@mcp.example.com',
-		'https://mcp.example.com?token=secret'
+		'https://mcp.example.com?token=secret',
+		// Same name to the resolver as the two above; the trailing dot must not be a bypass.
+		'https://localhost./mcp',
+		'https://box.local./mcp',
+		'https://127.0.0.1./mcp'
 	])
 		expect(() => mcpConnections(config({ url }))).toThrow();
 	expect(() => mcpConnections(config({ tools: ['COMPOSIO_MULTI_EXECUTE_TOOL'] }))).toThrow(

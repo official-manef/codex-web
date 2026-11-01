@@ -31,13 +31,16 @@ export function mcpConnections(env: IntegrationEnv): McpConnection[] {
 		if (connection.tools.some((name) => name.startsWith('COMPOSIO_')))
 			throw new Error('Select direct toolkit tools, not Composio execution/router metatools');
 		const url = new URL(connection.url);
+		const local = /^(localhost|.*\.localhost|.*\.local|\[.*\]|\d+(?:\.\d+){3})$/i;
 		if (
 			url.protocol !== 'https:' ||
 			url.username ||
 			url.password ||
 			url.hash ||
 			url.port ||
-			/^(localhost|.*\.localhost|.*\.local|\[.*\]|\d+(?:\.\d+){3})$/i.test(url.hostname)
+			// A trailing dot is the same host to the resolver: `localhost.` and `127.0.0.1.` are
+			// loopback. Compare the stripped name, or the denylist never fires.
+			local.test(url.hostname.replace(/\.$/, ''))
 		)
 			throw new Error('MCP endpoints must be approved public HTTPS URLs');
 		for (const key of url.searchParams.keys())

@@ -41,6 +41,7 @@
   import { Pencil, Trash2 } from "@lucide/svelte";
   import SpeechControls from "#lib/SpeechControls.svelte";
   import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
+  import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -1244,6 +1245,8 @@
       providerEntry?.models.find((name) => name === serverModel) ??
       providerEntry?.models?.[0] ??
       modelId;
+    // Tab-scoped only. The old `localStorage` fallback meant any key this origin had ever
+    // persisted was picked up and sent on the user's behalf.
     const apiKey = readProviderKey();
     // Saved notes reach the model as untrusted context, never as an instruction. `context()`
     // is already bounded to MAX_CONTEXT_CHARS, so the server never sees more than that.

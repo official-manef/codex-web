@@ -29,8 +29,10 @@ const TOKEN = process.env.BRIDGE_TOKEN ?? '';
 const SHELL =
 	process.env.BRIDGE_SHELL ?? (process.platform === 'win32' ? 'powershell.exe' : 'bash');
 
-// Comma-separated exact origins. Empty means "same host only", which is right for the
-// SSH-tunnel case and wrong for a hosted app, so say so at startup instead of failing later.
+// Comma-separated exact origins. Empty means "this loopback bridge only", which is right for
+// the SSH-tunnel case. A proxy (tailscale serve/funnel) sees the browser's real origin and needs
+// it listed here, or every handshake is refused with 403 — say so at startup instead of failing
+// later.
 const ALLOWED = (process.env.BRIDGE_ALLOW_ORIGIN ?? '')
 	.split(',')
 	.map((value) => value.trim())
@@ -40,6 +42,7 @@ const TERMINAL_PATH = '/v1/terminal';
 const HEALTH_PATH = '/v1/health';
 const MAX_FRAME_BYTES = 65536;
 const MAX_CONNECTIONS = Number(process.env.BRIDGE_MAX_CONNECTIONS ?? 8);
+const SELF_ORIGINS = selfOrigins(HOST, PORT);
 
 if (!TOKEN) {
 	console.error(
@@ -61,6 +64,12 @@ if (!/^[A-Za-z0-9._~-]+$/.test(TOKEN)) {
 			'Plain base64 emits +, / and =, which cannot appear in a WebSocket subprotocol.\n' +
 			'Generate one with: openssl rand -base64 32 | tr "+/" "-_" | tr -d "="'
 	);
+	process.exit(1);
+}
+// `Number('abc')` is NaN, and `live.size >= NaN` is false forever: a typo silently removed the
+// connection cap. Refuse to start instead of running without a limit nobody knows is gone.
+if (!Number.isInteger(MAX_CONNECTIONS) || MAX_CONNECTIONS < 1) {
+	console.error('BRIDGE_MAX_CONNECTIONS must be a positive whole number.');
 	process.exit(1);
 }
 
@@ -87,7 +96,7 @@ function tokenFromProtocols(protocols) {
 }
 
 /** Empty allowlist means the request must be same-origin as the bridge itself. */
-function originAllowed(origin, host) {
+function originAllowed(origin) {
 	if (!origin) return true; // Non-browser client: nothing to confuse, the token is the gate.
 	let parsed;
 	try {
@@ -98,7 +107,29 @@ function originAllowed(origin, host) {
 	if (ALLOWED.includes(parsed.origin)) return true;
 	if (ALLOWED.length) return false;
 	// No allowlist configured: accept only when the origin points at this very bridge.
-	return parsed.host === host;
+	//
+	// The comparison must not read `Host`. A WebSocket handshake lets the client set both
+	// `Origin` and `Host`, so trusting the request's own host means the check only proves the
+	// two headers agree with each other — an attacker sets both to `evil.example:PORT` and is
+	// accepted. Compare against the port this process actually listens on instead, so the
+	// same-host rule cannot be satisfied by a name the bridge does not answer to.
+	return SELF_ORIGINS.has(parsed.origin);
+}
+
+/** The origins this bridge answers to, from configuration rather than from a request header. */
+function selfOrigins(host, port) {
+	const origins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+	const literal = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+	if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1')
+		origins.add(`http://${literal}:${port}`);
+	return origins;
+}
+
+/** Child environment: never hand the pairing token to the shell the token unlocks. */
+function shellEnv() {
+	const env = { ...process.env, TERM: 'xterm-256color' };
+	for (const key of Object.keys(env)) if (key.startsWith('BRIDGE_')) delete env[key];
+	return env;
 }
 
 const server = createServer((request, response) => {
@@ -130,7 +161,7 @@ server.on('upgrade', (request, socket, head) => {
 	};
 
 	if (url.pathname !== TERMINAL_PATH) return reject(404, 'Not Found');
-	if (!originAllowed(request.headers.origin, request.headers.host)) return reject(403, 'Forbidden');
+	if (!originAllowed(request.headers.origin)) return reject(403, 'Forbidden');
 	if (live.size >= MAX_CONNECTIONS) return reject(503, 'Too Many Connections');
 
 	const protocols = (request.headers['sec-websocket-protocol'] ?? '')
@@ -157,7 +188,7 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (ws) => {
 	const pty = spawn(SHELL, [], {
 		cwd: process.env.BRIDGE_CWD ?? process.env.HOME ?? process.cwd(),
-		env: { ...process.env, TERM: 'xterm-256color' },
+		env: shellEnv(),
 		stdio: ['pipe', 'pipe', 'pipe']
 	});
 
@@ -233,6 +264,6 @@ server.listen(PORT, HOST, () => {
 	console.log(
 		ALLOWED.length
 			? `  origins  ${ALLOWED.join(', ')}`
-			: '  origins  same-host only (set BRIDGE_ALLOW_ORIGIN for a hosted app)'
+			: `  origins  ${[...SELF_ORIGINS].join(', ')} only (set BRIDGE_ALLOW_ORIGIN behind a proxy)`
 	);
 });
