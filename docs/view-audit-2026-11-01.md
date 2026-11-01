@@ -1,5 +1,11 @@
 # View audit — 2026-11-01
 
+> **This file is the authority for registry ids and their realness.** Its header figure
+> ("3 real / 4 partial / 15 stub / 5 guess", "27 registry entries") is the **pre-deletion
+> snapshot**; the follow-up sections at the end supersede it, and `src/lib/registry.ts` holds
+> 25 ids on `dff55b3`. Other documents that quote 27 or 29 ids are dated observations, not
+> contradictions to resolve. Index: [README.md](README.md).
+
 Which of the 27 registry entries are backed by something real, and which were reconstructed from
 screenshots of Codex Desktop. Read this before building any screen.
 

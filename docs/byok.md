@@ -1,13 +1,6 @@
 # BYOK, cloud persistence and the decision model
 
-The template ships three engines and one rule: **the browser never persists a provider key.**
-
-"Never persists" is the honest form of the older wording. There is a fourth path — the SvelteKit
-BYOK route at `/api/ai/chat` — and a request body has to carry a key somewhere. That path holds
-the key in module scope for the life of the tab (`src/lib/byok_key.ts`): not `localStorage`, not
-`sessionStorage`, never a URL, never a log. Closing the tab ends it. Anything the user wants to
-survive a reload goes through Convex, where it is encrypted under their identity. §2 covers that
-split.
+The template ships three engines and one rule: **the browser never holds a provider key.**
 
 ## 1. Engines
 
@@ -84,29 +77,6 @@ action, with:
 when a deployment URL exists. `configureCloudChat(null)` restores the unconfigured state, which
 is what the local-only build uses.
 
-### The SvelteKit route, and where its key lives
-
-`POST /api/ai/chat` (`src/routes/api/ai/chat/+server.ts`) is the path a build without Convex
-uses. It is a different trade from the Convex path: the server relays the caller's key to a
-pinned provider origin and never stores it, so nothing needs a master key — but the request body
-has to carry it, and something in the tab has to hold it while the turn streams.
-
-- **`src/lib/byok_key.ts`** is the only holder: a module-scope string with the same
-  `[!-~]{8,4096}` alphabet `keySchema` in `src/lib/server/ai/config.ts` enforces, so the route is
-  never handed a body it must reject. Not `localStorage`, not `sessionStorage`, cleared on
-  demand from Chat settings, gone when the tab closes.
-- **Chat settings → Bring your own key** writes it; nothing else does. The older
-  `localStorage.getItem("byok-key")` read — which nothing wrote, so every SvelteKit turn failed
-  validation — is gone.
-- **Missing key is named, not discovered.** With AI enabled and no key held, the composer says
-  where to add one instead of spending a round trip on a 400.
-
-**Bounded context.** A turn may carry a `memory` string (2000 chars, validated by `chatSchema`).
-`src/lib/memories.ts` builds it from notes the user saved in this browser, and
-`src/lib/server/ai/chat.ts` prefixes it as a **system** message that says it is untrusted
-context. The wording matches the `decisionNote` treatment in `src/convex/chat.ts`: context a
-model may read, never an instruction it must follow.
-
 ## 4. Decision model (Jev / Laya)
 
 The model is non-autoregressive: it takes a state and typed questions and returns a label, an
@@ -168,22 +138,17 @@ runs on their own machine, never a route in this app. No `ssh -L`, `tailscale se
 
 ## 7. Verification
 
-| Check        | Command                      | Result                                       |
-| ------------ | ---------------------------- | -------------------------------------------- |
-| Convex types | `tsc --noEmit -p src/convex` | clean                                        |
-| App types    | `bun run check`              | 0 errors, 0 warnings                         |
-| Unit         | `bun run test:unit`          | see `bun run test:unit`                      |
-| Build        | `bun run build`              | ok                                           |
-| Browser      | `bunx playwright test`       | **not run** — see [progress.md](progress.md) |
+This section once held a fourth copy of the gate table. Gate results live in **one** place:
+[progress.md](progress.md) §"Gates, measured on this commit". That table went `95` → `138`
+→ `194` → `197` passed while three documents kept asserting different numbers; restating it
+here is how that happened.
 
-> An earlier version of this table claimed 12 browser tests passed before `6ed1f3e` deleted
-> the acceptance suites with the route family they targeted, so there is no browser proof of
-> AC01–AC18 today. `docs/progress.md` is the authoritative gate list.
-
-Not verified: a live Convex deployment, a real provider call, a real NPU device, a real
-bridge, and every `ssh -L` / `tailscale serve` / `tailscale funnel` command shown in the
-Devices screen. Those need credentials and hardware the template deliberately does not
-contain.
+What this document does claim, and what is unverified about it: the browser never holds a
+provider key (§1), the `cloud` engine is the only path that touches a key, and every provider
+slug is host-pinned. **Not verified here:** a live Convex deployment, a real provider call, a
+real NPU device, a real bridge, and every `ssh -L` / `tailscale serve` / `tailscale funnel`
+command shown in the Devices screen. Those need credentials and hardware the template
+deliberately does not contain.
 
 **Generated types.** `src/convex/_generated/api.d.ts` lists the modules by hand because
 `convex codegen` needs a deployment. `api.js` uses `anyApi`, so runtime is unaffected. Run

@@ -1,5 +1,12 @@
 # Implementation plan — placeholder workspace shell
 
+> **Superseded.** This plan built the 0.3.0 shell with a `/workspace` · `/capabilities` ·
+> `/settings` route family. `6ed1f3e` deleted that route family, both its acceptance suites and
+> the `slices/{app-shell,placeholders,workspace,composer,workbench,capabilities,settings-surface}`
+> directories this plan creates. None of them exists. Kept as the historical record of a
+> decision, not as instructions. Current shape: [laya-parity.md](laya-parity.md). Index:
+> [README.md](README.md).
+
 Execution order for an agent working in the cloud. Each step lists exact paths, the exit
 check, and the P0/P1 rules it touches. Steps are sequential; a step must pass its check
 before the next begins.
@@ -177,30 +184,26 @@ passes 4.5:1.
 
 ## 10. Tests and evidence
 
-| Layer | File / command         | Covers                                                         |
-| ----- | ---------------------- | -------------------------------------------------------------- |
-| Unit  | `bun run test:unit`    | slice barrels, guards, registry parity, `t()` coverage         |
-| Type  | `bun run check`        | svelte-check + `tsc -p src/convex`                             |
-| Lint  | `bun run lint`         | prettier + eslint + Svelte-5 guard                             |
-| Build | `bun run build`        | production bundle                                              |
-| E2E   | `bunx playwright test` | none currently (only `tests/dev-smoke.e2e.ts` exists)          |
-| Dev   | `bun run test:dev`     | hydration + navigation keeps drafts (`tests/dev-smoke.e2e.ts`) |
+| Layer | File / command                                         | Covers                                                         |
+| ----- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| Unit  | `bun run test:unit`                                    | slice barrels, guards, registry parity, `t()` coverage         |
+| Type  | `bun run check`                                        | svelte-check + `tsc -p src/convex`                             |
+| Lint  | `bun run lint`                                         | prettier + eslint + Svelte-5 guard                             |
+| Build | `bun run build`                                        | production bundle                                              |
+| E2E   | `tests/acceptance.e2e.ts` under `bunx playwright test` | the AC scenarios that still have a surface                     |
+| Dev   | `bun run test:dev`                                     | hydration + navigation keeps drafts (`tests/dev-smoke.e2e.ts`) |
 
-> **Corrigendum (2026-10-30, `cc33ef0`).** Earlier revisions assigned AC01–AC18 to
-> `tests/workspace.e2e.ts` (AC01, AC02, AC04, AC07, AC08, AC10, AC16) and
-> `tests/acceptance.e2e.ts` (AC03, AC05, AC06, AC09, AC11–AC15, AC17, AC18). Both files were
-> deleted by `6ed1f3e` along with the route family they targeted, and no AC id appears
-> anywhere in `src/` or `slices/` — the only browser suite currently present is
-> `tests/dev-smoke.e2e.ts`. Recover the scenario list from history
-> (`git show ad4a909:tests/acceptance.e2e.ts`) and re-point it at current selectors before
-> claiming the AC; see [progress.md](progress.md).
+AC coverage is not tabulated here. One file owns it:
+[ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md) — per criterion, what is covered,
+what asserts only part of its scenario, and what has no surface left to assert.
 
-> **Recovery (2026-11-02).** That re-pointing is done for 14 of the 18 criteria in
-> `tests/acceptance.e2e.ts`. AC05, AC09, AC13 and AC16 are marked **no longer applicable**:
-> the deleted route family took the `offline` retry path, the dirty-tab contract, the
-> capability catalog and the composer's authorization input with it. Read
-> [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md) before treating §5 as a green bar —
-> AC03, AC06 and AC12 are also narrower than their text.
+> **Corrected twice, kept as history.** The table's E2E row said
+> `tests/workspace.e2e.ts` + `tests/acceptance.e2e.ts` covered "AC01–AC18 at
+> 390/768/1440", and a paragraph underneath spelled out which file covered which id. Both
+> files had already been deleted by `6ed1f3e` when that was written; the corrigendum
+> (`cc33ef0`, 2026-10-30) and the recovery note (2026-11-02) each patched it separately.
+> Neither note is the authority — the coverage file is. Live gate numbers live in
+> [progress.md](progress.md).
 
 Playwright selects by role/name. No snapshot-only assertions. Add one test per AC that is
 not already covered by unit tests.

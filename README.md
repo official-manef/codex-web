@@ -274,6 +274,7 @@ boundaries and [implementation-plan.md](docs/implementation-plan.md) for the bui
 
 | Task                                | Guide                                                                            |
 | ----------------------------------- | -------------------------------------------------------------------------------- |
+| Docs index — read this first        | [docs/README.md](docs/README.md)                                                 |
 | Product scope and acceptance        | [PRD](docs/PRD.md)                                                               |
 | Build order, slice map, exit checks | [Implementation plan](docs/implementation-plan.md)                               |
 | Regions, tokens, responsive, focus  | [UI spec](docs/ui-spec.md)                                                       |

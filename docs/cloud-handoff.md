@@ -1,5 +1,12 @@
 # Cloud handoff
 
+> **Superseded.** This guide sends an agent to build the 0.3.0 shell and its
+> `/workspace` → `/capabilities` → `/settings/[section]` route family, none of which exists
+> after `6ed1f3e`. Its "Repository facts" table names the old repo and a Vercel preview that
+> serves an older build. Kept as a record of the cloud-start procedure. Current entry point:
+> [README.md](README.md), [architecture.md](architecture.md),
+> [deployment.md](deployment.md), [environment.md](environment.md).
+
 Everything an agent needs to start the MVP in the cloud without asking questions.
 Read in this order:
 

@@ -1,5 +1,12 @@
 # UI specification — workspace shell
 
+> **Superseded.** The region hierarchy and composition table below describe the 0.3.0 shell
+> (`/workspace`, `/capabilities`, `/settings/[section]`), deleted by `6ed1f3e`. The shipped
+> shell is Laya's, vendored — it does not follow this region hierarchy. Read
+> [laya-parity.md](laya-parity.md) for the actual shape and [README.md](README.md) for the
+> index. The token and focus decisions here remain the reasoning behind
+> `src/routes/layout.css`.
+
 Structural contract for the shell. Reference implementation for _layout only_ is
 `docs/reference/workspace-prototype.html`; the tokens below are design decisions for this
 repository, not measurements copied from any product.

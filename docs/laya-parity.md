@@ -1,5 +1,11 @@
 # Laya parity — shipped template shape
 
+> **§2 is provenance, not a claim about this tree.** The block lists the 21 views Laya shipped
+> at `84c1823`. This tree holds 21 view files with a **different membership** (`6ed1f3e`
+> deleted them all; `d52e006` restored a subset, and `fa5aa54` deleted two more). The count
+> matching at 21 is a coincidence, not a check. Whether §2 describes the copy or the tree is
+> recorded as unresolved in [README.md](README.md) §Unresolved contradictions.
+
 This repository is the shared workspace template. Its UI is `rahmanef63/laya-npu`, copied,
 not reimplemented. `docs/REBUILD-PLAN-laya-parity.md` is the plan this executed.
 

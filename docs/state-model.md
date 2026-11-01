@@ -1,5 +1,10 @@
 # State model
 
+> **Superseded.** The ten axes below belong to the 0.3.0 `slices/workspace/state.svelte.ts`
+> design, which `6ed1f3e` deleted. The shipped shell keeps its state in Laya's
+> `slices/workspace-shell/**` plus `src/lib/workspace_persistence.ts` and
+> `src/lib/draft_storage.ts`. Kept as design rationale. Index: [README.md](README.md).
+
 One workspace state object, decomposed per slice. Sourced from
 `docs/reference/classification-uiux-state.json` (`state_model`, `persistence_plan`) and
 normalized to Svelte 5 Runes. No new dimension is added without a note here.

@@ -1,5 +1,12 @@
 # Placeholder copy contract
 
+> **Superseded, with one exception.** `slices/placeholders/index.ts` and the `COPY` table it
+> describes do not exist — they went with `6ed1f3e`. `grep -rn 'empty_context' src slices
+shared` returns nothing. The shipped shell renders Laya's copy through
+> `src/lib/workspace_routes.ts` and the vendored views. The exception is the **convention**:
+> keys stay `snake_case` identifiers and the resolver returns label text, never a brace token,
+> which the vendored views follow. Index: [README.md](README.md).
+
 The MVP renders structure, not product language. Every visible string resolves through one
 copy table, and the resolved value is human-readable label text.
 

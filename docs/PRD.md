@@ -3,6 +3,12 @@
 Status: draft MVP scope, approved for cloud implementation. Owner: rahmanef63.
 Product identity is intentionally unset; every string in the UI is a placeholder token.
 
+> **Read [README.md](README.md) first.** This file is two documents in one. §5 (the AC bar) is
+> current. §3.1 and §7 describe the `/workspace` · `/capabilities` · `/settings` route family
+> that `6ed1f3e` deleted; that part is superseded by
+> [REBUILD-PLAN-laya-parity.md](REBUILD-PLAN-laya-parity.md) and
+> [laya-parity.md](laya-parity.md). The index explains the split.
+
 ## 1. What this is
 
 A Codex-style assistant workspace: a compact global rail, a context sidebar, a primary
@@ -151,24 +157,20 @@ Collection counts are data (24 recent items, 16/6/5 settings categories), not co
 | M6  | Restore/persistence + overlay keyboard                 | AC07, AC11, AC12, AC14 green                                 |
 | M7  | Full release evidence                                  | See §8                                                       |
 
-> **Corrigendum (2026-10-30, `cc33ef0`).** Earlier revisions assigned AC01–AC18 to
-> `tests/workspace.e2e.ts` (AC01, AC02, AC04, AC07, AC08, AC10, AC16) and
-> `tests/acceptance.e2e.ts` (AC03, AC05, AC06, AC09, AC11–AC15, AC17, AC18). Those two files
-> no longer exist: `6ed1f3e` ("rebuild on the Laya NPU workspace template") removed the
-> `/workspace`, `/capabilities` and `/settings` route family together with their acceptance
-> suites, and this section was not updated. Today the only browser test is
-> `tests/dev-smoke.e2e.ts` (four tests: hydration and navigation), and nothing in `src/` or
-> `slices/` references an AC id — so **none of AC01–AC18 currently has a browser test**. The
-> scenario text above is still the acceptance bar; see [progress.md](progress.md) for what
-> closing it costs.
+The AC ids below are the acceptance **bar**. Which of them have a browser test today, and
+which no longer have a surface to test, is recorded in exactly one place:
+[ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md). Do not restate a pass/fail summary
+here; it goes stale on the next route change.
 
-> **Recovery (2026-11-02).** `tests/acceptance.e2e.ts` is back, re-pointed at the current
-> single-route shell: 14 of the 18 criteria now drive the shipped UI. AC05, AC09, AC13 and
-> AC16 are recorded as **no longer applicable** rather than tested, because the surface each
-> one names was deleted with the route family (`offline` retry, dirty output tabs, the
-> capability catalog, an authorization input in the composer). AC03, AC06 and AC12 assert
-> only the part of their scenario this build performs. Per-criterion reasoning, selectors
-> and what a full pass would cost: [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
+> **History, kept on purpose.** This section claimed until 2026-10-30 (`cc33ef0`) that
+> `tests/workspace.e2e.ts` and `tests/acceptance.e2e.ts` covered all of AC01–AC18. `6ed1f3e`
+> ("rebuild on the Laya NPU workspace template") deleted both suites with the
+> `/workspace`, `/capabilities` and `/settings` route family, and the claim survived unedited
+> in this file **and** in [implementation-plan.md](implementation-plan.md) §10 **and** in
+> [progress.md](progress.md) — three restatements of one stale fact, corrected at three
+> different times. That duplication is what this note replaces. `tests/acceptance.e2e.ts` was
+> restored on 2026-11-02 against the current single-route shell; the per-criterion verdict is
+> in the coverage file, not here.
 
 ## 8. Release evidence
 

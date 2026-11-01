@@ -1,5 +1,10 @@
 # AC01–AC18 coverage, mapped to the live app (2026-11-02)
 
+**This file is the single authority for which acceptance criterion has a browser test.**
+[PRD.md](PRD.md) §7 and [implementation-plan.md](implementation-plan.md) §10 carry a pointer
+here instead of a verdict; [progress.md](progress.md) keeps the same correction only as
+history. If this file and a test disagree, the test wins and this file is wrong — fix it.
+
 `docs/PRD.md` §5 still states AC01–AC18 as the acceptance bar. `6ed1f3e` ("rebuild on the
 Laya NPU workspace template") deleted the route family those scenarios were written against
 (`/workspace`, `/workspace/[chatId]`, `/capabilities`, `/settings/[section]`) together with

@@ -93,13 +93,19 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
+Run on `dff55b3`, 2026-11-02 (`vitest run`, `npx prettier --check .`):
+
 ```
-vitest run          36 files / 194 passed / 3 skipped
+vitest run          36 files / 197 passed / 3 skipped
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
 tsc -p src/convex   clean
 ```
+
+This block is the only place gate numbers belong. Other documents link here instead of
+copying them; a count repeated in three files is how `138 passed (27 files)` survived two
+route rebuilds.
 
 The 3 skips are `src/convex/deployment.spec.ts`, and they are now explained in the output
 rather than silently counted: this machine's local deployment is reachable but has **zero
@@ -172,11 +178,15 @@ dropped four tests. `bin/` in this worktree holds only `codex-cli.mjs`, so there
 fix here; if that gate is ever used against this repo it must probe 3210 and report
 `skipped: functions not pushed`.
 
-## Correction — the AC test suites do not exist
+## Correction — the AC test suites do not exist (historical, superseded)
 
-`docs/PRD.md` §7 and `docs/implementation-plan.md` §10 both state that
-`tests/workspace.e2e.ts` and `tests/acceptance.e2e.ts` cover AC01–AC18. They do not exist
-in this tree, and nothing in `src/` or `slices/` references an AC id:
+> **This section is history.** It is kept because it records how a stale claim survived three
+> files. It is **not** the AC verdict. The single authority for which criterion has a test
+> today is [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
+
+`docs/PRD.md` §7 and `docs/implementation-plan.md` §10 both stated that
+`tests/workspace.e2e.ts` and `tests/acceptance.e2e.ts` cover AC01–AC18. They did not exist
+in this tree, and nothing in `src/` or `slices/` referenced an AC id:
 
 ```
 find . -name '*e2e.ts' -not -path './node_modules/*'
