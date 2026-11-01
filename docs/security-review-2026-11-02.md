@@ -369,11 +369,13 @@ same-origin route. It is not in a log — `logEvent` receives counts and outcome
 key is encrypted with AES-256-GCM before it is stored and is never returned by any query.
 
 Accepted risk, stated: a key held in `sessionStorage` is still readable by an XSS bug on this
-origin, and there is no CSP anywhere in this app (`src/hooks.server.ts` sets
-`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` — no
-`Content-Security-Policy`). The key store is a deliberate ceiling, not a guarantee. Closing it
-needs a nonce-based CSP served from `hooks.server.ts`; that is a real change with a real
-breakage surface, so it belongs in its own task rather than in a review.
+origin, and until now there was no CSP anywhere in this app (`src/hooks.server.ts` sets
+`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`). The key store is a deliberate
+ceiling, not a guarantee. A nonce-based enforced policy now ships from `svelte.config.js`
+(`kit.csp`); it is described in `docs/csp.md`. `<script>` execution is nonce-only and no
+`unsafe-inline`/`unsafe-eval` appears in `script-src`. `style-src` still allows inline, because
+`srcdoc` artifact frames inherit the policy and their model-written `<style>` blocks cannot
+carry a nonce.
 
 ## Residual risk not closed by this review
 
@@ -381,7 +383,10 @@ Stated plainly, because the list above is about what changed and this is about w
 
 1. **No CSP.** The strongest credential this app handles in the browser is a provider key in
    `sessionStorage`; XSS on this origin takes it. Headers exist for framing, sniffing and
-   referrer, but not for script origin. This is the largest unmitigated exposure on the review.
+   referrer, but not for script origin. This was the largest unmitigated exposure on the review
+   and is now closed by an enforced nonce-based policy in `svelte.config.js`; the policy, the
+   three relaxations it still carries and what each one would need are documented in
+   `docs/csp.md` and asserted by `tests/csp.e2e.ts`.
 2. **The terminal bridge is an unlogged shell.** Holding the token means holding a shell with
    the user's privileges, with no per-command approval and no audit trail. Documented as such;
    not a defect against the contract, but it is the biggest blast radius in the surface.
