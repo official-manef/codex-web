@@ -487,6 +487,9 @@
     flex: 1;
   }
   .browser-navigation button,
+  /* `DropdownMenu.Trigger` renders its own element, so the scoped child selector above never
+     matched it: the Downloads and Browser options triggers had no padding and measured 17x17. */
+  .browser-navigation :global(.icon-button),
   .annotation-tools button {
     display: inline-flex;
     align-items: center;

@@ -21,6 +21,7 @@ export default defineConfig({
 		},
 		command: `bun run build && bun run preview -- --host 127.0.0.1 --port ${port}`,
 		url: baseURL,
+		timeout: 180_000,
 		reuseExistingServer: false
 	},
 	use: {
