@@ -17,20 +17,21 @@ src/convex --noEmit` clean.
 
 ## Summary
 
-| Surface                                          | Verdict    | Evidence                                                                                      |
-| ------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------- |
-| `/api/mcp/server` bearer check                   | no finding | `src/lib/server/access.spec.ts`, route read in full                                           |
-| `/api/mcp/tools` + server MCP allowlist          | fixed      | `src/lib/server/mcp/mcp.spec.ts` — `localhost.` / `127.0.0.1.` bypassed the public-HTTPS rule |
-| `/auth/*` + `auth/oidc.ts`                       | fixed      | `src/lib/server/auth/callback.spec.ts` — cross-origin callback burned the pending login       |
-| `/api/ai/{chat,config}`                          | no finding | `src/lib/server/ai/chat.spec.ts`, `src/lib/server/ai/config.ts` read in full                  |
-| `/api/manef/[...path]`                           | no finding | `src/lib/server/manef.spec.ts`, route read in full                                            |
-| `bridge/terminal-bridge.mjs` + `bridge_token.ts` | fixed      | `src/lib/runtime/terminal-bridge.spec.ts` — three findings, three failing tests               |
-| `src/convex/*` identity boundary                 | no finding | `src/convex/store.spec.ts`, every public handler audited by hand                              |
-| `src/lib/byok_key.ts`                            | fixed      | does not exist; the equivalent path is `src/lib/byok_input.ts` + `Chat.svelte`                |
+| Surface                                          | Verdict    | Evidence                                                                                                          |
+| ------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------- |
+| `/api/mcp/server` bearer check                   | no finding | `src/lib/server/access.spec.ts`, route read in full                                                               |
+| `/api/mcp/tools` + server MCP allowlist          | fixed      | `src/lib/server/mcp/mcp.spec.ts` — `localhost.` / `127.0.0.1.` bypassed the public-HTTPS rule                     |
+| `/auth/*` + `auth/oidc.ts`                       | fixed      | `src/lib/server/auth/callback.spec.ts` — cross-origin callback burned the pending login                           |
+| `/api/ai/{chat,config}`                          | no finding | `src/lib/server/ai/chat.spec.ts`, `src/lib/server/ai/config.ts` read in full                                      |
+| `/api/manef/[...path]`                           | no finding | `src/lib/server/manef.spec.ts`, route read in full                                                                |
+| `bridge/terminal-bridge.mjs` + `bridge_token.ts` | fixed      | `src/lib/runtime/terminal-bridge.spec.ts` — three findings, three failing tests                                   |
+| `src/convex/*` identity boundary                 | no finding | `src/convex/store.spec.ts`, every public handler audited by hand                                                  |
+| `src/lib/byok_key.ts`                            | fixed      | outlived its tab; now `src/lib/byok_input.ts` reads a tab-scoped draft and `byok_key.ts` holds it in module scope |
 
 Five fixes. Four distinct root causes: a trailing dot in a hostname denylist, a cookie consumed
 before the request was authorised, a request header trusted as configuration, and a credential
-that outlived its tab.
+that outlived its tab. One of the five was reported against a file that turned out to exist; the
+defect was in the read path, not the file's absence (see the `byok_key.ts` section).
 
 ---
 
@@ -328,12 +329,23 @@ trailing-dot bug above was found in both, which is the drift that duplication in
 spec corpus, or generating one from the other, would close it; merging the modules is not
 possible in the current build graph.
 
-## `src/lib/byok_key.ts` — does not exist; equivalent path fixed
+## `src/lib/byok_key.ts` — exists; the leak was in how the key was read
 
 **Verdict: fixed.**
 
-`src/lib/byok_key.ts` is not on this branch (verified by `find`). The live equivalent is the
-SvelteKit chat screen, which read its provider key like this:
+> **Correction, 2026-11-02 (claims audit).** An earlier revision of this section said
+> `src/lib/byok_key.ts` "is not on this branch (verified by `find`)". It is, and it was added by
+> `1ab435b`, which is an ancestor of the commit this review was written on. The `find` that
+> "verified" the absence was wrong, not the file. The analysis below is unchanged, because the
+> defect it describes is real; only the claim about the file's existence was false. See
+> [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md) #10.
+
+`src/lib/byok_key.ts` holds the SvelteKit provider key in **module scope** while a turn streams:
+not `localStorage`, not `sessionStorage`, never a URL. The live read path is
+`src/lib/byok_input.ts`, which the chat screen calls. Both modules export a function named
+`readProviderKey`; `Chat.svelte` imports the `byok_input` one.
+
+The SvelteKit chat screen used to read its provider key like this:
 
 ```ts
 const apiKey =
@@ -361,7 +373,14 @@ Evidence:
 ```
 
 Fix: `src/lib/byok_input.ts` reads the tab-scoped draft only, type-checks the value, and is the
-single place the chat screen gets a key from. No `localStorage` access anywhere in the path.
+single place the chat screen gets a key from. `src/lib/byok_key.ts` is a separate module-scope
+holder for the same value on the streaming path. No `localStorage` access anywhere in either
+path.
+
+> **Open item, recorded not fixed.** Two modules export `readProviderKey`. They agree today, and
+> `Chat.svelte` imports only the `byok_input` one, but nothing structural keeps them in step —
+> this is the same duplication shape that produced the trailing-dot bug in §`/api/mcp/tools`.
+> Consolidating them is a code change and belongs in its own commit, not in a docs audit.
 
 Checked: the key is not in any URL — `streamServerChat` POSTs it as a JSON field to a
 same-origin route. It is not in a log — `logEvent` receives counts and outcomes only, and

@@ -7,7 +7,9 @@ functions and persisted data. Root feature slices stay independent of framework 
 
 The product is the shared workspace shell template. Its MVP uses **no backend and no
 credentials**: the shell renders Laya's UI, and the transport (`src/lib/http.ts`) is an
-in-browser store. Enabled capabilities: none.
+in-browser store. Every optional capability ships disabled, so a fresh clone has none enabled:
+`AUTH_ENABLED`, `AI_ENABLED`, `MCP_CLIENT_ENABLED`, `MCP_SERVER_ENABLED`, `GIT_SURFACE_ENABLED`
+and `AI_TOOLS_ENABLED` all default to `false`, and `PUBLIC_CONVEX_URL` empty means no cloud.
 
 ```text
 /                     → app-shell chrome + Chat (primary) + tabbed output region (secondary)
@@ -123,11 +125,12 @@ origin. Change one, change the other, then run `vitest run src/convex src/lib/se
 `PUBLIC_CONVEX_URL` exists. Subscriptions are already reactive. Committed codegen lets
 a fresh clone typecheck without linking a backend.
 
-`starter.status` returns public version metadata. The `notes` table stores bounded private
-notes; every query/mutation checks the verified identity and indexed ownership. Google OIDC
-is optional; its server session passes only an ID token through `/auth/token` to Convex,
-which verifies its configured issuer/audience independently. Safe session metadata in the
-root loader contains no tokens. [Auth setup and limits](auth.md) are part of this boundary.
+`starter.status` returns public version metadata. **There is no `notes` table** — it was removed
+in `023aa02`; owner-scoped private data now lives in `memories` and `projects`, each indexed by
+owner and re-checking identity on every read. Google OIDC is optional; its server session passes
+only an ID token through `/auth/token` to Convex, which verifies its configured issuer/audience
+independently. Safe session metadata in the root loader contains no tokens.
+[Auth setup and limits](auth.md) are part of this boundary.
 Workspace switching and settings remain local examples, not a tenancy system.
 
 ## Loading and recovery

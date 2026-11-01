@@ -99,9 +99,10 @@ Without these values, provider keys and MCP servers cannot be stored, and `/auth
    flag alone does not remove a provider already configured in Convex.
    Convex throws on an absent variable in auth configuration; the config catches only
    that specific missing-ID error. Other configuration errors still fail deployment.
-4. Open `/apps/notes`, sign in, create a note, edit it, and delete it. Use a second Google
-   account to confirm that the first account's notes remain inaccessible. An invalid
-   deployment/client ID should show a connection/sign-in failure, not private data.
+4. Sign in, then open **Memories** (rail) or **Repository** (settings) and exercise the
+   owner-scoped path: create an entry, edit it, delete it. Use a second Google account to confirm
+   that the first account's rows remain inaccessible. An invalid deployment/client ID should show
+   a connection/sign-in failure, not private data.
 
 ## Runtime boundary
 
@@ -141,15 +142,28 @@ no GET logout endpoint.
 
 ## Private Convex example
 
-`src/convex/notes.ts` implements `list`, `create`, `update` and `remove`. Every operation
-authenticates on the backend. The owner comes from `ctx.auth.getUserIdentity()` and is
-stored as `tokenIdentifier`; no API accepts an owner ID supplied by the browser.
-Updates and deletions check ownership again after reading the record. Missing and
-other-user IDs return the same error.
+> **Correction, 2026-11-02 (claims audit).** This section used to document `src/convex/notes.ts`
+> and a `/apps/notes` screen. Both were **deleted** in `023aa02` ("feat(byok): add cloud mode on
+> Convex with the user's own provider key") when that commit removed the `notes` table and the
+> whole `/apps/*` route family. The nearest surviving owner-scoped example is
+> `src/convex/memories.ts` + `src/convex/projects.ts`, described below. See
+> [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md).
 
-The `by_owner` index bounds reads to 100 notes per account. Each note contains 1–2,000
-trimmed characters. The list omits the owner field from its response. This intentionally
-small example needs pagination and a product-specific quota policy if those limits change.
+`src/convex/memories.ts` implements `list`, `add`, `remove` and `clear` (plus an internal
+`touch`). `src/convex/projects.ts` implements `list`, `create`, `rename`, `remove`, `assign` and
+`ofSession`. Every operation authenticates on the backend. The owner comes from
+`ctx.auth.getUserIdentity()` and is stored as `tokenIdentifier`; no API accepts an owner ID
+supplied by the browser. Reads re-check ownership after fetching. Missing and other-user IDs
+return the same error.
+
+The `by_owner` index bounds each read: 50 memories per account at 400 characters each, and 50
+projects at 60 name characters plus 2,000 instruction characters. Both list queries omit the
+owner field from their response. This intentionally small example needs pagination and a
+product-specific quota policy if those limits change.
+
+**Still local, not Convex.** The UI reads `localStorage` for memories (`src/lib/memories.ts`) and
+for project membership (`src/lib/projects.ts`). The Convex functions work and are tested; nothing
+in the client calls them yet, which `progress.md` §Not started records as a `partial`.
 
 ## Verification and limits
 

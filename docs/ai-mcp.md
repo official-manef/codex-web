@@ -1,9 +1,16 @@
 # Optional BYOK chat and MCP
 
-`/apps/assistant` contains real provider chat and a separate, manually operated remote
-tool panel. All three capabilities default to disabled, so a clone starts without AI
-accounts, API keys or MCP connections. The screen is loaded only when its feature route
-opens; provider SDKs and connection settings stay in server modules.
+The chat surface and a separate, manually operated remote tool panel. All three capabilities
+default to disabled, so a clone starts without AI accounts, API keys or MCP connections. The
+chat screen is loaded only when its feature destination opens; provider SDKs and connection
+settings stay in server modules.
+
+> **Corrected, 2026-11-02 (claims audit).** This file used to say `/apps/assistant`. That route
+> belongs to the deleted `/apps/*` family (`6ed1f3e`, then `023aa02` removed the last of it).
+> Today the BYOK chat is the main **Chat** surface (`src/lib/views/Chat.svelte` via
+> `src/lib/chat_dispatch.ts`) and the MCP panel is under **Tools** (`#tools` →
+> `src/lib/views/ToolsSettings.svelte`). See
+> [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md).
 
 ## Access and keys
 
@@ -72,8 +79,8 @@ with Responses-Lite enabled the gateway mangles tool names and every call fails 
 `unsupported call`.
 
 This example is configuration structure, not a working model ID. After replacing it,
-open the Assistant screen, check setup, select the provider/model, enter your own key,
-and send a message. Switching providers clears the previous provider key. The page
+open **Chat**, add your key under Chat settings → Bring your own key, and send a message.
+Switching providers clears the previous provider key. The page
 shows streamed text, partial failures and a stop button. Starting another conversation
 uses **Clear keys and conversation**.
 

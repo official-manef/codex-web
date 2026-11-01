@@ -1,7 +1,8 @@
 # Optional integrations
 
-Convex is the default backend. Google auth/private notes and BYOK AI/MCP are implemented,
-optional features: follow [auth.md](auth.md) and [ai-mcp.md](ai-mcp.md). Node/Vercel hosting
+Convex is the default backend. Google auth and owner-scoped private data (memories, projects) plus
+BYOK AI/MCP are implemented, optional features: follow [auth.md](auth.md) and
+[ai-mcp.md](ai-mcp.md). Node/Vercel hosting
 is covered in [deployment.md](deployment.md). DOKU Checkout and Resend remain callable
 server transport adapters, tested with mocked HTTP. Product checkout/email workflows
 need their own durable state, authorization and actual merchant/mail acceptance.
