@@ -32,6 +32,12 @@ template's transport swap point (see §4).
 
 ## 2. What the copy contains
 
+> **As copied, not as shipped.** The listing below is the shape at source commit `84c1823`.
+> Since then this tree removed `Performance`, `Parameters`, `Corpus`, `Schema` and `Reference`,
+> and never had a `Files` or `Browser` view under those names. Do not grep for these nine
+> entries; measure the current tree with `ls src/lib/views/*.svelte`. Kept because it is the
+> provenance record of what was taken from Laya.
+
 ```text
 slices/workspace-shell/       shell (2098 lines) + 10 sub-slices
 shared/                       icons, workspace-layout math, base.css token source
