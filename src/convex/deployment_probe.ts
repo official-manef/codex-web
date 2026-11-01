@@ -31,27 +31,52 @@ const NO_FUNCTION = /could not find (?:public )?function/i;
 /** What `requireUser` and the Convex auth layer answer for a caller with no identity. */
 export const REFUSED = /[Ss]ign in|not_authenticated|Unauthorized|Not authenticated/;
 
+/**
+ * The local `npx convex dev` port. Not 9999: that port is dead, so pointing a gate at it
+ * forces this spec to skip forever while a real deployment sits here being ignored.
+ *
+ * 3210 is only the first-run default. `convex dev` writes the ports it actually chose into
+ * `.convex/local/default/config.json`, and on a machine with several checkouts it is common
+ * for another project to own 3210 — which is exactly how this gate reported UNPROVEN while
+ * this repo's own deployment sat on 3214 refusing anonymous callers correctly. So read the
+ * config when it exists, and keep 3210 as the fallback for a fresh clone that never ran dev.
+ */
+export const DEFAULT_DEPLOYMENT_URL = 'http://127.0.0.1:3210';
+
+/** The port this checkout's own `convex dev` chose, injected by the caller.
+ *
+ * The reader is a parameter rather than a `node:fs` import on purpose: this module sits in
+ * the Convex bundle graph, where Node built-ins are refused (`starter/runtime-boundaries`).
+ * The probe spec passes `readFileSync`; the app never calls this with a default.
+ */
+export function localDeploymentUrl(readFile?: (path: string) => string): string | null {
+	if (!readFile) return null;
+	try {
+		const config = JSON.parse(readFile('.convex/local/default/config.json')) as {
+			ports?: { cloud?: unknown };
+		};
+		const port = config?.ports?.cloud;
+		if (typeof port === 'number' && Number.isInteger(port) && port > 0 && port <= 65535) {
+			return `http://127.0.0.1:${port}`;
+		}
+	} catch {
+		// No local config, unreadable, or not JSON: the caller falls back to the default.
+	}
+	return null;
+}
+
 /** A protected function that exists in every build; its absence means nothing was pushed. */
 const PROBE_PATH = 'devices:list';
 
-/**
- * The deployment to probe, or `null` when this checkout has not named one.
- *
- * There is deliberately no hardcoded default. Ports are allocated per project from 3210
- * upwards, so a literal number can point at a *different* project's backend — and a foreign
- * deployment that happens to have a `devices:list` would answer "Please sign in." too, which
- * would let this spec claim our boundary held while measuring somebody else's. The port is
- * therefore resolved from `.convex/local/default/config.json` by `scripts/convex-local.mjs`
- * and injected as `CONVEX_URL` (see `vite.config.ts` and `bin/gate`); an explicit env value
- * still wins, which is how the state table in `docs/gate.md` is exercised.
- */
 export function deploymentUrl(
-	env: Record<string, string | undefined> = process.env
-): string | null {
+	env: Record<string, string | undefined> = process.env,
+	readFile?: (path: string) => string
+): string {
 	// A blank variable is an unset variable here: `CONVEX_URL= npx vitest run` must not turn
 	// into a request against the empty string.
 	const url = [env.CONVEX_URL, env.PUBLIC_CONVEX_URL].find((value) => value && value.trim());
-	return url ? url.trim().replace(/\/$/, '') : null;
+	if (url) return url.trim().replace(/\/$/, '');
+	return localDeploymentUrl(readFile) ?? DEFAULT_DEPLOYMENT_URL;
 }
 
 export type QueryAnswer = 'missing-functions' | 'ready' | 'unclassified';
@@ -81,20 +106,9 @@ function firstLine(text: string): string {
 }
 
 export async function probeDeployment(
-	url: string | null = deploymentUrl(),
+	url: string = deploymentUrl(),
 	fetcher: typeof fetch = fetch
 ): Promise<DeploymentProbe> {
-	if (url === null) {
-		// No deployment named and none recorded for this checkout. Reporting a guessed port here
-		// is exactly the mistake this module exists to stop, so it says so instead.
-		return {
-			url: '',
-			state: 'absent',
-			detail:
-				'this checkout names no Convex deployment (no CONVEX_URL/PUBLIC_CONVEX_URL and no ' +
-				'.convex/local/default/config.json), so no port was guessed'
-		};
-	}
 	const base = url.replace(/\/$/, '');
 
 	try {
@@ -187,11 +201,18 @@ export function classifyAuthFailure(rejection: string | null): AuthFailure {
  * Turn a rejection into a verdict we are willing to defend. Anything unrecognised throws:
  * `Server Error` from a missing function must never be counted as "the boundary held", and
  * neither must a plain 500 from something else.
+ *
+ * Returns the classification instead of void so a caller can assert on it. It used to return
+ * nothing, and the specs that call it had no `expect` of their own — which meant these tests
+ * could only ever pass while the deployment was empty. The moment a real backend answered,
+ * `requireAssertions: true` turned three green rows into "expected any number of assertion,
+ * but got none". The skip branch hid that for as long as the deployment stayed empty.
  */
-export function assertRefused(rejection: string | null, label: string, url: string): void {
-	switch (classifyAuthFailure(rejection)) {
+export function assertRefused(rejection: string | null, label: string, url: string): AuthFailure {
+	const verdict = classifyAuthFailure(rejection);
+	switch (verdict) {
 		case 'refused':
-			return;
+			return verdict;
 		case 'missing-functions':
 			throw new Error(
 				`${label} is not deployed on ${url}, so the auth boundary was NOT exercised. ` +

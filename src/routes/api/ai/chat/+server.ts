@@ -5,6 +5,7 @@ import { aiSettings, parseChat } from '$lib/server/ai/config';
 import { chatResponse } from '$lib/server/ai/chat';
 import { defaultPolicy, parsePolicy } from '$lib/server/policy';
 import { logEvent } from '$lib/server/log';
+import { bridgeAvailable, createBridgeClient } from '$lib/server/bridge';
 import type { RequestHandler } from './$types';
 
 /**
@@ -55,6 +56,25 @@ export const POST: RequestHandler = async (event) => {
 		tools: toolsEnabled && input.toolUse,
 		images: input.messages.some((message) => Array.isArray(message.content))
 	});
+	const bridge = bridgeAvailable(env);
+	const toolUse = input.toolUse === true;
+	await logEvent('info', 'ai.chat.tools', {
+		bridge,
+		toolUse,
+		enabled: toolsEnabled
+	});
+	const bridgeClient = toolsEnabled && toolUse && bridge ? createBridgeClient(env) : undefined;
+	const currentPolicy = policy(env);
+	const deps = bridgeClient
+		? {
+				policy: currentPolicy,
+				tools: {
+					exec: bridgeClient.exec,
+					readFile: bridgeClient.readFile,
+					writeFile: bridgeClient.writeFile
+				}
+			}
+		: { policy: currentPolicy };
 	return chatResponse(
 		input,
 		event.request.signal,
@@ -65,9 +85,6 @@ export const POST: RequestHandler = async (event) => {
 				outcome
 			}).catch(() => undefined);
 		},
-		// No `tools` deps are wired here on purpose: this route has no bridge connection, so a
-		// tool call has nowhere to execute. Passing the policy alone keeps the refusal honest —
-		// every tool returns "denied by policy" instead of pretending to run.
-		{ policy: policy(env) }
+		deps
 	);
 };

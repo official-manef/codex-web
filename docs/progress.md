@@ -296,12 +296,14 @@ loaded screen.
 
 Ordered by the reasoning in `docs/chatgpt-desktop-parity-windows.md` §7, cheapest first.
 
-| #   | Item                                        | Blocker                                                               | Status       |
-| --- | ------------------------------------------- | --------------------------------------------------------------------- | ------------ |
-| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`  | done         |
-| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default          | done (gated) |
-| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol exist; no manifest loader, no approval gate           | partial      |
-| 4   | Memories                                    | local done; Convex tables exist but the UI still reads `localStorage` | partial      |
+| #   | Item                                        | Blocker                                                                  | Status       |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------ | ------------ |
+| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`     | done         |
+| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default             | done (gated) |
+| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol + manifest + screen; the `mcp_app` verb is not consulted | partial      |
+| 4   | Memories                                    | Convex when signed in, local otherwise, explicit import button           | done         |
+| 5   | Bridge-backed tool execution                | client + route wired; the bridge has not grown the HTTP verbs            | partial      |
+| 6   | Scheduled tasks                             | records + a dry-run decision route; still no runner                      | partial      |
 
 Done rows name the file that carries them: Projects `src/lib/projects.ts`, Memories
 `src/lib/memories.ts` + `src/convex/memories.ts`, Git `src/lib/server/git.ts` +
@@ -311,7 +313,14 @@ The git surface used to be read-only. As of 2026-11-02 it also stages, commits a
 worktrees — behind `GIT_POLICY_JSON`, which denies every verb when unset or malformed. Diff and
 status stay open because they cannot write. Push and PR review remain absent: no forge
 credential is in reach, so claiming them would repeat the AC mistake this document exists to
-correct. Full phase-by-phase status: `docs/parity-checklist-2026-11-02.md` §6.
+correct. Full phase-by-phase status: `docs/parity-checklist-2026-11-02.md` §6 and §7.
+
+Two validation findings worth keeping: `chat.ts` used to index the policy by tool name rather
+than policy verb, and three auth assertions had no `expect` at all — they only ever passed while
+the Convex deployment was empty. `bin/gate` now carries the probed deployment URL into vitest so
+the script and the spec cannot disagree about which backend they mean; before that, the gate
+reported UNPROVEN against another project's backend on 3210 while this checkout's own deployment
+answered correctly on 3214.
 
 Out of scope unless a product decision changes it: parallel chat orchestration, Computer
 Use, mobile remote relay, MCP 2.0 events.

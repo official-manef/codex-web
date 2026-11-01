@@ -318,3 +318,29 @@ Three things a reader should not over-read:
    the local store. Wiring the client is a separate change with its own migration test.
 3. **Phase 5 records, does not run.** Deliberate (see the phase table), and the e2e test asserts
    the copy says so.
+
+## 7. Wave 3 (same day, ten more agents) — what closed
+
+The three "not done" cells above were the work of a second batch. Same rule as §6: the file is
+named so the claim can be checked.
+
+| Gap from §6                       | Now                                                                                                                                                                                                                                                                            | Still not done                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase 1 had no execution deps     | `src/lib/server/bridge.ts` — bearer-authed client for `/v1/exec`, `/v1/fs/read`, `/v1/fs/write`, 5 s timeout, 1 MB cap, argv/path validated **before** any call. `/api/ai/chat` builds the deps only when `AI_TOOLS_ENABLED` + request `toolUse` + `bridgeAvailable` all agree | The bridge process itself still speaks only `/v1/health` and the WebSocket; those three HTTP verbs are the contract this client expects and the bridge has not grown |
+| Phase 4 had no client             | `src/lib/memory_client.ts` (`mergeMemories`, `contextBlock`, `toMemoryRows`) and `Memories.svelte` reading Convex when signed in, local otherwise, with an explicit **Import local memories** button                                                                           | A migration for a user who edits the same note in two tabs; `dual_write` stays off                                                                                   |
+| Phase 5 had no decision core      | `src/lib/automations_runner.ts` (`decideRun`, `drainOrder`, `MAX_RUNS_PER_DRAIN`) and `POST /api/automations/run`, a **dry run** that returns decisions and never calls a model or `recordRun`                                                                                 | The actual runner. The route says `executor: 'none'` in its own JSON body                                                                                            |
+| Phase 6 had no manifest or screen | `src/lib/server/mcp_app_manifest.ts` (§-closed allowlist, agrees with `framePolicy`), `GET /api/mcp/apps`, `McpApps.svelte`, registered as `mcp-apps`                                                                                                                          | The `mcp_app` policy verb is declared but never consulted by the frame; a per-app approval gate is still the missing fence                                           |
+
+Two bugs the batches themselves could not see, found while validating:
+
+1. **`chat.ts` indexed the policy by tool name, not by policy verb.** `read_file` and `exec` happen
+   to share a name, so the bug was invisible until `apply_patch` would have read `undefined` and
+   fallen to deny for the wrong reason. Fixed through `TOOL_MAP`.
+2. **Three auth tests had no `expect` at all.** `requireAssertions: true` made them fail the moment
+   a real Convex deployment answered — they could only ever pass while the backend was empty, and
+   the skip branch hid that. `assertRefused` now returns its verdict so the spec asserts on it.
+
+The second one is the more interesting failure: the gate was green _because_ it was not testing
+anything. It was found by pointing the probe at this checkout's own deployment (port 3214) instead
+of the machine default (3210, owned by another project), and then by making `bin/gate` carry the
+probed URL into vitest so the script and the spec cannot disagree about which backend they mean.
