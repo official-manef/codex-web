@@ -23,6 +23,11 @@
     gridFromBox,
     isAttachedToBottom,
   } from "#lib/terminal_buffer.js";
+  import {
+    clearBridgeToken,
+    readBridgeToken,
+    saveBridgeToken,
+  } from "#lib/runtime/bridge_token.js";
 
   /**
    * Terminal on the user's own device.
@@ -111,11 +116,19 @@
     const row = terminalDevices.find((entry) => entry._id === value);
     endpoint = row?.endpoint ?? "";
     resetSession();
+    // A token saved for this device in this tab is restored, so a reload does not force the
+    // user to paste their own credential again. It stays in tab memory from here on.
+    const remembered = value ? readBridgeToken(value) : "";
+    if (remembered) {
+      sessionToken = remembered;
+      tokenSaved = true;
+    }
   }
 
   $effect(() => {
     // A row can be revoked while the panel is open; drop the stale selection and its socket.
     if (deviceId && !terminalDevices.some((row) => row._id === deviceId)) {
+      clearBridgeToken(deviceId);
       deviceId = "";
       endpoint = "";
       resetSession();
@@ -230,6 +243,8 @@
     sessionToken = candidate;
     tokenSaved = true;
     token = "";
+    // Remembered for this tab and this device only; cleared when the device is revoked.
+    if (deviceId) saveBridgeToken(deviceId, sessionToken);
 
     terminal = createTerminal({
       endpoint: check.origin,
@@ -348,7 +363,7 @@
             autocomplete="off"
             spellcheck={false}
             disabled={tokenSaved}
-            placeholder={tokenSaved ? "Token saved for this session" : "Paste the pairing token"}
+            placeholder={tokenSaved ? "Token restored for this tab" : "Paste the pairing token"}
             bind:value={token}
           />
         </label>
@@ -367,6 +382,8 @@
               token = "";
               status = "idle";
               statusDetail = "";
+              // Forget it for this device too: "use another" means stop reusing this one.
+              if (deviceId) clearBridgeToken(deviceId);
             }}
           >
             Use another token

@@ -12,9 +12,15 @@ this template.
   [Devices](#devices).
 - Lists paired `terminal` devices in a `<select>`; picking one fills the bridge endpoint from
   the device row.
-- Takes the pairing token in a `password` field. The token stays in component memory: it is
-  never written to storage, never appended to a URL, never logged, and the field becomes a
-  disabled `Token saved for this session` placeholder once a connection is attempted.
+- Takes the pairing token in a `password` field. The token is never appended to a URL and never
+  logged. Once a connection is attempted the field becomes a disabled placeholder.
+- Remembers that token per device in `sessionStorage`, so a reload does not force the user to
+  paste their own credential again. It survives a reload, dies when the tab closes, is never
+  shared across tabs, and is removed when the device is revoked or the user picks **Use another
+  token**. This is a deliberate ceiling rather than a guarantee: anything a browser persists is
+  reachable by an XSS bug, so the exposure window is kept as small as the feature allows.
+  Nothing about the token ever reaches the server or Convex — only its SHA-256 does, and only
+  when the device is registered.
 - Rejects an endpoint `classifyEndpoint` marks `invalid`, and refuses a `public` endpoint when
   the page itself is not https (the token would cross a cleartext connection).
 - Streams text frames into a `<pre aria-live="polite">` capped at 200 000 characters; the
