@@ -135,7 +135,9 @@ test('no CSP violation is reported while the workspace shell and composer run', 
 	await page.goto('/');
 
 	// Send a turn: this exercises the same-origin `/api` path and the local stub reply.
-	const composer = page.getByRole('textbox').first();
+	// The composer carries role="combobox" since it drives the picker listbox, so a `textbox`
+	// query no longer matches it.
+	const composer = page.getByRole('combobox').first();
 	await composer.fill('CSP smoke');
 	await composer.press('Enter');
 	await expect(page.getByRole('log', { name: 'Conversation' })).toContainText('CSP smoke');
