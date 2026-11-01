@@ -123,8 +123,9 @@ invalid`. Plain `http:` is accepted for loopback, LAN and Tailscale (a MagicDNS 
   and the user enables the tool in Tools. A remote browser view is not framed: a token in an
   iframe URL would leak, so the UI names that limit instead of showing a broken frame.
 
-The template does not ship the bridge, and no `ssh -L`, `tailscale serve` or `tailscale funnel`
-command in the UI has been run here.
+A reference bridge ships at `bridge/terminal-bridge.mjs`; it is a separate process the user
+runs on their own machine, never a route in this app. No `ssh -L`, `tailscale serve` or
+`tailscale funnel` command in the UI has been run here.
 
 ## 6. What is intentionally absent
 

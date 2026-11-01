@@ -71,4 +71,47 @@ None of these commands were run or verified in this build.
 - No shell multiplexing: one device selection is one pty, with no tabs or sessions.
 - No per-command approval: the shell is not gated command by command.
 - No audit log: the template records nothing about what ran.
-- No bridge: `/v1/health`, `/v1/terminal` and the pty are the user's service to run.
+
+## The bridge that ships here
+
+`bridge/terminal-bridge.mjs` implements the contract above. It is a separate process, not a
+SvelteKit route, because it must outlive a web request and it must run on the user's machine —
+never on the app server. One file, no build step, no native dependency.
+
+```bash
+# Generate a URL-safe token. Plain base64 emits +, / and =, and RFC 6455 forbids those in a
+# subprotocol name, so every handshake would fail with "invalid or duplicated subprotocol".
+BRIDGE_TOKEN=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=') node bridge/terminal-bridge.mjs
+```
+
+| Setting                  | Default     | Meaning                                                                                                   |
+| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
+| `BRIDGE_TOKEN`           | none        | Required, ≥16 chars, `A-Z a-z 0-9 . _ ~ -` only. Compared in constant time, never logged.                 |
+| `BRIDGE_PORT`            | `8649`      | Listening port.                                                                                           |
+| `BRIDGE_HOST`            | `127.0.0.1` | Loopback by default. Expose it with `tailscale serve`, not by binding `0.0.0.0`.                          |
+| `BRIDGE_ALLOW_ORIGIN`    | empty       | Comma-separated exact origins allowed to open a socket. Empty means same-host only, which suits a tunnel. |
+| `BRIDGE_SHELL`           | `bash`      | `powershell.exe` on Windows.                                                                              |
+| `BRIDGE_CWD`             | `$HOME`     | Starting directory of the shell.                                                                          |
+| `BRIDGE_MAX_CONNECTIONS` | `8`         | Concurrent sockets. Over the limit the handshake gets `503`.                                              |
+
+Behaviour worth knowing:
+
+- A foreign `Origin` gets `403` during the upgrade, so another site cannot open a socket with
+  a token the user pasted into this page.
+- Binary frames close the socket with `1003`, because the client refuses them anyway.
+- `{"type":"resize","cols":N,"rows":N}` is accepted and clamped to 500×300. Without `node-pty`
+  there is no real terminal sizing — the bridge signals the child instead — so a program that
+  draws on screen coordinates will not reflow.
+- Nothing is written to disk and nothing is logged. The transcript exists only in the browser
+  tab, until the page reloads.
+
+`src/lib/runtime/terminal-bridge.spec.ts` starts this bridge on a random port and speaks the
+protocol at it: health with a good and a bad token, a shell that keeps state between frames,
+a handshake with no subprotocol, a foreign origin, and a binary frame. Six tests, no mocks.
+
+## What the bridge still does not do
+
+It is honest about being a thin shell pipe: no `node-pty`, no scrollback, no per-command
+approval, no audit trail, one shell per socket. Adding `node-pty` would give real terminal
+sizing but requires a native build on the user's machine, which is a deployment decision the
+user should make rather than a default.

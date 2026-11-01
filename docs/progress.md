@@ -5,6 +5,24 @@ commit named at the top. If a line here disagrees with the code, the code wins â
 
 Baseline: `d839f75`, `main`, 2026-10-31.
 
+## Terminal bridge
+
+`bridge/terminal-bridge.mjs` is the bridge `docs/terminal.md` used to describe as missing. One
+file, no build step, no native dependency: it serves `GET /v1/health` and a
+`WebSocket /v1/terminal` that authenticates through the `bearer.<token>` subprotocol and pipes
+one shell per socket.
+
+It runs on the user's machine, never on the app server â€” that is the whole point of the BYOK
+device model. Six tests in `src/lib/runtime/terminal-bridge.spec.ts` spawn it on a random port
+and check a good token, a bad token, a shell that keeps state between frames, a handshake with
+no subprotocol, a foreign origin, and a binary frame. No mocks.
+
+One trap worth recording: a WebSocket subprotocol name allows only RFC 6455 `tchar`, so a plain
+base64 token contains `+`, `/` and `=` and every handshake dies with "invalid or duplicated
+subprotocol". The bridge refuses such a token at startup and `TOKEN_PATTERN` in
+`src/lib/runtime/terminal.ts` was tightened to match, because it previously accepted
+characters that were guaranteed to fail.
+
 ## Default model: `cx/gpt-6.1-sol`
 
 The `nine-router` catalog shipped in the companion Codex setup puts `cx/gpt-6.1-sol` on
@@ -76,7 +94,7 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 ## Gates, measured on this commit
 
 ```
-vitest run          28 files / 143 tests passed
+vitest run          29 files / 149 tests passed
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings

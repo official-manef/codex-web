@@ -45,7 +45,9 @@ const MAX_COLS = 500;
 const MAX_ROWS = 300;
 const OPEN = 1;
 
-const TOKEN_PATTERN = /^[A-Za-z0-9._~+/=-]{8,512}$/;
+// A WebSocket subprotocol name may only use RFC 6455 tchar. Base64 with +, / or = would
+// throw inside `new WebSocket`, so reject it here with a message the user can act on.
+const TOKEN_PATTERN = /^[A-Za-z0-9._~-]{8,512}$/;
 
 function defaultSocketFactory(url: string, protocols: string[]): TerminalSocket {
 	return new WebSocket(url, protocols) as unknown as TerminalSocket;
