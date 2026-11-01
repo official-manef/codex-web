@@ -14,12 +14,11 @@
     chatAppearanceStyle,
     chatCandidateColors,
   } from "../../../slices/workspace-shell/shared/chat-ui/index.js";
-  import { onMount, tick, untrack } from "svelte";
+  import { onMount, tick, untrack, type Component } from "svelte";
   import { Icon } from "../../../shared/icons/index.js";
   import RecoveryNotice from "#lib/RecoveryNotice.svelte";
   import RichText from "#lib/RichText.svelte";
   import ModelCapabilities from "#lib/ModelCapabilities.svelte";
-  import ChatTools from "#lib/ChatTools.svelte";
   import { api, get, post, postAudio } from "#lib/http.js";
   import { projectStore } from "#lib/projects.js";
   import {
@@ -32,7 +31,6 @@
   import Recorder from "#lib/Recorder.svelte";
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
   import { Pencil, Trash2 } from "@lucide/svelte";
-  import SpeechControls from "#lib/SpeechControls.svelte";
   import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
@@ -195,6 +193,15 @@
   let settingsVisited = $state(false);
   let sessionVisited = $state(false);
   let toolPanel = $state<"tools" | "mcp" | "skills">("tools");
+  // The tools panel is 24 kB of source that most sessions never open, so it stays out of the
+  // initial graph. Loaded once on first visit; the `{#key}` remount below still runs on every
+  // tab change, which is why this is state and not `{#await}` (that would re-suspend each time).
+  let ChatTools = $state<Component<any> | null>(null);
+  $effect(() => {
+    if (toolsVisited && !ChatTools) {
+      import("#lib/ChatTools.svelte").then((module) => (ChatTools = module.default));
+    }
+  });
   export function openPanel(next: string, notify = true) {
     if (!isLayaChatPanel(next)) return;
     contextSummaryOpen = false;
@@ -2974,33 +2981,33 @@
         hidden={panel !== "tools" && panel !== "mcp" && panel !== "skills"}
         inert={panel !== "tools" && panel !== "mcp" && panel !== "skills"}
       >
-        {#key `${session?.id}:${toolPanel}:${resourceFocus.connectionId}:${resourceFocus.toolName}:${resourceFocus.skillId}:${resourceFocus.tab}`}<ChatTools
-            mode={toolPanel}
-            embedded={externalPanels}
-            active={panel === "tools" || panel === "mcp" || panel === "skills"}
-            initialConnection={resourceFocus.connectionId}
-            initialTool={resourceFocus.toolName}
-            initialSkill={resourceFocus.skillId}
-            initialTab={resourceFocus.tab}
-            sessionId={session?.id ?? ""}
-            selectedTools={toolIds}
-            onTools={(ids) => (toolIds = ids)}
-            onAttach={attach}
-            onResult={refreshToolHistory}
-            onResourcesChange={resourcesChanged}
-          />{/key}
+        {#key `${session?.id}:${toolPanel}:${resourceFocus.connectionId}:${resourceFocus.toolName}:${resourceFocus.skillId}:${resourceFocus.tab}`}{#if ChatTools}<ChatTools
+              mode={toolPanel}
+              embedded={externalPanels}
+              active={panel === "tools" || panel === "mcp" || panel === "skills"}
+              initialConnection={resourceFocus.connectionId}
+              initialTool={resourceFocus.toolName}
+              initialSkill={resourceFocus.skillId}
+              initialTab={resourceFocus.tab}
+              sessionId={session?.id ?? ""}
+              selectedTools={toolIds}
+              onTools={(ids: string[]) => (toolIds = ids)}
+              onAttach={attach}
+              onResult={refreshToolHistory}
+              onResourcesChange={resourcesChanged}
+            />{/if}{/key}
       </div>{/if}
     {#if settingsVisited}<div hidden={panel !== "models"} inert={panel !== "models"}>
         <section class="chat-inspector-section">
           <h2 class:sr-only={externalPanels}>Chat settings</h2>
           <h3>Voice</h3>
           <MicrophoneSelect bind:value={microphone} disabled={busy || voiceWorking || micActive} />
-          <SpeechControls
-            bind:device={voiceDevice}
-            bind:language={voiceLanguage}
-            status={capabilities?.audio}
-            disabled={busy || voiceWorking || micActive}
-          />
+          {#await import("#lib/SpeechControls.svelte") then { default: SpeechControls }}<SpeechControls
+              bind:device={voiceDevice}
+              bind:language={voiceLanguage}
+              status={capabilities?.audio}
+              disabled={busy || voiceWorking || micActive}
+            />{/await}
           <h3 class="mt-6">Model & device</h3>
           <div class="inspector-field">
             <span>Model</span><AppSelect
