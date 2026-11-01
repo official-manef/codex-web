@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
 import { requireCapabilityAccess, readJsonBody } from '$lib/server/access';
-import { parseChat } from '$lib/server/ai/config';
+import { aiSettings, parseChat } from '$lib/server/ai/config';
 import { chatResponse } from '$lib/server/ai/chat';
 import { defaultPolicy, parsePolicy } from '$lib/server/policy';
 import { logEvent } from '$lib/server/log';
@@ -26,6 +26,14 @@ function policy(source: Record<string, string | undefined>) {
 export const POST: RequestHandler = async (event) => {
 	if (env.AI_ENABLED !== 'true') error(404, 'AI chat is disabled.');
 	await requireCapabilityAccess(event);
+	// A broken model catalog or platform flag is the operator's fault, not the caller's: answer
+	// the same 503 `/api/ai/config` returns instead of letting `parseChat` report it as a 400.
+	try {
+		aiSettings(env);
+	} catch {
+		await logEvent('warn', 'ai.chat', { outcome: 'invalid-configuration' });
+		error(503, 'Assistant setup is incomplete. Check the private server configuration.');
+	}
 	const body = await readJsonBody(event.request);
 	let input: ReturnType<typeof parseChat>;
 	try {
