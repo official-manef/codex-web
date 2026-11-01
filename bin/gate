@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+# bin/gate — one honest gate for this repo.
+#
+# This repository has no CI, so this script is the only thing standing between a branch and
+# "it works". It exists because the pieces it replaces each lied at least once:
+#
+#   * `npx vitest run` printed `197 passed | 3 skipped` on one machine and `179 passed |
+#     4 skipped` on another for the same commit. The skip count was not a property of the
+#     code, it was a property of whether a Convex deployment happened to be listening.
+#   * A sibling repo pinned CONVEX_URL to a dead port. Four security tests turned into a
+#     permanent silent skip and the gate stayed green while an auth boundary went unproven.
+#
+# So the rule here is: a skip is never silent and never a pass. Anything that could not be
+# proven is reported as UNPROVEN, which is its own state with its own exit code.
+#
+# Usage:
+#   bin/gate
+#
+# Exit codes:
+#   0  every step PASSed and nothing was skipped
+#   1  at least one step FAILed
+#   2  no step failed, but at least one step is UNPROVEN (missing browser, missing Convex,
+#      missing dependency). This is not green. Fix the reported cause and re-run.
+#
+# What it does not prove: see docs/gate.md.
+set -uo pipefail
+
+cd "$(dirname "$0")/.." || exit 1
+
+BIN=./node_modules/.bin
+WORK="${TMPDIR:-/tmp}/gate-$$"
+mkdir -p "$WORK" || exit 1
+trap 'rm -rf "$WORK"' EXIT
+
+PASSED=()
+FAILED=()
+UNPROVEN=()
+SKIP_LOG="$WORK/skips.txt"
+: >"$SKIP_LOG"
+
+now_ms() { date +%s%3N; }
+
+fmt_ms() {
+	local ms="$1"
+	if [ "$ms" -lt 1000 ]; then
+		printf '%dms' "$ms"
+	else
+		printf '%d.%01ds' $((ms / 1000)) $(((ms % 1000) / 100))
+	fi
+}
+
+section() { printf '\n%s\n' "$*"; }
+
+# Run a command, timing it, with both streams captured to $WORK/<name>.log.
+# Sets LAST_MS and LAST_LOG. Returns the command's own status.
+run() {
+	local name="$1"
+	shift
+	LAST_LOG="$WORK/$name.log"
+	local start
+	start=$(now_ms)
+	"$@" >"$LAST_LOG" 2>&1
+	local rc=$?
+	LAST_MS=$(($(now_ms) - start))
+	return $rc
+}
+
+pass() {
+	printf '  PASS      %-14s %s\n' "$1" "$(fmt_ms "$2")"
+	PASSED+=("$1")
+}
+
+fail() {
+	printf '  FAIL      %-14s %s\n' "$1" "$(fmt_ms "$2")"
+	printf '            %s\n' "$3"
+	FAILED+=("$1")
+	# Show the tail of the log so the failure is readable without opening a file.
+	if [ -f "$LAST_LOG" ]; then
+		sed 's/\x1b\[[0-9;]*m//g' "$LAST_LOG" | tail -n 25 | sed 's/^/            | /'
+	fi
+}
+
+unproven() {
+	printf '  UNPROVEN  %-14s %s\n' "$1" "$(fmt_ms "$2")"
+	printf '            %s\n' "$3"
+	printf '            fix: %s\n' "$4"
+	UNPROVEN+=("$1")
+}
+
+need_tool() {
+	local tool="$1" step="$2"
+	if [ ! -x "$BIN/$tool" ]; then
+		printf '  UNPROVEN  %-14s %s\n' "$step" "0ms"
+		printf '            node_modules/.bin/%s is missing\n' "$tool"
+		printf '            fix: %s\n' 'bun install'
+		UNPROVEN+=("$step")
+		return 1
+	fi
+	return 0
+}
+
+strip_ansi() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
+
+# ── environment ────────────────────────────────────────────────────────────────────────────
+
+CONVEX_STATE="unknown"
+CONVEX_DETAIL="probe did not run"
+CONVEX_FIX='npx convex dev'
+
+probe_convex() {
+	# Reuse the spec's own classifier instead of a second opinion implemented here.
+	local out
+	out="$(node -e "
+		import('./src/convex/deployment_probe.ts')
+			.then(async (m) => {
+				const p = await m.probeDeployment();
+				process.stdout.write(JSON.stringify({ state: p.state, detail: p.detail, url: p.url }));
+			})
+			.catch((error) => {
+				process.stdout.write(JSON.stringify({ state: 'unknown', detail: String(error && error.message || error), url: '' }));
+			});
+	" 2>/dev/null)"
+
+	if [ -z "$out" ]; then
+		CONVEX_STATE="unknown"
+		CONVEX_DETAIL="could not run src/convex/deployment_probe.ts"
+		return
+	fi
+
+	CONVEX_STATE="$(printf '%s' "$out" | node -e "
+		let raw = '';
+		process.stdin.on('data', (chunk) => (raw += chunk));
+		process.stdin.on('end', () => {
+			try { process.stdout.write(JSON.parse(raw).state); } catch { process.stdout.write('unknown'); }
+		});
+	")"
+	CONVEX_DETAIL="$(printf '%s' "$out" | node -e "
+		let raw = '';
+		process.stdin.on('data', (chunk) => (raw += chunk));
+		process.stdin.on('end', () => {
+			try { process.stdout.write(JSON.parse(raw).detail); } catch { process.stdout.write('unreadable probe'); }
+		});
+	")"
+}
+
+BROWSER_PATH=""
+probe_browser() {
+	BROWSER_PATH="$(node --input-type=module -e "
+		import('@playwright/test')
+			.then((m) => process.stdout.write(m.chromium.executablePath()))
+			.catch(() => process.stdout.write(''));
+	" 2>/dev/null)"
+}
+
+printf 'bin/gate — %s\n' "$(git rev-parse --short HEAD 2>/dev/null || echo 'not a git checkout')"
+printf 'branch   %s\n' "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+printf 'node     %s\n' "$(node --version 2>/dev/null || echo 'absent')"
+printf 'bun      %s\n' "$(bun --version 2>/dev/null || echo 'absent')"
+
+probe_convex
+probe_browser
+
+section 'environment'
+case "$CONVEX_STATE" in
+ready) printf '  convex    READY     %s\n' "$CONVEX_DETAIL" ;;
+absent) printf '  convex    ABSENT    %s\n' "$CONVEX_DETAIL" ;;
+empty) printf '  convex    EMPTY     %s\n' "$CONVEX_DETAIL" ;;
+*) printf '  convex    UNKNOWN   %s\n' "$CONVEX_DETAIL" ;;
+esac
+if [ -n "$BROWSER_PATH" ] && [ -x "$BROWSER_PATH" ]; then
+	printf '  browser   present   %s\n' "$BROWSER_PATH"
+else
+	printf '  browser   absent    playwright chromium is not installed\n'
+fi
+
+# ── steps ──────────────────────────────────────────────────────────────────────────────────
+# Order matters: formatting and lint are seconds and catch the cheapest mistakes first, then
+# types, then the unit suite, then the build (which the browser suite needs anyway), then
+# browsers. Nothing here is allowed to stop the run early: a gate that stops at the first
+# failure reports one problem per run and hides the rest.
+
+section 'steps'
+
+if need_tool prettier prettier; then
+	if run prettier "$BIN/prettier" --check .; then
+		pass prettier "$LAST_MS"
+	else
+		fail prettier "$LAST_MS" 'formatting drifted; run: npx prettier --write .'
+	fi
+fi
+
+if need_tool eslint eslint; then
+	if run eslint "$BIN/eslint" .; then
+		pass eslint "$LAST_MS"
+	else
+		fail eslint "$LAST_MS" 'lint errors above'
+	fi
+fi
+
+if need_tool svelte-kit svelte-check; then
+	# svelte-check reads generated types; sync must run first or a fresh clone reports noise.
+	svelte_ok=0
+	if run svelte-sync "$BIN/svelte-kit" sync; then
+		if run svelte-check "$BIN/svelte-check" --tsconfig ./tsconfig.json; then
+			svelte_ok=1
+		fi
+	fi
+	if [ "$svelte_ok" = 1 ]; then
+		pass svelte-check "$LAST_MS"
+	else
+		fail svelte-check "$LAST_MS" 'type or accessibility errors above'
+	fi
+fi
+
+if need_tool tsc convex-types; then
+	if run convex-types "$BIN/tsc" --noEmit -p src/convex; then
+		pass convex-types "$LAST_MS"
+	else
+		fail convex-types "$LAST_MS" 'Convex backend does not typecheck'
+	fi
+fi
+
+# ── vitest, with skips surfaced ────────────────────────────────────────────────────────────
+
+VITEST_SKIPS=0
+VITEST_SUMMARY=''
+if need_tool vitest vitest; then
+	# --reporter=verbose is load-bearing, not cosmetic: it is the only reporter that prints
+	# the skip reason next to the skipped test. The default and json reporters both drop it,
+	# which is exactly how a skip became indistinguishable from a pass.
+	run vitest "$BIN/vitest" run --reporter=verbose
+	vitest_rc=$?
+
+	VITEST_SUMMARY="$(strip_ansi "$LAST_LOG" | grep -E '^[[:space:]]*Tests[[:space:]]' | tail -n 1 | sed 's/^[[:space:]]*//')"
+
+	strip_ansi "$LAST_LOG" | grep -E '^[[:space:]]*↓ ' >"$WORK/skip-lines.txt" || true
+	VITEST_SKIPS="$(wc -l <"$WORK/skip-lines.txt" | tr -d ' ')"
+
+	if [ "$VITEST_SKIPS" -gt 0 ]; then
+		# One line per skipped test: title, then reason if the reporter gave one.
+		while IFS= read -r line; do
+			body="$(printf '%s' "$line" | sed 's/^[[:space:]]*↓ //')"
+			reason="$(printf '%s' "$body" | sed -n 's/.* \[\([^]]*\)\]$/\1/p')"
+			# Drop the duration and the vitest project prefix ("|server| ") so the title is the
+			# test's own name, which is what a reader searches for.
+			title="$(printf '%s' "$body" | sed 's/ \[[^]]*\]$//; s/ [0-9][0-9.]*ms$//; s/^|[^|]*| //')"
+			if [ -z "$reason" ]; then
+				reason='NO REASON REPORTED — treat as a silent skip and investigate'
+			fi
+			printf '%s\t%s\n' "$reason" "$title" >>"$SKIP_LOG"
+		done <"$WORK/skip-lines.txt"
+	fi
+
+	if [ "$vitest_rc" -ne 0 ]; then
+		fail vitest "$LAST_MS" "unit suite failed${VITEST_SUMMARY:+ ($VITEST_SUMMARY)}"
+	elif [ "$CONVEX_STATE" = ready ]; then
+		if [ "$VITEST_SKIPS" -eq 0 ]; then
+			pass vitest "$LAST_MS"
+		else
+			unproven vitest "$LAST_MS" \
+				"$VITEST_SKIPS test(s) skipped with a live deployment: ${VITEST_SUMMARY:-?}" \
+				'read the skip reasons below; a skip against a READY deployment is not environmental'
+		fi
+	else
+		# Tests passed, but some of them did not run. Saying PASS here is the original lie.
+		unproven vitest "$LAST_MS" \
+			"$VITEST_SKIPS test(s) skipped, Convex is ${CONVEX_STATE}: ${VITEST_SUMMARY:-?}" \
+			"$CONVEX_FIX"
+	fi
+fi
+
+# ── build ──────────────────────────────────────────────────────────────────────────────────
+
+if need_tool vite build; then
+	if run build "$BIN/vite" build; then
+		pass build "$LAST_MS"
+	else
+		fail build "$LAST_MS" 'production build failed'
+	fi
+fi
+
+# ── playwright ─────────────────────────────────────────────────────────────────────────────
+
+if ! command -v bun >/dev/null 2>&1; then
+	printf '  UNPROVEN  %-14s %s\n' playwright "0ms"
+	printf '            bun is required: playwright.config.ts starts the app with `bun run build`\n'
+	printf '            fix: %s\n' 'curl -fsSL https://bun.sh/install | bash'
+	UNPROVEN+=("playwright")
+elif [ ! -x "$BIN/playwright" ]; then
+	printf '  UNPROVEN  %-14s %s\n' playwright "0ms"
+	printf '            node_modules/.bin/playwright is missing\n'
+	printf '            fix: %s\n' 'bun install'
+	UNPROVEN+=("playwright")
+elif [ -z "$BROWSER_PATH" ] || [ ! -x "$BROWSER_PATH" ]; then
+	# A missing browser must never read as a pass: the browser suite is the only thing that
+	# proves the app hydrates, and "0 tests ran" would otherwise look like success.
+	printf '  UNPROVEN  %-14s %s\n' playwright "0ms"
+	printf '            no chromium binary for @playwright/test\n'
+	printf '            fix: %s\n' 'npx playwright install chromium'
+	UNPROVEN+=("playwright")
+else
+	# Retries are deliberately left at 0. Retrying a flaky test until it passes is the same
+	# dishonesty as skipping it: the suite below is known to have a load-sensitive flake and
+	# the gate's job is to report that, not to outvote it.
+	if run playwright "$BIN/playwright" test; then
+		pass playwright "$LAST_MS"
+	else
+		fail playwright "$LAST_MS" 'browser suite failed; see report above (npx playwright show-report)'
+	fi
+fi
+
+# ── skips, spelled out ────────────────────────────────────────────────────────────────────
+
+if [ "$VITEST_SKIPS" -gt 0 ]; then
+	section "skipped tests ($VITEST_SKIPS)"
+	# Grouped by reason: one reason per block, then the tests it silenced. Identical reasons
+	# collapse, so the reader sees "3 tests — this one missing fact" instead of three lines
+	# that look like three unrelated problems.
+	cut -f1 "$SKIP_LOG" | awk '!seen[$0]++' | while IFS= read -r reason; do
+		[ -n "$reason" ] || continue
+		count="$(awk -F'\t' -v want="$reason" '$1 == want' "$SKIP_LOG" | wc -l | tr -d ' ')"
+		printf '  %sx  %s\n' "$count" "$reason"
+		awk -F'\t' -v want="$reason" '$1 == want { print "        - " $2 }' "$SKIP_LOG"
+		printf '\n'
+	done
+	printf '  A skipped test proves nothing. It is not a pass, and it is not "environmental"\n'
+	printf '  by default: it is a hole in this run, and the gate exits 2 to say so.\n'
+fi
+
+# ── verdict ───────────────────────────────────────────────────────────────────────────────
+
+section 'verdict'
+printf '  %d passed, %d unproven, %d failed\n' "${#PASSED[@]}" "${#UNPROVEN[@]}" "${#FAILED[@]}"
+
+if [ "${#FAILED[@]}" -gt 0 ]; then
+	printf '\n  FAIL — %s\n' "${FAILED[*]}"
+	exit 1
+fi
+
+if [ "${#UNPROVEN[@]}" -gt 0 ]; then
+	printf '\n  UNPROVEN — %s\n' "${UNPROVEN[*]}"
+	printf '  Not green. Something in this run was not exercised, so nothing here claims it works.\n'
+	exit 2
+fi
+
+printf '\n  PASS — every step ran, nothing was skipped\n'
+exit 0
