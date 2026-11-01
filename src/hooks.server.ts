@@ -10,6 +10,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event, {
 		transformPageChunk: ({ html }) => html.replace('%app.locale%', appConfig.locale)
 	});
+	// CSP is not set here: SvelteKit emits the enforced policy from `kit.csp` in
+	// `svelte.config.js`, because it needs a per-response nonce stamped on the inline
+	// bootstrap script. See `docs/csp.md`.
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');
 	if (!response.headers.has('Referrer-Policy'))
