@@ -3239,7 +3239,7 @@
           </div>
           <h3 class="mt-6">Laptop utilities</h3>
           <div class="utility-links">
-            {#each [{ id: "transcribe", label: "Transcribe audio", icon: "mic" }, { id: "voice", label: "Voice to action", icon: "mic" }, { id: "apps", label: "Document automation", icon: "workflow" }, { id: "embeddings", label: "Search by meaning", icon: "search" }, { id: "corpus", label: "Document corpus", icon: "folder" }, { id: "setup", label: "Setup & diagnostics", icon: "check" }] as item}<button
+            {#each [{ id: "transcribe", label: "Transcribe audio", icon: "mic" }, { id: "voice", label: "Voice to action", icon: "mic" }, { id: "apps", label: "Document automation", icon: "workflow" }, { id: "embeddings", label: "Search by meaning", icon: "search" }, { id: "setup", label: "Setup & diagnostics", icon: "check" }] as item}<button
                 onclick={() => onNavigate(item.id)}
                 ><Icon name={item.icon} size={16} />{item.label}<Icon
                   name="arrowUpRight"

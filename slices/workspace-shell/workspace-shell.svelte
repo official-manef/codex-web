@@ -724,6 +724,23 @@
       if (settingsOpen && !isSettings(settingsView)) settingsOpen = false;
     });
   });
+  let mountedHash = "";
+  let deepLinkSettled = false;
+  /**
+   * A deep link can name a view the registry had not resolved yet: the host turns the stored tool
+   * selection on after mount, so the first `initialLayout` ran against a smaller id set and
+   * dropped the request while the URL kept it. Retry once, as soon as that id exists; the effect
+   * depends on the id set only, so it cannot loop.
+   */
+  $effect(() => {
+    if (!hydrated || deepLinkSettled) return;
+    const sections = SECTION_IDS;
+    if (!mountedHash || !sections.includes(mountedHash as OutputRoute)) return;
+    untrack(() => {
+      deepLinkSettled = true;
+      if ((layout.output ?? "chat") !== mountedHash) syncHash();
+    });
+  });
   function migrateSettingsRoute() {
     const requested = layout.output;
     if (requested && isSettings(requested)) {
@@ -1025,6 +1042,7 @@
   }
   onMount(() => {
     disposed = false;
+    mountedHash = window.location.hash.slice(1);
     layout = initialLayout(window.location.hash, persistence.loadLayout(TOOLS), SECTION_IDS);
     migrateSettingsRoute();
     applyTabs(

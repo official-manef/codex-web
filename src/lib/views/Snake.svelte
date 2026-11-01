@@ -91,9 +91,9 @@
         if (!alive) return;
         if (data.error) throw new Error(data.error);
         const value = data.benchmarks?.max_steps;
-        if (!Number.isInteger(value) || value < 1)
-          throw new Error("Snake step limits did not load. Reload the page to try again.");
-        maxSteps = value;
+        // No reported limit is not a failure: the field is optional, and a run can still be
+        // stepped by hand. Only a malformed value is worth a recovery notice.
+        maxSteps = Number.isInteger(value) && value > 0 ? value : null;
       })
       .catch((e) => {
         if (alive) error = e.message;
@@ -174,10 +174,11 @@
 
   async function run(steps: number) {
     if (busy || game.finished || !engines.length || savePending) return;
-    if (maxSteps === null || !Number.isInteger(steps) || steps < 1 || steps > maxSteps) {
+    // `maxSteps === null` means the server reported no ceiling, not that the round is refused.
+    if (!Number.isInteger(steps) || steps < 1 || (maxSteps !== null && steps > maxSteps)) {
       error =
         maxSteps === null
-          ? "Wait for the server's step limits before running."
+          ? "Choose a whole number of steps, one or more."
           : `Choose a whole number of steps from 1 to ${maxSteps}.`;
       return;
     }
@@ -419,7 +420,7 @@
         ></label
       >
       <label for="snake-length"
-        >Steps · 1–{maxSteps ?? "…"}<input
+        >Steps{maxSteps === null ? " · no limit reported" : ` · 1–${maxSteps}`}<input
           id="snake-length"
           class="field"
           type="number"
@@ -439,18 +440,13 @@
               savePending ||
               !Number.isInteger(runLength) ||
               runLength < 1 ||
-              maxSteps === null ||
-              runLength > maxSteps ||
+              (maxSteps !== null && runLength > maxSteps) ||
               !validSeed(seed)}><Icon name="play" size={13} /> Run {runLength} steps</button
           >{/if}
         <button
           class="btn"
           onclick={() => run(1)}
-          disabled={busy ||
-            game.finished ||
-            !engines.length ||
-            maxSteps === null ||
-            !validSeed(seed)}>Next step</button
+          disabled={busy || game.finished || !engines.length || !validSeed(seed)}>Next step</button
         >
         <button class="btn" onclick={reset}>Reset</button>
       </div>
@@ -531,7 +527,10 @@
             ? phase
             : game.finished
               ? "Round complete. Reset to try again."
-              : phase || "Ready. Every step calls the real model."}{busy && remaining
+              : phase ||
+                (engines.length
+                  ? "Ready. Every step calls the real model."
+                  : "No device is selected, so a run cannot start here.")}{busy && remaining
             ? ` · ${remaining} remaining`
             : ""}
         </p>

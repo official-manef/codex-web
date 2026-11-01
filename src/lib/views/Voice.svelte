@@ -230,8 +230,14 @@
         <Icon name="mic" size={24} />
         <p class="mt-3 text-[13px]">Drop a voice note</p>
         <p class="mt-1 text-[11.5px] text-ink-3">
-          {meta?.asr?.formats?.join(", ") ?? "Waiting for the supported formats"}. Up to
-          {meta?.asr?.max_mb ?? "…"} MB and {meta?.asr?.max_seconds ?? "…"} seconds.
+          {#if meta?.asr?.max_mb && meta?.asr?.max_seconds}
+            {meta.asr.formats?.join(", ") ?? "Supported formats load with the model"}. Up to
+            {meta.asr.max_mb} MB and {meta.asr.max_seconds} seconds.
+          {:else if meta}
+            No file limit is reported: a speech model supplies it, and this build loads none.
+          {:else}
+            Waiting for the supported formats.
+          {/if}
         </p>
         <button
           class="btn btn-solid mt-4"

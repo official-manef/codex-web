@@ -255,7 +255,9 @@ function catalogue() {
 		capabilities: {
 			attachments: {
 				max_files_per_turn: 4,
-				max_bytes: 8 * 1024 * 1024,
+				// The views read `max_file_bytes`; `max_bytes` was a second name nothing read, so
+				// Embedding search rendered "4 files · NaN MB each" from an undefined field.
+				max_file_bytes: 8 * 1024 * 1024,
 				kinds: ['image', 'pdf', 'text']
 			},
 			tools: [],
@@ -472,11 +474,36 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
 		case '/api/capabilities':
 			return catalogue().capabilities;
 
-		case '/api/tasks':
-			return { tasks: [] };
+		case '/api/asr':
+			// Transcribe, Voice and SpeechControls read this: `present: false` closes the panel and
+			// makes "no speech model in this build" the answer instead of a failed fetch.
+			return {
+				present: false,
+				devices: [],
+				languages: ['en'],
+				multilingual: false,
+				formats: [],
+				max_mb: null,
+				max_seconds: null,
+				stub: true
+			};
 
 		case '/api/pipeline':
-			return { pipeline: [] };
+			return {
+				asr: {
+					present: false,
+					devices: [],
+					languages: ['en'],
+					multilingual: false,
+					formats: [],
+					max_mb: null,
+					max_seconds: null
+				},
+				pipeline: []
+			};
+
+		case '/api/tasks':
+			return { tasks: [] };
 
 		case '/api/runtime/restart':
 			return { ok: true };
@@ -499,7 +526,10 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
  * `stub: true` plus a reason so nothing can be presented as real output.
  */
 function stubResponse(path: string): Record<string, unknown> {
-	const reason = 'This template has no backend; wire src/lib/http.ts to a real transport.';
+	// User-facing, because a view prints it: naming the source file was talking to the repo's
+	// maintainer, not to the person reading the screen.
+	const reason =
+		'This browser build has no runtime behind it, so the request cannot be answered here. The desktop app is the build that can.';
 
 	switch (path) {
 		// Deps.svelte reads `st.packages`, then filters. Without the array it throws.
