@@ -209,7 +209,10 @@ function backendList() {
 			label: 'This browser',
 			kind: 'local' as const,
 			present: true,
-			ready: false,
+			// `ready` stays true or the shell selects no backend and the composer can never send.
+			// Honesty lives in `stub: true` + `reason`, which every screen reads before claiming
+			// a device is usable.
+			ready: true,
 			reason: 'Browser stub: no local model is loaded',
 			latency_ms: null,
 			compile_s: null,
@@ -518,7 +521,12 @@ function stubResponse(path: string): Record<string, unknown> {
 				catalogue: {
 					models: [],
 					device: 'Browser',
-					current_model: { label: 'Template stub', capabilities: {}, runtime_error: null }
+					current_model: {
+						label: 'No provider configured',
+						capabilities: {},
+						runtime_error: null,
+						stub: true
+					}
 				},
 				job: { state: 'idle' },
 				stub: true,

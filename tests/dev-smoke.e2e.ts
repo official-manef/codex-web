@@ -36,10 +36,8 @@ test('a local send produces a timeline entry and a stub reply', async ({ page })
 
 	const log = page.getByRole('log', { name: 'Conversation' });
 	await expect(log).toContainText('Hello from the template');
-	// The stub answers locally; the reply names itself so it cannot pass for a model.
-	await expect(
-		log.getByText(/No model is attached|stored in this browser|ships without a backend/)
-	).toBeVisible();
+	// The stub names itself: no reply is generated and no provider is configured.
+	await expect(log.getByText(/No provider configured/).first()).toBeVisible();
 });
 
 test('settings destinations open the settings window, not the primary region', async ({ page }) => {

@@ -5,6 +5,22 @@ screenshots of Codex Desktop. Read this before building any screen.
 
 **3 real / 4 partial / 15 stub / 5 guess.**
 
+> **Status after the follow-up session (2026-11-01, `a77b9d2` and after).** The three fabrications
+> below are fixed, and the audit's recommended order was carried out in part:
+>
+> - Fabrication 1 (Setup claiming a server): `http.local.ts` `/api/health` now answers `ok: false`,
+>   and `Setup.svelte` requires a literal `true`.
+> - Fabrication 2 ("measured on this machine"): the numbers are gone from the render paths.
+>   `measured.ts` is null placeholders and the views say so.
+> - Fabrication 3 ("Available"/"Installed"): stub rows carry `stub: true` and render
+>   "not configured" / "no model is installed".
+> - `chat` is no longer a stub: `src/lib/chat_dispatch.ts` routes Convex → `/api/ai/chat` → stub.
+> - The three id spaces are one: see the navigation note below.
+>
+> Still guessed: `pricing`, `parameters`, `faq`, `performance`, `workspace-home`. Their invented
+> numbers are removed, but none has a data source, so the classification stands. `Corpus`,
+> `Reference` and `Schema` remain unregistered.
+
 | State     | Meaning                                                                      |
 | --------- | ---------------------------------------------------------------------------- |
 | `real`    | reads or writes through a real route or Convex function, and that has a test |
@@ -76,13 +92,17 @@ replace.
 the shell's own pattern (hidden panels stay mounted,
 `workspace-shell.svelte:1446-1452`). What fights it is one id space split across three files:
 `registry.ts`, `SECTION_IDS` (`workspace-shell.svelte:833`) and `workspace_routes.ts:12-16`.
-Seven ids have no `loadScreen`; three resolve through the chat panel via a hand-written map. So an
-entry can be "registered" and still do nothing. `registry.ts:238-246`
+**Five** ids have no `loadScreen` (`chat`, `chat-tools`, `chat-settings`, `chat-session`,
+`workspace-home`); three of those resolve through the chat panel via a hand-written map, `chat` is
+passed as the `chat` prop directly, and `workspace-home` is the launcher. So an entry can be
+"registered" and still do nothing. `registry.ts:238-246`
 (`hasFeatureScreen`/`loadFeatureScreen`) is dead code — the shell re-implements both locally at
-`:609-618`.
+`:609-618`. (An earlier revision of this document said "seven"; the file-level count is five.)
 
 Merge the id space into one before registering anything new, or every desktop surface added later
-inherits the same ambiguity.
+inherits the same ambiguity. **Done:** `workspace_routes.ts` now resolves every id through
+`registry.ts` and throws at module load on a mismatch, and `src/lib/registry.spec.ts` asserts the
+registry, the access rules and the routes name the same ids.
 
 ## Not determined
 
