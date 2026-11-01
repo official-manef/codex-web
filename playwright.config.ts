@@ -21,6 +21,9 @@ export default defineConfig({
 		},
 		command: `bun run build && bun run preview -- --host 127.0.0.1 --port ${port}`,
 		url: baseURL,
+		// A cold `vite build` on this repo takes over a minute; the 60s default made the whole
+		// suite fail with "Timed out waiting from config.webServer" instead of running.
+		timeout: 300_000,
 		reuseExistingServer: false
 	},
 	use: {

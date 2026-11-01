@@ -260,4 +260,149 @@ describe('chat backend resolution and dispatch', () => {
 		expect(chatSource).toContain('sendServerTurn');
 		expect(chatSource).toContain('sendStubTurn');
 	});
+
+	describe('a stream that does not end the way the protocol says it should', () => {
+		const encoder = new TextEncoder();
+
+		function responseOf(chunks: string[]): Response {
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+						controller.close();
+					}
+				}),
+				{ status: 200 }
+			);
+		}
+
+		const input = {
+			provider: 'openai' as const,
+			model: 'gpt-4o',
+			apiKey: 'k',
+			messages: [{ role: 'user' as const, content: 'hi' }]
+		};
+
+		it('reports an upstream that closes with no done frame instead of calling it complete', async () => {
+			const fetcher = vi
+				.fn()
+				.mockResolvedValue(
+					responseOf([JSON.stringify({ type: 'text', text: 'truncated rep' }) + '\n'])
+				);
+			const result = await streamServerChat(
+				input,
+				() => {},
+				undefined,
+				fetcher as unknown as typeof fetch
+			);
+			// The partial text is kept so the user can see what arrived...
+			expect(result.text).toBe('truncated rep');
+			// ...and the ending is named, instead of presenting a cut reply as finished.
+			expect(result.error).toMatch(/closed before the reply finished/i);
+		});
+
+		it('parses a final frame that has no trailing newline', async () => {
+			const fetcher = vi
+				.fn()
+				.mockResolvedValue(
+					responseOf([JSON.stringify({ type: 'text', text: 'unterminated final frame' })])
+				);
+			const result = await streamServerChat(
+				input,
+				() => {},
+				undefined,
+				fetcher as unknown as typeof fetch
+			);
+			// `split('\n')` used to leave the only frame in the buffer, so the reply came back
+			// empty and was saved as a successful blank answer.
+			expect(result.text).toBe('unterminated final frame');
+			expect(result.error).toMatch(/closed before the reply finished/i);
+		});
+
+		it('accepts a done frame that arrives without a trailing newline', async () => {
+			const fetcher = vi
+				.fn()
+				.mockResolvedValue(
+					responseOf([
+						JSON.stringify({ type: 'text', text: 'complete reply' }) + '\n',
+						JSON.stringify({ type: 'done' })
+					])
+				);
+			const result = await streamServerChat(
+				input,
+				() => {},
+				undefined,
+				fetcher as unknown as typeof fetch
+			);
+			expect(result.text).toBe('complete reply');
+			expect(result.error).toBeNull();
+		});
+
+		it('treats a caller abort mid-stream as a stated stop that keeps the partial text', async () => {
+			const controller = new AbortController();
+			const fetcher = vi.fn().mockImplementation(() => {
+				const stream = new ReadableStream<Uint8Array>({
+					start(streamController) {
+						streamController.enqueue(
+							encoder.encode(JSON.stringify({ type: 'text', text: 'partial ' }) + '\n')
+						);
+						// Never closes: only the abort ends it.
+					}
+				});
+				return Promise.resolve(new Response(stream, { status: 200 }));
+			});
+			const promise = streamServerChat(
+				input,
+				() => {},
+				controller.signal,
+				fetcher as unknown as typeof fetch
+			);
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			controller.abort();
+			const result = await promise;
+			expect(result.aborted).toBe(true);
+			expect(result.text).toBe('partial ');
+			expect(result.error).toBeNull();
+		});
+
+		it('treats an abort before the first byte as a stated stop, not a crash', async () => {
+			const controller = new AbortController();
+			controller.abort();
+			const fetcher = vi
+				.fn()
+				.mockRejectedValue(
+					Object.assign(new Error('signal is aborted without reason'), { name: 'AbortError' })
+				);
+			const result = await streamServerChat(
+				input,
+				() => {},
+				controller.signal,
+				fetcher as unknown as typeof fetch
+			);
+			// This used to reject, and the view printed "signal is aborted without reason" next
+			// to the user's own message.
+			expect(result).toEqual({ text: '', error: null, aborted: true });
+		});
+
+		it('rethrows a transport failure that is not an abort', async () => {
+			const fetcher = vi.fn().mockRejectedValue(new Error('network gone'));
+			await expect(
+				streamServerChat(input, () => {}, undefined, fetcher as unknown as typeof fetch)
+			).rejects.toThrow('network gone');
+		});
+
+		it('names a body with no parseable frames instead of returning a blank success', async () => {
+			const fetcher = vi
+				.fn()
+				.mockResolvedValue(responseOf(['event: message\ndata: {"type":"text","text":"sse"}\n\n']));
+			const result = await streamServerChat(
+				input,
+				() => {},
+				undefined,
+				fetcher as unknown as typeof fetch
+			);
+			expect(result.text).toBe('');
+			expect(result.error).toMatch(/closed before the reply finished/i);
+		});
+	});
 });
