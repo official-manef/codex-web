@@ -23,12 +23,7 @@
   import { api, get, post, postAudio } from "#lib/http.js";
   import { projectStore } from "#lib/projects.js";
   import { memoryStore } from "#lib/memories.js";
-  import {
-    readProviderKey,
-    saveProviderKey,
-    clearProviderKey,
-    hasProviderKey,
-  } from "#lib/byok_key.js";
+  import { saveProviderKey, clearProviderKey, hasProviderKey } from "#lib/byok_key.js";
   import {
     resolveChatBackend,
     streamServerChat,
