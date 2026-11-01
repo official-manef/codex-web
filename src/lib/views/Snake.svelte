@@ -581,6 +581,9 @@
       </h3>
       <div class="table-wrap">
         <table>
+          <caption class="sr-only">
+            Samples, correctness and latency per selected engine
+          </caption>
           <thead
             ><tr
               ><th>Engine</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
@@ -606,6 +609,9 @@
         <summary>Warmup and timing breakdown</summary>
         <div class="table-wrap">
           <table>
+            <caption class="sr-only">
+              Server, queue and warmup latency per selected engine
+            </caption>
             <thead
               ><tr><th>Engine</th><th>Server mean</th><th>Queue mean</th><th>Warmup HTTP</th></tr
               ></thead
@@ -635,6 +641,9 @@
         <summary>Inspect {moves.length} measured steps</summary>
         <div class="table-wrap">
           <table>
+            <caption class="sr-only">
+              Each measured step, its food direction and every selected engine's answer
+            </caption>
             <thead
               ><tr
                 ><th>Step</th><th>Food direction</th><th>Played</th>{#each engines as id}<th

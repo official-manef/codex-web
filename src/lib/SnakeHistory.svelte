@@ -207,6 +207,9 @@
         </p>{/if}
       <div class="table-wrap">
         <table>
+          <caption class="sr-only">
+            Recorded run comparison: samples, correctness, latency and hardware per engine
+          </caption>
           <thead
             ><tr
               ><th>Run / engine</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
@@ -264,6 +267,9 @@
         <p><strong>Recorded input:</strong> {current.state}</p>
         <div class="table-wrap">
           <table>
+            <caption class="sr-only">
+              Recorded measurements for this frame: answer, confidence and latency per engine
+            </caption>
             <thead
               ><tr
                 ><th>Engine</th><th>Answer</th><th>Confidence</th><th>Policy move</th><th

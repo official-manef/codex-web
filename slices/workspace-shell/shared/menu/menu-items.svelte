@@ -78,6 +78,10 @@
     outline: none;
     cursor: default;
   }
+  :global(.workspace-menu-item:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: -2px;
+  }
   :global(.workspace-menu-item[data-highlighted]),
   :global(.workspace-menu-item[data-state="open"]) {
     background: var(--color-hover);

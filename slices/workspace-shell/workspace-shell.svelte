@@ -470,6 +470,7 @@
           shortcut: "Ctrl+/",
           binding: { key: "/", ctrl: true, allowInEditable: true },
           onSelect: () => {
+            rememberMenuTrigger();
             shortcutsOpen = true;
           },
         },
@@ -638,12 +639,50 @@
   let settingsView = $state("");
   let settingsWasOpen = false;
   $effect(() => {
-    if (settingsWasOpen && !settingsOpen) untrack(() => chatView?.openPanel("", false));
+    if (settingsWasOpen && !settingsOpen)
+      untrack(() => {
+        chatView?.openPanel("", false);
+        restoreOverlayFocus();
+      });
     settingsWasOpen = settingsOpen;
   });
   let chatPanelContent = $state<Snippet>();
   let trail = $state<NavigationTrail>({ entries: ["chat"], index: 0 });
   let focusedPane = $state<"chat" | "output">("chat");
+  /**
+   * A dialog opened from a menubar item outlives the item that opened it, so the trigger has to be
+   * remembered while the menu is still on screen; otherwise bits-ui restores focus into a detached
+   * item and it lands on `<body>`.
+   */
+  let overlayReturnFocus: HTMLElement | null = null;
+  function rememberMenuTrigger() {
+    const trigger = document.querySelector<HTMLElement>(
+      ".workspace-menubar-trigger[data-state='open']",
+    );
+    if (trigger) overlayReturnFocus = trigger;
+  }
+  /** Only claims focus when the closing overlay left it on `<body>`. */
+  function restoreOverlayFocus() {
+    const target = overlayReturnFocus;
+    overlayReturnFocus = null;
+    if (!(target instanceof HTMLElement) || !target.isConnected) return;
+    // bits-ui moves focus after this point, so read the result on the next frame.
+    requestAnimationFrame(() => {
+      if (document.activeElement !== document.body) return;
+      if (!target.isConnected || !target.getClientRects().length) return;
+      if (target.matches(":disabled")) return;
+      target.focus({ preventScroll: true });
+    });
+  }
+  /** Same intent, for a dialog that reports the moment focus is about to be returned. */
+  function restoreOverlayFocusNow(event: Event) {
+    const target = overlayReturnFocus;
+    overlayReturnFocus = null;
+    if (!(target instanceof HTMLElement) || !target.isConnected) return;
+    if (!target.getClientRects().length || target.matches(":disabled")) return;
+    event.preventDefault();
+    target.focus({ preventScroll: true });
+  }
   let tabSearch = $state("");
   let tabListOpen = $state(false);
   let openTabs = $state<OutputId[]>([]);
@@ -697,6 +736,7 @@
   }
   function openSettingsSection(id: string) {
     if (!isSettings(id)) return;
+    rememberMenuTrigger();
     settingsView = id;
     if (chatPanels.some((route) => route.id === id))
       chatView?.openPanel(chatPanelForOutput(id, chatPanels), false);
@@ -827,6 +867,8 @@
   });
   let outputExpanded = $state(false);
   const regions = $derived(visibleRegions(!!layout.output, split.mode === "stacked", focusedPane));
+  /** True when the chat region is on screen; `display: none` there makes `.focus()` a no-op. */
+  const chatRegionVisible = $derived(regions.chat && !(outputExpanded && !!layout.output));
   async function go(id: OutputRoute, track = true) {
     resourceRequest++;
     resourceNotice = "";
@@ -1059,7 +1101,10 @@
     href={`#${chatRegionId}`}
     onclick={(event) => {
       event.preventDefault();
-      focusChatComposer();
+      // The chat region is display:none whenever the output panel fills the view, so focusing it
+      // directly would drop the user on <body>. Fall back to the same path the Chat rail takes.
+      if (chatRegionVisible) focusChatComposer();
+      else void go("chat");
     }}>{labels.skipToChat}</a
   >
   <div class="workspace-host">
@@ -1084,6 +1129,7 @@
             : labels.hideSidebar
           : labels.openNavigation}
         title={labels.toggleSidebar}
+        aria-controls="chat-sessions"
         aria-expanded={viewportWidth > 1100 ? !navigationCollapsed : menuOpen}
         onclick={toggleSidebar}><Icon name="sidebar" size={17} /></button
       >
@@ -1428,7 +1474,12 @@
                     id={`output-panel-${launcher.id}`}
                     class="output-view"
                     role="tabpanel"
-                    aria-labelledby={`output-tab-${launcher.id}`}
+                    aria-labelledby={openTabs.includes(launcher.id as OutputId)
+                      ? `output-tab-${launcher.id}`
+                      : undefined}
+                    aria-label={openTabs.includes(launcher.id as OutputId)
+                      ? undefined
+                      : (OUTPUTS.find((row) => row.id === launcher.id)?.label ?? labels.workspace)}
                     hidden={layout.output !== launcher.id}
                     inert={layout.output !== launcher.id}
                     style:display={layout.output === launcher.id ? "flex" : "none"}
@@ -1490,7 +1541,10 @@
     </div>{/if}
   <Dialog.Root bind:open={shortcutsOpen}>
     <Dialog.Portal
-      ><Dialog.Overlay class="shortcut-overlay" /><Dialog.Content class="shortcut-dialog">
+      ><Dialog.Overlay class="shortcut-overlay" /><Dialog.Content
+        class="shortcut-dialog"
+        onCloseAutoFocus={restoreOverlayFocusNow}
+      >
         <Dialog.Title>{labels.keyboardShortcuts}</Dialog.Title><Dialog.Description
           >{labels.shortcutsDescription}</Dialog.Description
         >
@@ -2019,6 +2073,14 @@
     text-align: left;
     cursor: pointer;
     outline: none;
+  }
+  /* The roving highlight uses --color-hover, which is this panel's own background, so the
+     highlight alone leaves a keyboard user with no visible cursor. */
+  :global(.workspace-overflow-item:focus-visible),
+  :global(.workspace-menu-item:focus-visible),
+  :global(.workspace-menubar-item:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: -2px;
   }
   :global(.workspace-overflow-item:hover),
   :global(.workspace-overflow-item[data-highlighted]) {

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const port = 4197;
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 4197);
 const baseURL = `http://127.0.0.1:${port}`;
 export const devServerCommand = `bun run dev -- --host 127.0.0.1 --port ${port} --strictPort`;
 
