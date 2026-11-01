@@ -509,3 +509,211 @@ test('the API key never appears in output including tool results', async () => {
 	expect(raw).not.toContain(input.apiKey);
 	expect(raw).toContain('[redacted]');
 });
+
+test('tool-loop: a tool call reported only through the resolved toolCalls promise still runs', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	// Some SDK paths emit no `tool-call` stream part and expose the calls on the result instead.
+	vi.mocked(streamText)
+		.mockReturnValueOnce({
+			fullStream: (async function* () {
+				/* no tool-call part, no text part */
+			})(),
+			toolCalls: Promise.resolve([{ toolName: 'read_file', input: { path: 'a.txt' } }])
+		} as unknown as ReturnType<typeof streamText>)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'done' }]));
+
+	const response = chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{
+			policy: defaultPolicy
+		}
+	);
+	const events = (await response.text())
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	expect(events.find((event) => event.type === 'tool')).toMatchObject({
+		type: 'tool',
+		name: 'read_file',
+		decision: 'allow'
+	});
+	expect(vi.mocked(streamText)).toHaveBeenCalledTimes(2);
+});
+
+test('tool-loop: a non-array toolCalls value is ignored rather than iterated', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockReturnValueOnce({
+		fullStream: (async function* () {})(),
+		toolCalls: 'not-an-array'
+	} as unknown as ReturnType<typeof streamText>);
+	const events = (
+		await chatResponse({ ...input, toolUse: true }, new AbortController().signal, undefined, {
+			policy: defaultPolicy
+		}).text()
+	)
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	// Nothing ran, so the loop breaks and reports a clean finish.
+	expect(events.at(-1)).toEqual({ type: 'done' });
+	expect(events.some((event) => event.type === 'tool')).toBe(false);
+});
+
+test('tool-loop: unknown tool names are dropped, so a model cannot invent a verb', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText)
+		.mockReturnValueOnce(parts([{ type: 'tool-call', toolName: 'drop_database', args: {} }]))
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'nothing to do' }]));
+	const events = (
+		await chatResponse({ ...input, toolUse: true }, new AbortController().signal, undefined, {
+			policy: defaultPolicy
+		}).text()
+	)
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	expect(events.some((event) => event.type === 'tool')).toBe(false);
+	expect(vi.mocked(streamText)).toHaveBeenCalledTimes(1);
+});
+
+test('tool-loop: a throwing tool becomes an error result and the loop continues', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	const toolsModule = await import('./tools');
+	vi.mocked(toolsModule.runTool).mockRejectedValueOnce(new Error(`boom ${input.apiKey}`));
+	vi.mocked(streamText)
+		.mockReturnValueOnce(parts([{ type: 'tool-call', toolName: 'exec', args: { argv: ['true'] } }]))
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'recovered' }]));
+
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{
+			policy: defaultPolicy
+		}
+	).text();
+	const toolEvent = raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line))
+		.find((event) => event.type === 'tool');
+	expect(toolEvent.text).toBe('boom [redacted]');
+	expect(raw).not.toContain(input.apiKey);
+});
+
+test('tool-loop: a pending text buffer is flushed before the tool event', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText)
+		.mockReturnValueOnce(
+			parts([
+				{ type: 'text-delta', text: 'Let me look. ' },
+				{ type: 'tool-call', toolName: 'read_file', args: { path: 'a.txt' } }
+			])
+		)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'Done.' }]));
+	const events = (
+		await chatResponse({ ...input, toolUse: true }, new AbortController().signal, undefined, {
+			policy: defaultPolicy
+		}).text()
+	)
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	const toolIndex = events.findIndex((event) => event.type === 'tool');
+	expect(events.slice(0, toolIndex).some((event) => event.type === 'text')).toBe(true);
+});
+
+test('tool-loop: a provider error part aborts the loop with the generic failure event', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockReturnValueOnce(
+		parts([{ type: 'error', error: new Error('upstream 500') }])
+	);
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{
+			policy: defaultPolicy
+		}
+	).text();
+	expect(raw).toContain('"type":"error"');
+	expect(raw).not.toContain('upstream 500');
+});
+
+test('tool-loop: the outcome hook gets exactly one terminal signal', async () => {
+	// clearAllMocks does not drop queued once-values, so reset the queue per test.
+	vi.mocked(streamText).mockReset();
+	const onOutcome = vi.fn();
+	vi.mocked(streamText)
+		.mockReturnValueOnce(parts([{ type: 'tool-call', toolName: 'read_file', args: {} }]))
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'ok' }]));
+	await chatResponse({ ...input, toolUse: true }, new AbortController().signal, onOutcome, {
+		policy: defaultPolicy
+	}).text();
+	expect(onOutcome.mock.calls).toEqual([['ok']]);
+});
+
+test('image and assistant content keep their provider shape instead of being flattened to text', async () => {
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockReturnValueOnce(parts([{ type: 'text-delta', text: 'ok' }]));
+	const image = { type: 'image' as const, mediaType: 'image/png' as const, data: 'AAAA' };
+	await chatResponse(
+		{
+			...input,
+			messages: [
+				{ role: 'user', content: 'look' },
+				{ role: 'assistant', content: 'I see a pixel.' },
+				{ role: 'user', content: [{ type: 'text', text: 'and this?' }, image] }
+			]
+		},
+		new AbortController().signal
+	).text();
+	const sent = vi.mocked(streamText).mock.calls[0][0].messages as Array<{
+		role: string;
+		content: unknown;
+	}>;
+	expect(sent[1]).toEqual({ role: 'assistant', content: 'I see a pixel.' });
+	// The image part must stay a typed part; flattening it to text would drop the attachment.
+	expect(sent[2]).toEqual({
+		role: 'user',
+		content: [
+			{ type: 'text', text: 'and this?' },
+			{ type: 'image', image: 'AAAA', mediaType: 'image/png' }
+		]
+	});
+});
+
+test('non-text stream parts are skipped without ending the response', async () => {
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockReturnValueOnce(
+		parts([{ type: 'reasoning-delta' }, { type: 'text-delta', text: 'answer' }])
+	);
+	const raw = await chatResponse(input, new AbortController().signal).text();
+	expect(raw).toContain('"text":"answer"');
+	expect(raw).toContain('"type":"done"');
+});
+
+test('an abort that arrives before a tool step starts stops the loop', async () => {
+	vi.mocked(streamText).mockReset();
+	const controller = new AbortController();
+	let steps = 0;
+	vi.mocked(streamText).mockImplementation(() => {
+		steps++;
+		// Abort while the first step is in flight, so the second step never starts.
+		queueMicrotask(() => controller.abort());
+		return parts([{ type: 'tool-call', toolName: 'read_file', args: {} }]);
+	});
+	const raw = await chatResponse({ ...input, toolUse: true }, controller.signal, undefined, {
+		policy: defaultPolicy
+	}).text();
+	expect(steps).toBeLessThan(8);
+	expect(raw).toContain('"type":"error"');
+});

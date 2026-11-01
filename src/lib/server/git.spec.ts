@@ -721,3 +721,85 @@ describe('real git smoke test', () => {
 		expect(commits[0]).toHaveProperty('subject');
 	});
 });
+
+describe('git write-path input guards not covered by the argv tests', () => {
+	const root: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('gitCommit rejects a non-string message instead of coercing it', async () => {
+		// A Buffer or object would otherwise reach `git commit -m` through implicit toString.
+		for (const value of [undefined, null, 42, {}, ['feat: x']])
+			await expect(gitCommit(root, value as unknown as string)).rejects.toThrow(
+				'Invalid commit message'
+			);
+	});
+
+	test('gitCommit rejects a hash that rev-parse reports as blank', async () => {
+		// Exit 0 with no hash would otherwise be returned as a successful commit.
+		const runner: Runner = async (args) =>
+			args[0] === 'rev-parse' ? { code: 0, stdout: '  \n' } : { code: 0, stdout: '' };
+		await expect(gitCommit(root, 'feat: x', runner)).rejects.toThrow('git commit failed');
+	});
+
+	test('gitCommit rejects a runner that rejects during rev-parse, not just a non-zero exit', async () => {
+		const runner: Runner = async (args) => {
+			if (args[0] === 'rev-parse') throw new Error('spawn failed');
+			return { code: 0, stdout: '' };
+		};
+		await expect(gitCommit(root, 'feat: x', runner)).rejects.toThrow('git commit failed');
+	});
+
+	test('gitDiff rejects null options rather than reading properties off it', async () => {
+		const bad = (value: unknown) => value as Parameters<typeof gitDiff>[1];
+		await expect(gitDiff(root, bad(null))).rejects.toThrow('Invalid options');
+		await expect(gitDiff(root, bad('staged'))).rejects.toThrow('Invalid options');
+	});
+
+	test('gitLog keeps a two-field row with an empty subject instead of dropping it', async () => {
+		const runner: Runner = async () => ({ code: 0, stdout: 'abc1234\t2026-11-02\n' });
+		expect(await gitLog(root, runner)).toEqual([
+			{ hash: 'abc1234', date: '2026-11-02', subject: '' }
+		]);
+	});
+
+	test('gitLog ignores a one-field row, which has no date to show', async () => {
+		const runner: Runner = async () => ({ code: 0, stdout: 'abc1234\n' });
+		expect(await gitLog(root, runner)).toEqual([]);
+	});
+
+	test('a non-"##" status line is a file row, and a short row yields an empty path', async () => {
+		const runner: Runner = async () => ({ code: 0, stdout: 'M\n?? a.txt\n' });
+		expect(await gitStatus(root, runner)).toEqual({
+			branch: '',
+			files: [
+				{ code: 'M', path: '' },
+				{ code: '??', path: 'a.txt' }
+			],
+			truncated: false
+		});
+	});
+
+	test('parseBranch handles the "Initial commit on" and detached spellings', async () => {
+		const branchOf = async (header: string) =>
+			(await gitStatus(root, async () => ({ code: 0, stdout: `${header}\n` }))).branch;
+		expect(await branchOf('## Initial commit on main')).toBe('main');
+		expect(await branchOf('## No commits yet on trunk')).toBe('trunk');
+		expect(await branchOf('## (no branch)')).toBe('HEAD');
+		expect(await branchOf('## HEAD')).toBe('HEAD');
+		expect(await branchOf('## main...origin/main [ahead 2]')).toBe('main');
+	});
+
+	test('gitRoots trims separators, skips duplicates and keeps the first eight', async () => {
+		expect(
+			gitRoots({ GIT_SURFACE_ROOTS: ' /repos/alpha/ : /repos/alpha : /repos/beta// ' })
+		).toEqual([
+			{ name: 'alpha', path: '/repos/alpha' },
+			{ name: 'beta', path: '/repos/beta' }
+		]);
+		const many = Array.from({ length: 12 }, (_, i) => `/repos/r${i}`).join(':');
+		expect(gitRoots({ GIT_SURFACE_ROOTS: many })).toHaveLength(8);
+		// A relative entry is skipped, not resolved against the process cwd.
+		expect(gitRoots({ GIT_SURFACE_ROOTS: '/repos/alpha:relative/path' })).toEqual([
+			{ name: 'alpha', path: '/repos/alpha' }
+		]);
+	});
+});

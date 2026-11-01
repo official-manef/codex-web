@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { mcpConnections } from './config';
+import { connectionFor, mcpConnections } from './config';
 import { executeRemoteTool, listRemoteTools } from './client';
 import { statusMcpResponse } from './server';
 
@@ -158,4 +158,69 @@ test('official stateless MCP server advertises only read-only template status', 
 	};
 	const output = await (await statusMcpResponse(request(call), call)).json();
 	expect(JSON.parse(output.result.content[0].text)).toMatchObject({ backend: 'convex' });
+});
+
+const allowlistEnv = (servers: unknown) => ({
+	MCP_CLIENT_ENABLED: 'true',
+	MCP_SERVERS_JSON: typeof servers === 'string' ? servers : JSON.stringify(servers)
+});
+
+test('an unset, oversized or malformed server list refuses to enable the client at all', () => {
+	expect(() => mcpConnections({ MCP_CLIENT_ENABLED: 'true' })).toThrow(
+		'Configure MCP_SERVERS_JSON'
+	);
+	expect(() => mcpConnections(allowlistEnv('x'.repeat(32_001)))).toThrow(
+		'Configure MCP_SERVERS_JSON'
+	);
+	expect(() => mcpConnections(allowlistEnv('{not json'))).toThrow();
+	// An empty list is not "allow everything": it fails the min(1) bound.
+	expect(() => mcpConnections(allowlistEnv([]))).toThrow();
+	expect(() => mcpConnections(allowlistEnv(Array.from({ length: 9 }, () => connection)))).toThrow();
+});
+
+test('duplicate aliases are refused so an allowlist cannot shadow another entry', () => {
+	expect(() =>
+		mcpConnections(
+			allowlistEnv([
+				{ ...connection, tools: ['echo'] },
+				{ ...connection, url: 'https://other.example.com/mcp', tools: ['other'] }
+			])
+		)
+	).toThrow('Duplicate MCP alias');
+});
+
+test('every local and non-HTTPS URL shape stays out, including ports and trailing dots', () => {
+	for (const url of [
+		'https://mcp.example.com:8443/mcp',
+		'https://[::1]/mcp',
+		'https://10.0.0.1/mcp',
+		'https://192.168.1.1/mcp',
+		'https://box.local/mcp',
+		'https://sub.localhost/mcp',
+		'https://mcp.example.com/mcp#frag',
+		'https://mcp.example.com/mcp?apiKey=1',
+		'https://mcp.example.com/mcp?X-Api-Key=1',
+		'https://mcp.example.com/mcp?password=x',
+		'ftp://mcp.example.com/mcp',
+		'not a url'
+	])
+		expect(() => mcpConnections(allowlistEnv([{ ...connection, url }])), url).toThrow();
+});
+
+test('an approved URL is normalised once, so the stored endpoint matches what is called', () => {
+	const [parsed] = mcpConnections(
+		allowlistEnv([{ ...connection, url: 'https://MCP.example.com:443/mcp' }])
+	);
+	expect(parsed.url).toBe('https://mcp.example.com/mcp');
+});
+
+test('connectionFor resolves only an exact alias and refuses a disabled client', () => {
+	expect(connectionFor(allowlistEnv([connection]), 'test').url).toBe(connection.url);
+	expect(() => connectionFor(allowlistEnv([connection]), 'other')).toThrow('disabled or unknown');
+	expect(() => connectionFor({ MCP_CLIENT_ENABLED: 'false' }, 'test')).toThrow(
+		'disabled or unknown'
+	);
+	// No case-folding or prefix matching: the alias is the allowlist key.
+	expect(() => connectionFor(allowlistEnv([connection]), 'TEST')).toThrow('disabled or unknown');
+	expect(() => connectionFor(allowlistEnv([connection]), 'tes')).toThrow('disabled or unknown');
 });
