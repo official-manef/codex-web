@@ -226,6 +226,14 @@ they will not run as-is: the shell now owns navigation and `/` mounts the worksp
 them as the scenario list, not as runnable tests, and re-point each at the current
 selectors before claiming the AC. Do not restore the files and call the gate green.
 
+> **Done 2026-11-02.** `tests/acceptance.e2e.ts` is back with 14 criteria driving the current
+> shell (composer, hash navigation, settings window, output tabs, timeline). AC05, AC09,
+> AC13 and AC16 are recorded as **no longer applicable** instead of tested: the deleted route
+> family owned the `offline` retry path, the dirty-tab contract, the capability catalog and
+> the composer's authorization input. AC03, AC06 and AC12 assert only the part of their
+> scenario this build performs. Details, selectors and the cost of a full pass:
+> [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
+
 ## How to update this file
 
 Run the commands, paste the numbers, change the state word. Do not mark "shipped" from a
