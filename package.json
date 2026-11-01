@@ -1,17 +1,17 @@
 {
-	"name": "codex-clone-placeholder",
+	"name": "codex-web",
 	"private": true,
 	"version": "0.6.0",
 	"description": "Configurable Svelte workspace shell: rail, chat surface, tabbed output region and lazy feature screens.",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/rahmanef63/codex-clone-placeholder.git"
+		"url": "git+https://github.com/rahmanef63/codex-web.git"
 	},
 	"bugs": {
-		"url": "https://github.com/rahmanef63/codex-clone-placeholder/issues"
+		"url": "https://github.com/rahmanef63/codex-web/issues"
 	},
-	"homepage": "https://github.com/rahmanef63/codex-clone-placeholder#readme",
+	"homepage": "https://github.com/rahmanef63/codex-web#readme",
 	"keywords": [
 		"svelte",
 		"sveltekit",

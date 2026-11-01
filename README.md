@@ -1,9 +1,25 @@
-# Workspace Shell Template
+# codex-web
 
-The Laya NPU workspace UI/UX as a standalone SvelteKit template: rail, sidebar, chat surface
-with a tabbed output region, lazy feature screens, layout persistence. The shell is copied
-verbatim from [`rahmanef63/laya-npu`](https://github.com/rahmanef63/laya-npu); this repository
-re-hosts it with a local stub backend so it boots with zero credentials.
+The browser console for the workspace: a SvelteKit shell with a rail, sidebar, chat surface, a
+tabbed output region, lazy feature screens and layout persistence. The shell is copied verbatim
+from [`rahmanef63/laya-npu`](https://github.com/rahmanef63/laya-npu); this repository re-hosts it
+with a local stub backend so it boots with zero credentials.
+
+**This is not a clone of Codex Desktop.** The sibling repository
+[**codex-desktop**](https://github.com/rahmanef63/codex-desktop) holds the configuration and
+tooling for OpenAI's Rust + Electron app. Same scope, different techstack, deliberately separate
+repositories:
+
+|               | codex-desktop                                  | codex-web (here)                        |
+| ------------- | ---------------------------------------------- | --------------------------------------- |
+| Stack         | Rust + Electron app, PowerShell/Python tooling | SvelteKit 2, Svelte 5 Runes, TypeScript |
+| Runs on       | your Windows machine                           | any host, or Vercel                     |
+| Executes code | yes — the app's own agent                      | only through a bridge on your machine   |
+| Identity      | your ChatGPT account, or a self-hosted gateway | Google OIDC, or an operator token       |
+
+They share a design language and a workspace model, and nothing else. Do not expect this
+repository to run a local agent: it is the console, and the bridge pattern in
+[docs/terminal.md](docs/terminal.md) is how execution reaches your own machine.
 
 [Laya parity and provenance](docs/laya-parity.md) · [Rebuild plan](docs/REBUILD-PLAN-laya-parity.md)
 · [Contract](CONTRACT.md) · [UI/UX](UIUX.md) · [Changelog](CHANGELOG.md)
@@ -27,15 +43,15 @@ full. This repository is one working consumer of it.
 On any Linux host — VPS, container, laptop — with Node 22/24 and Bun installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rahmanef63/codex-clone-placeholder/main/scripts/install.sh \
+curl -fsSL https://raw.githubusercontent.com/rahmanef63/codex-web/main/scripts/install.sh \
   | bash -s -- --site https://app.example.com --convex https://<deployment>.convex.cloud
 ```
 
 Or from a checkout, if you would rather read what runs:
 
 ```sh
-git clone https://github.com/rahmanef63/codex-clone-placeholder
-cd codex-clone-placeholder
+git clone https://github.com/rahmanef63/codex-web
+cd codex-web
 node scripts/install.mjs --site https://app.example.com --convex https://<deployment>.convex.cloud
 ```
 
