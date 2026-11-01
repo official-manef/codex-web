@@ -347,3 +347,19 @@ class of problem in `30c6096` — `classifyAuthFailure(...)` is now asserted exp
 hardcoded `3210` default is gone in favour of `scripts/convex-local.mjs`. That version was kept
 over this batch's reader-injection variant during the rebase: one resolution point at
 `vite.config.ts` is less machinery than a parameter threaded through every caller.
+
+## 8. Wave 5 — the gaps §7 left open
+
+| Gap from §7                                          | Closed by                                                                                                                                                                                                                                                                                   | Still absent                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| The bridge only spoke `/v1/health` and the WebSocket | `bridge/terminal-bridge.mjs` now serves `POST /v1/exec`, `/v1/fs/read`, `/v1/fs/write` — bearer-authed, `spawn` with `shell:false`, 64 KB body cap, root confinement through `BRIDGE_FS_ROOTS`; `bridge/terminal-bridge.test.mjs` spawns the real process and now runs as its own gate step | —                                                                                 |
+| `mcp_app` was declared and never consulted           | `src/lib/server/mcp_app_gate.ts` — two independent fences (policy verb **and** `MCP_APPS_ALLOW`), empty allowlist means nothing; `GET /api/mcp/apps` filters through it and returns `blocked`; `McpAppFrame` refuses without creating an iframe                                             | A per-app consent prompt for the operator at click time                           |
+| Phase 5 had no runner                                | `src/lib/automations_run_once.ts` (`planRunOnce`) + an idempotent `claimRun` internal mutation that advances `nextRunAt` so a second drain is a no-op                                                                                                                                       | The model call. Nothing executes a prompt, and both the route and the view say so |
+| Images trusted their declared media type             | `src/lib/uploads.ts` sniffs magic bytes, refuses a mismatch, caps at 4 MB and 2 per turn; the chat route re-verifies every part and answers 400 rather than forwarding an unproven type                                                                                                     | An upload route: images still travel in the body, nothing is stored               |
+| `dual_write` was a sentence, not a boolean           | `src/lib/memory_dual.ts` (`shouldDualWrite`, `reconcile`) — off unless the flag is `true` **and** the user is signed in; reconcile matches by normalised text, not id                                                                                                                       | The UI switch that flips it                                                       |
+
+One contract conflict surfaced here and was resolved in favour of the stricter side:
+`src/routes/api/ai/chat/contract.spec.ts` asserted that a fabricated `'A'.repeat(32)` string was
+a valid image, and that the log field `images` was a boolean. With intake sniffing real magic
+bytes both claims are wrong, so the spec was corrected — it now uses an actual 1×1 PNG and expects
+`images: 1`. A test that passes because nothing validates the payload is not evidence.

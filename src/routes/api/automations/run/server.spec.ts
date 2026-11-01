@@ -98,8 +98,13 @@ describe('/api/automations/run POST', () => {
 			decisions: [],
 			considered: 0,
 			wouldRun: 0,
+			plan: {
+				toRun: [],
+				skipped: [],
+				capped: false
+			},
 			executor: 'none',
-			note: 'Dry run. No prompt is executed and no failure counter changes.'
+			note: 'Dry run. No prompt is executed and no failure counter changes. The plan is what a runner would claim, one row at a time, via claimRun.'
 		});
 		expect(mockMutation).not.toHaveBeenCalled();
 	});
@@ -129,6 +134,14 @@ describe('/api/automations/run POST', () => {
 				reason: 'over_cap'
 			}
 		]);
+		expect(body.plan.toRun).toEqual([]);
+		expect(body.plan.skipped).toEqual([
+			{
+				id: 'auto-capped',
+				reason: 'over_cap'
+			}
+		]);
+		expect(body.plan.capped).toBe(false);
 		expect(mockMutation).not.toHaveBeenCalled();
 	});
 
@@ -185,6 +198,9 @@ describe('/api/automations/run POST', () => {
 				reason: 'due'
 			}
 		]);
+		expect(body.plan.toRun).toEqual(['auto-due']);
+		expect(body.plan.skipped).toEqual([]);
+		expect(body.plan.capped).toBe(false);
 		expect(mockMutation).not.toHaveBeenCalled();
 	});
 
@@ -213,6 +229,46 @@ describe('/api/automations/run POST', () => {
 				reason: 'due'
 			}
 		]);
+		expect(parsed.plan.toRun).toEqual(['auto-secret']);
+		expect(JSON.stringify(parsed.plan)).not.toContain(sensitivePrompt);
+		expect(mockMutation).not.toHaveBeenCalled();
+	});
+
+	test('response contains plan.toRun and plan.skipped; over_cap row appears in skipped; plan never contains prompt; no mutation invoked', async () => {
+		const sensitivePrompt = 'HIGHLY_CONFIDENTIAL_PROMPT_XYZ';
+		mockQuery.mockResolvedValueOnce([
+			{
+				_id: 'auto-ok',
+				prompt: sensitivePrompt,
+				intervalMinutes: 15,
+				nextRunAt: Date.now() - 2000,
+				enabled: true,
+				failureCount: 0
+			},
+			{
+				_id: 'auto-failed',
+				prompt: sensitivePrompt,
+				intervalMinutes: 30,
+				nextRunAt: Date.now() - 1000,
+				enabled: true,
+				failureCount: 3
+			}
+		]);
+
+		const res = await POST(makePostEvent());
+		expect(res.status).toBe(200);
+
+		const body = await res.json();
+		expect(body.plan.toRun).toEqual(['auto-ok']);
+		expect(body.plan.skipped).toEqual([
+			{
+				id: 'auto-failed',
+				reason: 'over_cap'
+			}
+		]);
+		expect(body.plan.capped).toBe(false);
+		expect(JSON.stringify(body.plan)).not.toContain(sensitivePrompt);
+		expect(mockMutation).not.toHaveBeenCalled();
 	});
 
 	test('the log call receives no prompt string and records flat primitives only', async () => {

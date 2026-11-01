@@ -6,6 +6,7 @@ import { chatResponse } from '$lib/server/ai/chat';
 import { defaultPolicy, parsePolicy } from '$lib/server/policy';
 import { logEvent } from '$lib/server/log';
 import { bridgeAvailable, createBridgeClient } from '$lib/server/bridge';
+import { acceptImage, MAX_IMAGES_PER_TURN } from '$lib/uploads';
 import type { RequestHandler } from './$types';
 
 /**
@@ -39,9 +40,45 @@ export const POST: RequestHandler = async (event) => {
 	let input: ReturnType<typeof parseChat>;
 	try {
 		input = parseChat(env, body);
-	} catch {
+	} catch (err: unknown) {
 		await logEvent('warn', 'ai.chat', { outcome: 'invalid-request' });
+		if (
+			typeof err === 'object' &&
+			err !== null &&
+			'issues' in err &&
+			Array.isArray((err as { issues: Array<{ message?: string }> }).issues) &&
+			(err as { issues: Array<{ message?: string }> }).issues.some((i) =>
+				i.message?.includes('image')
+			)
+		) {
+			error(400, `At most ${MAX_IMAGES_PER_TURN} images per turn.`);
+		}
 		error(400, 'Check the approved provider/model, key and conversation limits.');
+	}
+	let imageCount = 0;
+	let refusedCount = 0;
+	for (const message of input.messages) {
+		if (Array.isArray(message.content)) {
+			for (const part of message.content) {
+				if (part.type === 'image') {
+					imageCount++;
+					const accepted = acceptImage(`image-${imageCount - 1}`, part.mediaType, part.data);
+					if ('error' in accepted) {
+						refusedCount++;
+					} else {
+						part.mediaType = accepted.mediaType;
+					}
+				}
+			}
+		}
+	}
+	if (imageCount > MAX_IMAGES_PER_TURN) {
+		await logEvent('warn', 'ai.chat', { outcome: 'invalid-request' });
+		error(400, `At most ${MAX_IMAGES_PER_TURN} images per turn.`);
+	}
+	if (refusedCount > 0) {
+		await logEvent('warn', 'ai.chat', { outcome: 'invalid-request' });
+		error(400, `${refusedCount} image${refusedCount === 1 ? '' : 's'} refused.`);
 	}
 	const toolsEnabled = env.AI_TOOLS_ENABLED === 'true';
 	await logEvent('info', 'ai.chat.start', {
@@ -54,7 +91,7 @@ export const POST: RequestHandler = async (event) => {
 			0
 		),
 		tools: toolsEnabled && input.toolUse,
-		images: input.messages.some((message) => Array.isArray(message.content))
+		images: imageCount
 	});
 	const bridge = bridgeAvailable(env);
 	const toolUse = input.toolUse === true;

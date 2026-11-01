@@ -4,6 +4,7 @@ import { fail, requireUser } from './_shared/auth';
 import {
 	INTERVALS,
 	MAX_AUTOMATIONS,
+	MAX_FAILURES,
 	MAX_PROMPT_LENGTH,
 	isValidInterval,
 	nextRunAt,
@@ -159,5 +160,31 @@ export const recordRun = internalMutation({
 			});
 		}
 		return null;
+	}
+});
+
+export const claimRun = internalMutation({
+	args: {
+		id: v.id('automations'),
+		now: v.number()
+	},
+	returns: v.union(v.literal('claimed'), v.literal('not_due'), v.literal('disabled')),
+	handler: async (ctx, args) => {
+		const row = await ctx.db.get('automations', args.id);
+		if (!row) {
+			fail('not_found', 'Automation not found.');
+		}
+		if (!row.enabled || row.failureCount >= MAX_FAILURES) {
+			return 'disabled';
+		}
+		if (row.nextRunAt > args.now) {
+			return 'not_due';
+		}
+		// Moving nextRunAt forward inside the claim is what makes a second concurrent drain a no-op.
+		await ctx.db.patch('automations', args.id, {
+			lastRunAt: args.now,
+			nextRunAt: nextRunAt(args.now, row.intervalMinutes)
+		});
+		return 'claimed';
 	}
 });

@@ -97,7 +97,7 @@ describe('/api/ai/chat POST', () => {
 			messages: 1,
 			chars: 5,
 			tools: false,
-			images: false
+			images: 0
 		});
 		expect(JSON.stringify(logMock.logEvent.mock.calls)).not.toContain('secret-key-123456');
 		expect(JSON.stringify(logMock.logEvent.mock.calls)).not.toContain('Hello');
@@ -112,8 +112,11 @@ describe('/api/ai/chat POST', () => {
 		expect(logMock.logEvent.mock.calls[0][2].tools).toBe(true);
 	});
 
-	test('image messages are flagged in the log without their payload', async () => {
-		const png = 'A'.repeat(32);
+	test('image messages are counted in the log, without their payload', async () => {
+		// A real 1x1 PNG. The intake sniffs magic bytes now, so a fabricated string is refused
+		// by `acceptImage` and never reaches the log — which is the point of the intake.
+		const png =
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
 		await POST(
 			makeEvent({
 				...validBody,
@@ -126,7 +129,7 @@ describe('/api/ai/chat POST', () => {
 			})
 		);
 		const fields = logMock.logEvent.mock.calls[0][2];
-		expect(fields.images).toBe(true);
+		expect(fields.images).toBe(1);
 		expect(fields.chars).toBe(0);
 		expect(JSON.stringify(logMock.logEvent.mock.calls)).not.toContain(png);
 	});

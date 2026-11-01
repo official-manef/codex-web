@@ -5,10 +5,11 @@
 		appId: string;
 		src: string; // https origin only
 		height?: number; // default 420, clamped 40–2000
+		allowed?: boolean;
 		onCall?: (tool: string, args: Record<string, unknown>) => Promise<unknown>;
 	};
 
-	let { appId, src, height = 420, onCall }: Props = $props();
+	let { appId, src, height = 420, allowed = true, onCall }: Props = $props();
 
 	let iframeEl = $state<HTMLIFrameElement | null>(null);
 	let guestHeight = $state<number | null>(null);
@@ -42,7 +43,7 @@
 	$effect(() => {
 		isReady = false;
 		timedOut = false;
-		if (!policyResult.policy) return;
+		if (allowed === false || !policyResult.policy) return;
 
 		const timer = setTimeout(() => {
 			if (!isReady) {
@@ -121,7 +122,11 @@
 	});
 </script>
 
-{#if policyResult.error}
+{#if allowed === false}
+	<p role="status" class="mcp-app-status">
+		This app is refused by the mcp_app policy verb or the MCP_APPS_ALLOW allowlist.
+	</p>
+{:else if policyResult.error}
 	<div role="alert" class="mcp-app-error">
 		<span>Failed to initialize MCP App frame: {policyResult.error}</span>
 	</div>

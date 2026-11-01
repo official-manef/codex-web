@@ -296,14 +296,15 @@ loaded screen.
 
 Ordered by the reasoning in `docs/chatgpt-desktop-parity-windows.md` §7, cheapest first.
 
-| #   | Item                                        | Blocker                                                                  | Status       |
-| --- | ------------------------------------------- | ------------------------------------------------------------------------ | ------------ |
-| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`     | done         |
-| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default             | done (gated) |
-| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol + manifest + screen; the `mcp_app` verb is not consulted | partial      |
-| 4   | Memories                                    | Convex when signed in, local otherwise, explicit import button           | done         |
-| 5   | Bridge-backed tool execution                | client + route wired; the bridge has not grown the HTTP verbs            | partial      |
-| 6   | Scheduled tasks                             | records + a dry-run decision route; still no runner                      | partial      |
+| #   | Item                                        | Blocker                                                                            | Status       |
+| --- | ------------------------------------------- | ---------------------------------------------------------------------------------- | ------------ |
+| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`               | done         |
+| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default                       | done (gated) |
+| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol + manifest + screen; the `mcp_app` verb is not consulted           | partial      |
+| 4   | Memories                                    | Convex when signed in, local otherwise, explicit import button                     | done         |
+| 5   | Bridge-backed tool execution                | bridge serves `/v1/exec`, `/v1/fs/read`, `/v1/fs/write` behind a root allowlist    | done         |
+| 6   | Scheduled tasks                             | records, dry-run plan and an idempotent `claimRun`; the model call is still absent | partial      |
+| 7   | MCP app approval gate                       | `mcp_app` verb + `MCP_APPS_ALLOW`; both must pass before a frame exists            | done         |
 
 Done rows name the file that carries them: Projects `src/lib/projects.ts`, Memories
 `src/lib/memories.ts` + `src/convex/memories.ts`, Git `src/lib/server/git.ts` +

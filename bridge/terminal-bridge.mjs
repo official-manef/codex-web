@@ -5,6 +5,9 @@
  * this process is that machine's half of the contract in `docs/terminal.md`:
  *
  *   GET /v1/health           Authorization: Bearer <token>  -> 200 or 401
+ *   POST /v1/exec            { argv: string[] }             -> { code: number, stdout: string }
+ *   POST /v1/fs/read         { path: string }               -> { text: string }
+ *   POST /v1/fs/write        { path: string, text: string } -> { ok: true }
  *   WebSocket /v1/terminal   subprotocol `bearer.<token>`   -> one pty
  *   frames                   text only, both directions
  *   resize                   {"type":"resize","cols":N,"rows":N} inbound
@@ -21,6 +24,8 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 8649);
@@ -40,7 +45,18 @@ const ALLOWED = (process.env.BRIDGE_ALLOW_ORIGIN ?? '')
 
 const TERMINAL_PATH = '/v1/terminal';
 const HEALTH_PATH = '/v1/health';
+const EXEC_PATH = '/v1/exec';
+const FS_READ_PATH = '/v1/fs/read';
+const FS_WRITE_PATH = '/v1/fs/write';
 const MAX_FRAME_BYTES = 65536;
+const MAX_BODY_BYTES = 65536;
+const MAX_STDOUT_BYTES = 65536;
+const MAX_FILE_BYTES = 1000000;
+const MAX_WRITE_CHARS = 200000;
+const MAX_ARGV_ENTRIES = 32;
+const MAX_ARG_CHARS = 200;
+const MAX_PATH_CHARS = 500;
+const EXEC_TIMEOUT_MS = 10000;
 const MAX_CONNECTIONS = Number(process.env.BRIDGE_MAX_CONNECTIONS ?? 8);
 const SELF_ORIGINS = selfOrigins(HOST, PORT);
 
@@ -132,6 +148,272 @@ function shellEnv() {
 	return env;
 }
 
+function sendJson(response, statusCode, payload) {
+	if (response.headersSent) return;
+	response.writeHead(statusCode, {
+		'content-type': 'application/json',
+		'cache-control': 'no-store'
+	});
+	response.end(JSON.stringify(payload));
+}
+
+function getFsRoots() {
+	const raw = process.env.BRIDGE_FS_ROOTS ?? '';
+	const entries = raw
+		.split(':')
+		.map((part) => part.trim())
+		.filter(Boolean);
+	if (entries.length === 0) {
+		return [resolve(process.cwd())];
+	}
+	return entries.map((part) => resolve(process.cwd(), part));
+}
+
+function resolveSafePath(filePath) {
+	if (
+		typeof filePath !== 'string' ||
+		filePath.length < 1 ||
+		filePath.length > MAX_PATH_CHARS ||
+		filePath.includes('\0')
+	) {
+		return { status: 400, path: null };
+	}
+	const candidate = resolve(process.cwd(), filePath);
+	const roots = getFsRoots();
+	for (const root of roots) {
+		const rel = relative(root, candidate);
+		if (!rel.startsWith('..') && !isAbsolute(rel)) {
+			return { status: 200, path: candidate };
+		}
+	}
+	return { status: 403, path: null };
+}
+
+function isValidArgv(argv) {
+	if (!Array.isArray(argv) || argv.length < 1 || argv.length > MAX_ARGV_ENTRIES) return false;
+	for (const arg of argv) {
+		if (typeof arg !== 'string' || arg.length > MAX_ARG_CHARS || arg.includes('\0')) {
+			return false;
+		}
+	}
+	return true;
+}
+
+function readJsonBody(request, response) {
+	return new Promise((resolveBody) => {
+		const contentLength = Number(request.headers['content-length']);
+		if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+			request.resume();
+			sendJson(response, 413, { error: 'payload too large' });
+			resolveBody(null);
+			return;
+		}
+
+		let bytes = 0;
+		const chunks = [];
+		let exceeded = false;
+
+		request.on('data', (chunk) => {
+			if (exceeded) return;
+			bytes += chunk.length;
+			if (bytes > MAX_BODY_BYTES) {
+				exceeded = true;
+				request.resume();
+				sendJson(response, 413, { error: 'payload too large' });
+				resolveBody(null);
+				return;
+			}
+			chunks.push(chunk);
+		});
+
+		request.on('end', () => {
+			if (exceeded) return;
+			const raw = Buffer.concat(chunks).toString('utf8');
+			try {
+				const parsed = JSON.parse(raw);
+				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+					sendJson(response, 400, { error: 'invalid json' });
+					resolveBody(null);
+					return;
+				}
+				resolveBody(parsed);
+			} catch {
+				sendJson(response, 400, { error: 'invalid json' });
+				resolveBody(null);
+			}
+		});
+
+		request.on('error', () => {
+			if (!exceeded && !response.headersSent) {
+				sendJson(response, 400, { error: 'bad request' });
+			}
+			resolveBody(null);
+		});
+	});
+}
+
+async function handleExec(request, response) {
+	if (!originAllowed(request.headers.origin)) {
+		sendJson(response, 403, { error: 'forbidden' });
+		return;
+	}
+	if (!tokenMatches(bearerFrom(request.headers.authorization))) {
+		sendJson(response, 401, { error: 'unauthorized' });
+		return;
+	}
+	const body = await readJsonBody(request, response);
+	if (!body) return;
+
+	if (!isValidArgv(body.argv)) {
+		sendJson(response, 400, { error: 'invalid argv' });
+		return;
+	}
+
+	const [command, ...args] = body.argv;
+	let child;
+	try {
+		child = spawn(command, args, {
+			shell: false,
+			timeout: EXEC_TIMEOUT_MS,
+			env: shellEnv(),
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+	} catch {
+		sendJson(response, 200, { code: 1, stdout: '' });
+		return;
+	}
+
+	const stdoutChunks = [];
+	let stdoutBytes = 0;
+	let truncated = false;
+
+	child.stdout.on('data', (chunk) => {
+		if (truncated) return;
+		if (stdoutBytes + chunk.length > MAX_STDOUT_BYTES) {
+			const allowed = Math.max(0, MAX_STDOUT_BYTES - stdoutBytes);
+			if (allowed > 0) {
+				stdoutChunks.push(chunk.subarray(0, allowed));
+				stdoutBytes += allowed;
+			}
+			truncated = true;
+			return;
+		}
+		stdoutChunks.push(chunk);
+		stdoutBytes += chunk.length;
+	});
+
+	child.stderr.resume();
+
+	let finished = false;
+	const finish = (code) => {
+		if (finished) return;
+		finished = true;
+		let stdout = Buffer.concat(stdoutChunks).toString('utf8');
+		if (truncated) {
+			stdout += (stdout.endsWith('\n') ? '' : '\n') + '[truncated]';
+		}
+		sendJson(response, 200, { code, stdout });
+	};
+
+	child.on('error', (err) => {
+		const code = err.code === 'ENOENT' ? 127 : 1;
+		finish(code);
+	});
+
+	child.on('close', (code) => {
+		const exitCode = typeof code === 'number' ? code : 1;
+		finish(exitCode);
+	});
+
+	request.on('close', () => {
+		if (!finished && !child.killed) {
+			child.kill();
+		}
+	});
+}
+
+async function handleFsRead(request, response) {
+	if (!originAllowed(request.headers.origin)) {
+		sendJson(response, 403, { error: 'forbidden' });
+		return;
+	}
+	if (!tokenMatches(bearerFrom(request.headers.authorization))) {
+		sendJson(response, 401, { error: 'unauthorized' });
+		return;
+	}
+	const body = await readJsonBody(request, response);
+	if (!body) return;
+
+	const resolved = resolveSafePath(body.path);
+	if (resolved.status !== 200) {
+		sendJson(response, resolved.status, {
+			error: resolved.status === 400 ? 'invalid path' : 'forbidden'
+		});
+		return;
+	}
+
+	try {
+		const info = await stat(resolved.path);
+		if (info.isDirectory()) {
+			sendJson(response, 400, { error: 'cannot read directory' });
+			return;
+		}
+		if (info.size > MAX_FILE_BYTES) {
+			sendJson(response, 413, { error: 'file too large' });
+			return;
+		}
+		const text = await readFile(resolved.path, 'utf8');
+		if (Buffer.byteLength(text, 'utf8') > MAX_FILE_BYTES) {
+			sendJson(response, 413, { error: 'file too large' });
+			return;
+		}
+		sendJson(response, 200, { text });
+	} catch (err) {
+		if (err && err.code === 'ENOENT') {
+			sendJson(response, 404, { error: 'not found' });
+			return;
+		}
+		sendJson(response, 500, { error: 'read failed' });
+	}
+}
+
+async function handleFsWrite(request, response) {
+	if (!originAllowed(request.headers.origin)) {
+		sendJson(response, 403, { error: 'forbidden' });
+		return;
+	}
+	if (!tokenMatches(bearerFrom(request.headers.authorization))) {
+		sendJson(response, 401, { error: 'unauthorized' });
+		return;
+	}
+	const body = await readJsonBody(request, response);
+	if (!body) return;
+
+	const resolved = resolveSafePath(body.path);
+	if (resolved.status !== 200) {
+		sendJson(response, resolved.status, {
+			error: resolved.status === 400 ? 'invalid path' : 'forbidden'
+		});
+		return;
+	}
+
+	if (typeof body.text !== 'string' || body.text.length > MAX_WRITE_CHARS) {
+		sendJson(response, 400, { error: 'invalid text' });
+		return;
+	}
+
+	try {
+		await writeFile(resolved.path, body.text, 'utf8');
+		sendJson(response, 200, { ok: true });
+	} catch (err) {
+		if (err && (err.code === 'ENOENT' || err.code === 'EISDIR')) {
+			sendJson(response, 404, { error: 'parent directory does not exist' });
+			return;
+		}
+		sendJson(response, 500, { error: 'write failed' });
+	}
+}
+
 const server = createServer((request, response) => {
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 
@@ -146,7 +428,22 @@ const server = createServer((request, response) => {
 		return;
 	}
 
-	response.writeHead(404, { 'content-type': 'application/json' });
+	if (url.pathname === EXEC_PATH && request.method === 'POST') {
+		handleExec(request, response);
+		return;
+	}
+
+	if (url.pathname === FS_READ_PATH && request.method === 'POST') {
+		handleFsRead(request, response);
+		return;
+	}
+
+	if (url.pathname === FS_WRITE_PATH && request.method === 'POST') {
+		handleFsWrite(request, response);
+		return;
+	}
+
+	response.writeHead(404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
 	response.end('{"error":"not found"}');
 });
 
@@ -259,6 +556,9 @@ function clampInt(value, min, max) {
 server.listen(PORT, HOST, () => {
 	console.log(`terminal bridge on http://${HOST}:${PORT}`);
 	console.log(`  health   GET ${HEALTH_PATH} (Bearer token)`);
+	console.log(`  exec     POST ${EXEC_PATH} (Bearer token)`);
+	console.log(`  fs/read  POST ${FS_READ_PATH} (Bearer token)`);
+	console.log(`  fs/write POST ${FS_WRITE_PATH} (Bearer token)`);
 	console.log(`  terminal WS  ${TERMINAL_PATH} (subprotocol bearer.<token>)`);
 	console.log(`  shell    ${SHELL}`);
 	console.log(

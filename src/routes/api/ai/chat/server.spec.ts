@@ -238,4 +238,135 @@ describe('/api/ai/chat POST', () => {
 			expect(serialized).not.toContain(capToken);
 		}
 	});
+
+	test('a valid PNG part reaches chatResponse with mediaType:"image/png"', async () => {
+		const validPngBase64 = 'iVBORw0KGgo=';
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [
+				{
+					role: 'user',
+					content: [
+						{ type: 'text', text: 'Analyze this' },
+						{ type: 'image', mediaType: 'image/png', data: validPngBase64 }
+					]
+				}
+			]
+		});
+
+		await POST(makeEvent());
+
+		expect(chatMock.chatResponse).toHaveBeenCalledTimes(1);
+		const input = chatMock.chatResponse.mock.calls[0][0];
+		expect(input.messages[0].content).toEqual([
+			{ type: 'text', text: 'Analyze this' },
+			{ type: 'image', mediaType: 'image/png', data: validPngBase64 }
+		]);
+	});
+
+	test('a PNG declared as JPEG is refused with 400', async () => {
+		const validPngBase64 = 'iVBORw0KGgo=';
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [
+				{
+					role: 'user',
+					content: [
+						{ type: 'text', text: 'Check this' },
+						{ type: 'image', mediaType: 'image/jpeg', data: validPngBase64 }
+					]
+				}
+			]
+		});
+
+		await expect(POST(makeEvent())).rejects.toMatchObject({
+			status: 400,
+			body: { message: '1 image refused.' }
+		});
+	});
+
+	test('three images → 400 naming the per-turn cap', async () => {
+		const validPngBase64 = 'iVBORw0KGgo=';
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [
+				{
+					role: 'user',
+					content: [
+						{ type: 'image', mediaType: 'image/png', data: validPngBase64 },
+						{ type: 'image', mediaType: 'image/png', data: validPngBase64 },
+						{ type: 'image', mediaType: 'image/png', data: validPngBase64 }
+					]
+				}
+			]
+		});
+
+		await expect(POST(makeEvent())).rejects.toMatchObject({
+			status: 400,
+			body: { message: 'At most 2 images per turn.' }
+		});
+	});
+
+	test('a text-only body is unchanged', async () => {
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [{ role: 'user', content: 'hello text only' }]
+		});
+
+		await POST(makeEvent());
+
+		expect(chatMock.chatResponse).toHaveBeenCalledTimes(1);
+		const input = chatMock.chatResponse.mock.calls[0][0];
+		expect(input.messages).toEqual([{ role: 'user', content: 'hello text only' }]);
+	});
+
+	test('the refused-image response body contains no base64', async () => {
+		const invalidBase64Payload = 'A'.repeat(64);
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [
+				{
+					role: 'user',
+					content: [{ type: 'image', mediaType: 'image/png', data: invalidBase64Payload }]
+				}
+			]
+		});
+
+		// Capture the rejection so the body can be inspected for leakage, and assert on it.
+		const error = await (Promise.resolve(POST(makeEvent())) as Promise<unknown>).catch(
+			(e: { body: unknown }) => e
+		);
+		expect(error).toMatchObject({ status: 400 });
+		const serialized = JSON.stringify((error as { body: unknown }).body);
+		expect(serialized).not.toContain(invalidBase64Payload);
+	});
+
+	test('the log receives a number, not a name on ai.chat.start', async () => {
+		const validPngBase64 = 'iVBORw0KGgo=';
+		accessMock.readJsonBody.mockResolvedValueOnce({
+			...defaultFixture,
+			messages: [
+				{
+					role: 'user',
+					content: [
+						{ type: 'text', text: 'hi' },
+						{ type: 'image', mediaType: 'image/png', data: validPngBase64 }
+					]
+				}
+			]
+		});
+
+		await POST(makeEvent());
+
+		const startCall = logMock.logEvent.mock.calls.find(
+			(call) => call[0] === 'info' && call[1] === 'ai.chat.start'
+		);
+		expect(startCall).toBeDefined();
+		const payload = startCall![2] as Record<string, unknown>;
+		expect(typeof payload.images).toBe('number');
+		expect(payload.images).toBe(1);
+		expect(payload).not.toHaveProperty('name');
+		expect(JSON.stringify(payload)).not.toContain('image-0');
+		expect(JSON.stringify(payload)).not.toContain('image/png');
+	});
 });

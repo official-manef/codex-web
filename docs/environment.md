@@ -76,6 +76,10 @@ The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 | `AUTOMATIONS_ENABLED`     | `false` | Enables `POST /api/automations/run`, a **dry run** that previews `decideRun` and executes nothing.                              |
 | `MCP_APPS_ENABLED`        | `false` | Enables `GET /api/mcp/apps`, the operator's sandboxed app allowlist.                                                            |
 | `MCP_APPS_JSON`           | Empty   | Closed list of `{ id, name, origin, entry, surfaces }`. Invalid entries are dropped, invalid JSON is a 503.                     |
+| `MCP_APPS_ALLOW`          | Empty   | Comma-separated app ids actually permitted. Empty means **nothing** runs, never everything.                                     |
+| `MCP_APPS_POLICY_JSON`    | Empty   | Per-verb decision including `mcp_app`. Empty or malformed denies, so no frame is created.                                       |
+| `MEMORY_DUAL_WRITE`       | `false` | Mirrors local notes to Convex when `true` **and** the user is signed in. Off by default.                                        |
+| `BRIDGE_FS_ROOTS`         | cwd     | `:`-separated directories `/v1/fs/read` and `/v1/fs/write` may touch. A path outside every root is a 403.                       |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.

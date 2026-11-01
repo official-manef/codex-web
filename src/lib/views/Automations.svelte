@@ -34,10 +34,17 @@
 		reason: string;
 	};
 
+	type DryRunPlan = {
+		toRun: string[];
+		skipped: { id: string; reason: string }[];
+		capped: boolean;
+	};
+
 	type DryRunResult = {
 		decisions: DryRunDecision[];
 		considered: number;
 		wouldRun: number;
+		plan?: DryRunPlan;
 		executor: string;
 		note: string;
 	};
@@ -217,13 +224,60 @@
 	{/if}
 
 	{#if dryRunResult}
-		<section class="mt-6 space-y-3">
+		<section class="mt-6 space-y-4">
 			<div class="flex items-center justify-between">
 				<h3 class="text-[13px] font-medium">Dry run preview</h3>
 				<span class="text-[12px] text-ink-3">
 					{dryRunResult.wouldRun} of {dryRunResult.considered} would run
 				</span>
 			</div>
+			{#if dryRunResult.note}
+				<p class="text-[12px] leading-relaxed text-ink-3">{dryRunResult.note}</p>
+			{/if}
+
+			{#if dryRunResult.plan}
+				<div class="card space-y-4 p-4">
+					{#if dryRunResult.plan.capped}
+						<p class="text-[12.5px] leading-relaxed text-ink-2" role="status">
+							more rows were due than this drain allows
+						</p>
+					{/if}
+
+					<div>
+						<h4 class="text-[12.5px] font-medium text-ink">
+							Would run ({dryRunResult.plan.toRun.length})
+						</h4>
+						{#if dryRunResult.plan.toRun.length === 0}
+							<p class="mt-1 text-[12px] text-ink-3">None</p>
+						{:else}
+							<ul class="mt-1.5 space-y-1">
+								{#each dryRunResult.plan.toRun as id}
+									<li class="mono text-[12px] text-ink-2">{id}</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+
+					<div>
+						<h4 class="text-[12.5px] font-medium text-ink">
+							Skipped ({dryRunResult.plan.skipped.length})
+						</h4>
+						{#if dryRunResult.plan.skipped.length === 0}
+							<p class="mt-1 text-[12px] text-ink-3">None</p>
+						{:else}
+							<ul class="mt-1.5 space-y-1">
+								{#each dryRunResult.plan.skipped as item}
+									<li class="text-[12px] text-ink-2">
+										<span class="mono">{item.id}</span>
+										<span class="mono text-ink-3">({item.reason})</span>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
 			{#if dryRunResult.decisions.length === 0}
 				<p class="text-[12.5px] text-ink-2" role="status">No due automations evaluated.</p>
 			{:else}

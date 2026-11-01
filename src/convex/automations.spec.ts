@@ -245,3 +245,47 @@ describe('automations: due query', () => {
 		expect(idsAt6000).not.toContain(idDisabled);
 	});
 });
+
+describe('automations: claimRun idempotency and state guards', () => {
+	test('claimRun handles first claim, double claim, disabled, and 3-failure row', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+
+		const id = await asAlice.mutation(api.automations.create, {
+			prompt: 'Claimable job',
+			intervalMinutes: 15
+		});
+
+		const now = Date.now() + 20 * 60_000;
+
+		// First call 'claimed' and nextRunAt moved forward
+		const firstClaim = await t.mutation(internal.automations.claimRun, { id, now });
+		expect(firstClaim).toBe('claimed');
+		const rowAfterFirst = await t.run(async (ctx) => ctx.db.get('automations', id));
+		expect(rowAfterFirst?.lastRunAt).toBe(now);
+		expect(rowAfterFirst?.nextRunAt).toBe(now + 15 * 60_000);
+
+		// Immediate second call 'not_due'
+		const secondClaim = await t.mutation(internal.automations.claimRun, { id, now });
+		expect(secondClaim).toBe('not_due');
+
+		// Disabled row 'disabled'
+		await asAlice.mutation(api.automations.setEnabled, { id, enabled: false });
+		const disabledClaim = await t.mutation(internal.automations.claimRun, {
+			id,
+			now: now + 30 * 60_000
+		});
+		expect(disabledClaim).toBe('disabled');
+
+		// 3-failure row 'disabled'
+		await asAlice.mutation(api.automations.setEnabled, { id, enabled: true });
+		await t.run(async (ctx) => {
+			await ctx.db.patch('automations', id, { failureCount: 3 });
+		});
+		const failureClaim = await t.mutation(internal.automations.claimRun, {
+			id,
+			now: now + 60 * 60_000
+		});
+		expect(failureClaim).toBe('disabled');
+	});
+});

@@ -5,6 +5,7 @@ import { ConvexHttpClient } from 'convex/browser';
 import { internal } from '../../../../convex/_generated/api';
 import type { FunctionReference } from 'convex/server';
 import { decideRun, MAX_RUNS_PER_DRAIN, type DueRow } from '$lib/automations_runner';
+import { planRunOnce } from '$lib/automations_run_once';
 import { requireCapabilityAccess } from '$lib/server/access';
 import { logEvent } from '$lib/server/log';
 import type { RequestHandler } from './$types';
@@ -95,6 +96,12 @@ export const POST: RequestHandler = async (event) => {
 			};
 		});
 
+		const plan = planRunOnce({
+			rows: candidateRows,
+			now,
+			maxRuns: MAX_RUNS_PER_DRAIN
+		});
+
 		const considered = candidateRows.length;
 		const wouldRun = decisions.filter((d) => d.run).length;
 
@@ -109,8 +116,9 @@ export const POST: RequestHandler = async (event) => {
 				decisions,
 				considered,
 				wouldRun,
+				plan,
 				executor: 'none',
-				note: 'Dry run. No prompt is executed and no failure counter changes.'
+				note: 'Dry run. No prompt is executed and no failure counter changes. The plan is what a runner would claim, one row at a time, via claimRun.'
 			},
 			{
 				headers: {

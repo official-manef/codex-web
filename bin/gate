@@ -286,6 +286,17 @@ if need_tool vitest vitest; then
 	fi
 fi
 
+# ── bridge contract ────────────────────────────────────────────────────────────────────────
+#
+# The bridge is not part of the SvelteKit build, so vitest never sees it. Its own test spawns
+# the real process and exercises the three HTTP verbs the app's client depends on; without this
+# step the bridge could drift from `src/lib/server/bridge.ts` and nothing would notice.
+if run bridge node --test bridge/terminal-bridge.test.mjs; then
+	pass bridge "$LAST_MS"
+else
+	fail bridge "$LAST_MS" 'bridge contract test failed'
+fi
+
 # ── build ──────────────────────────────────────────────────────────────────────────────────
 
 if need_tool vite build; then
