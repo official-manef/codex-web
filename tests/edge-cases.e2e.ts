@@ -47,7 +47,7 @@ async function streamChat(
 	await page.addInitScript(() => {
 		sessionStorage.setItem(
 			'laya-draft-v1:byok-key',
-			JSON.stringify({ version: 1, value: 'sk-edge-test-12345678' })
+			JSON.stringify({ version: 1, value: 'fake-not-a-secret-1234' })
 		);
 	});
 	await page.route('**/api/ai/config', (route) =>
@@ -304,7 +304,7 @@ test.describe('streaming that does not end the way the protocol says', () => {
 		await page.addInitScript(() => {
 			sessionStorage.setItem(
 				'laya-draft-v1:byok-key',
-				JSON.stringify({ version: 1, value: 'sk-edge-test-12345678' })
+				JSON.stringify({ version: 1, value: 'fake-not-a-secret-1234' })
 			);
 			const realFetch = window.fetch.bind(window);
 			window.fetch = (input, init) => {
