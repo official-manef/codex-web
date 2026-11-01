@@ -445,6 +445,17 @@
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
 	}
+	/* The blanket duration override above leaves `transition-behavior` alone, and it does not
+	   touch the two things a reduced-motion user actually asked about: smooth scrolling and
+	   an infinitely looping animation. Both are asserted in tests/a11y.e2e.ts. */
+	html {
+		scroll-behavior: auto !important;
+	}
+	*,
+	*::before,
+	*::after {
+		animation: none !important;
+	}
 }
 
 /* ── workspace shell (ported from the Laya template) ──────────────────────────

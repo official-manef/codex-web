@@ -53,6 +53,13 @@
     outline: 1px solid var(--chat-composer-focus, var(--color-line-strong, var(--color-ink-2)));
     outline-offset: 0;
   }
+  /* Forced colours strip the custom property that made the focus ring visible; the base
+     `:focus-visible` rule targets the textarea, which has `outline: none`. */
+  @media (forced-colors: active) {
+    .chat-composer:focus-within {
+      outline: 2px solid Highlight;
+    }
+  }
   .chat-composer :global(textarea) {
     display: block;
     width: 100%;

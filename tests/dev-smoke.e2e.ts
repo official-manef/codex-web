@@ -20,7 +20,7 @@ test('fresh clone boots without credentials and hydrates the workspace shell', a
 	await expect(page.getByRole('heading', { name: /What would you like to do\?/ })).toBeVisible();
 
 	// No credentials configured: the composer is present and usable.
-	const composer = page.getByRole('textbox').first();
+	const composer = page.getByRole('combobox').first();
 	await expect(composer).toBeVisible();
 	await expect(composer).toBeEnabled();
 
@@ -30,7 +30,7 @@ test('fresh clone boots without credentials and hydrates the workspace shell', a
 test('a local send produces a timeline entry and a stub reply', async ({ page }) => {
 	await page.goto('/');
 
-	const composer = page.getByRole('textbox').first();
+	const composer = page.getByRole('combobox').first();
 	await composer.fill('Hello from the template');
 	await composer.press('Enter');
 
@@ -56,7 +56,7 @@ test('rail navigation reaches a lazily loaded feature screen', async ({ page }) 
 	await page.goto('/');
 	// In dev the module graph hydrates later than the markup; wait for the composer to be
 	// interactive before clicking, or the click lands on a not-yet-bound button.
-	const composer = page.getByRole('textbox').first();
+	const composer = page.getByRole('combobox').first();
 	await expect(composer).toBeVisible();
 	await expect(composer).toBeEnabled();
 	await page.getByRole('button', { name: 'Files', exact: true }).first().click();
