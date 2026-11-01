@@ -139,7 +139,7 @@ They were deleted deliberately by `6ed1f3e` ("rebuild on the Laya NPU workspace 
 which removed the `/workspace`, `/capabilities`, `/settings` route family and their
 acceptance suites. The PRD and the implementation plan were not updated in that commit.
 
-So: **zero of AC01–AC18 have a browser test right now.** The 138 unit tests cover schema,
+So: **zero of AC01–AC18 have a browser test right now.** The unit suite covers schema,
 guards, transport, auth and config — not the acceptance scenarios. Both documents are stale
 and are corrected here rather than quietly satisfied.
 
@@ -154,10 +154,18 @@ Ordered by the reasoning in `docs/chatgpt-desktop-parity-windows.md` §7, cheape
 
 | #   | Item                                        | Blocker                                                              | Status      |
 | --- | ------------------------------------------- | -------------------------------------------------------------------- | ----------- |
-| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason` | not started |
-| 2   | Git surface: status, diff, stage, commit    | needs a server route + repo allowlist + process boundary             | not started |
+| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason` | done        |
+| 2   | Git surface: status, recent commits         | allowlist + read-only subcommands only; no stage/commit/push         | read-only   |
 | 3   | Plugin-extension entrypoints (MCP App host) | needs `@openai/mcp-extensions`; measured as the largest single gap   | not started |
-| 4   | Memories                                    | needs a table and a retention decision                               | not started |
+| 4   | Memories                                    | none; `localStorage`, attached as untrusted context per turn         | done        |
+
+Done rows name the file that carries them: Projects `src/lib/projects.ts`, Memories
+`src/lib/memories.ts`, Git `src/lib/server/git.ts` + `src/routes/api/git/+server.ts`.
+
+The git surface is deliberately partial. `GIT_SURFACE_ENABLED` plus a `GIT_SURFACE_ROOTS`
+allowlist buys status and `log -n 20`; stage, diff, commit and push need a real process
+boundary and an approval model, and neither exists here. Claiming them would repeat the AC
+mistake this document exists to correct.
 
 Out of scope unless a product decision changes it: parallel chat orchestration, Computer
 Use, mobile remote relay, MCP 2.0 events.

@@ -38,7 +38,9 @@ export const FEATURE_ACCESS: Readonly<Record<string, FeatureRequirement>> = Obje
 	'workspace-home': 'any',
 	// Settings surfaces that must stay reachable so the toggles can be changed back.
 	tools: 'any',
-	devices: 'any'
+	devices: 'any',
+	memories: 'any',
+	git: 'any'
 });
 
 /** Navigation that must stay reachable, including the Tools screen that re-enables the rest. */

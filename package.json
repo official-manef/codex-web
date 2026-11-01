@@ -1,7 +1,7 @@
 {
 	"name": "codex-web",
 	"private": true,
-	"version": "0.6.0",
+	"version": "0.7.0",
 	"description": "Configurable Svelte workspace shell: rail, chat surface, tabbed output region and lazy feature screens.",
 	"license": "MIT",
 	"repository": {

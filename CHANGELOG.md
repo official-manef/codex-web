@@ -3,6 +3,49 @@
 This repository starts from `rahmanef63/template-svelte-convex-starter` and now carries
 its own history. Notable changes follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-11-02
+
+### Added
+
+- **BYOK key holder for the SvelteKit route** — `src/lib/byok_key.ts`. It accepts exactly the
+  `keySchema` alphabet from `src/lib/server/ai/config.ts`, so `/api/ai/chat` is never handed a
+  body it must reject. Module scope only: no `localStorage`, no `sessionStorage`, no URL, no
+  log; the key dies with the tab. Chat settings gained the form ("Bring your own key"), including
+  provider and model selection from `/api/ai/config`.
+- **Memories** — `src/lib/memories.ts` (localStorage, 50 notes × 400 chars), the
+  `Memories` view, and a bounded `memory` field on `POST /api/ai/chat`. The server prefixes it as
+  a **system** message that says it is untrusted context, matching the `decisionNote` wording in
+  `src/convex/chat.ts`. No schema table, no consolidation, no `dual_write` — those need a
+  retention decision.
+- **Read-only git surface** — `src/lib/server/git.ts`, `GET /api/git`, and the `Repository` view.
+  `GIT_SURFACE_ENABLED` + a `GIT_SURFACE_ROOTS` allowlist (absolute paths, `..` refused, cap 8)
+  buys `status --porcelain` and `log -n 20` through `execFile` with a fixed argument array. Stage,
+  diff, commit and push are deliberately absent: they need a process boundary and an approval
+  model this build does not have.
+
+### Fixed
+
+- **The SvelteKit BYOK chat path was unreachable.** `Chat.svelte` read a provider key from
+  `localStorage.getItem("byok-key")`, which nothing ever wrote and which contradicted
+  `docs/byok.md` §1, so `parseChat` rejected every turn. A missing key is now named in the
+  composer instead of costing a round trip.
+
+### Changed
+
+- `docs/byok.md` §1 restated as "the browser never **persists** a provider key", with the
+  SvelteKit path documented honestly next to the Convex one.
+- `docs/PRD.md` §7 and `docs/implementation-plan.md` §10 no longer state that `tests/workspace.e2e.ts`
+  and `tests/acceptance.e2e.ts` exist; the correction is in the main text instead of a corrigendum
+  that contradicted the paragraph above it.
+- Pinned test counts removed from `docs/byok.md` and `docs/progress.md` in favour of the command
+  that reports them.
+
+### Verification
+
+`bun run verify` (0 type errors, 227 unit tests), `bunx playwright test` 18/18 across
+narrow-mobile/mobile/desktop, `bun run test:dev` 4/4. The 4 skipped unit tests are
+`src/convex/deployment.spec.ts`, which skips itself when no Convex deployment answers.
+
 ## [0.6.0] - 2026-10-29
 
 ### Added

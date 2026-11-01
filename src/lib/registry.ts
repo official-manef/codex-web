@@ -192,6 +192,26 @@ export const SECTIONS = [
 		group: 'Settings & help',
 		navigationRole: 'settings',
 		loadScreen: () => import('#lib/views/Devices.svelte')
+	},
+	{
+		id: 'memories',
+		label: 'Memories',
+		icon: 'pin',
+		group: 'Settings & help',
+		navigationRole: 'settings',
+		// Local `localStorage` notes only. They reach a model as untrusted context, never as an
+		// instruction, and they never leave the browser on their own.
+		loadScreen: () => import('#lib/views/Memories.svelte')
+	},
+	{
+		id: 'git',
+		label: 'Repository',
+		icon: 'fork',
+		group: 'Settings & help',
+		navigationRole: 'settings',
+		// Read-only status and history for roots the server operator allowlisted. No stage,
+		// commit or push: that needs a process boundary this build does not have.
+		loadScreen: () => import('#lib/views/Git.svelte')
 	}
 ] as const;
 

@@ -23,6 +23,7 @@ export interface StreamServerChatInput {
 	model: string;
 	apiKey: string;
 	messages: ChatMessage[];
+	memory?: string;
 }
 
 export interface StreamServerChatResult {

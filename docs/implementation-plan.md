@@ -177,23 +177,21 @@ passes 4.5:1.
 
 ## 10. Tests and evidence
 
-| Layer | File / command                                                                    | Covers                                                         |
-| ----- | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Unit  | `bun run test:unit`                                                               | slice barrels, guards, registry parity, `t()` coverage         |
-| Type  | `bun run check`                                                                   | svelte-check + `tsc -p src/convex`                             |
-| Lint  | `bun run lint`                                                                    | prettier + eslint + Svelte-5 guard                             |
-| Build | `bun run build`                                                                   | production bundle                                              |
-| E2E   | `tests/workspace.e2e.ts` + `tests/acceptance.e2e.ts` under `bunx playwright test` | AC01–AC18 at 390/768/1440                                      |
-| Dev   | `bun run test:dev`                                                                | hydration + navigation keeps drafts (`tests/dev-smoke.e2e.ts`) |
+| Layer | File / command         | Covers                                                         |
+| ----- | ---------------------- | -------------------------------------------------------------- |
+| Unit  | `bun run test:unit`    | slice barrels, guards, registry parity, `t()` coverage         |
+| Type  | `bun run check`        | svelte-check + `tsc -p src/convex`                             |
+| Lint  | `bun run lint`         | prettier + eslint + Svelte-5 guard                             |
+| Build | `bun run build`        | production bundle                                              |
+| E2E   | `bunx playwright test` | none currently (only `tests/dev-smoke.e2e.ts` exists)          |
+| Dev   | `bun run test:dev`     | hydration + navigation keeps drafts (`tests/dev-smoke.e2e.ts`) |
 
-AC coverage: `tests/workspace.e2e.ts` covers AC01, AC02, AC04, AC07, AC08, AC10 and AC16;
-`tests/acceptance.e2e.ts` covers AC03, AC05, AC06, AC09, AC11–AC15, AC17 and AC18. Every
-acceptance criterion therefore has a browser test.
-
-> **Corrigendum (2026-10-30, `cc33ef0`).** Both files were deleted by `6ed1f3e` along with
-> the route family they targeted, and this table was not updated. The E2E row above is now
-> inaccurate: the only browser suite is `tests/dev-smoke.e2e.ts`, and no AC id appears
-> anywhere in `src/` or `slices/`. Recover the scenario list from history
+> **Corrigendum (2026-10-30, `cc33ef0`).** Earlier revisions assigned AC01–AC18 to
+> `tests/workspace.e2e.ts` (AC01, AC02, AC04, AC07, AC08, AC10, AC16) and
+> `tests/acceptance.e2e.ts` (AC03, AC05, AC06, AC09, AC11–AC15, AC17, AC18). Both files were
+> deleted by `6ed1f3e` along with the route family they targeted, and no AC id appears
+> anywhere in `src/` or `slices/` — the only browser suite currently present is
+> `tests/dev-smoke.e2e.ts`. Recover the scenario list from history
 > (`git show ad4a909:tests/acceptance.e2e.ts`) and re-point it at current selectors before
 > claiming the AC; see [progress.md](progress.md).
 

@@ -52,10 +52,14 @@ The bounded burst limiter is a documented exception for hashed counters only, no
 or credential store; multi-instance deployments need an external rate limit.
 SvelteKit server modules and Convex actions use the environment of their executing runtime.
 Convex imports cannot depend on SvelteKit aliases or environment modules. SvelteKit request
-keys and chat history stay in current request/tab memory. A BYOK credential is posted once to
-Convex and stored only as an AES-256-GCM blob under `MODELS_ENC_KEY` (`modelCreds`, and
-`mcpConnections` for a user-owned MCP server); every read re-derives `owner` and never returns
-the plaintext. Tool output is untrusted data; MCP calls
+keys and chat history stay in current request/tab memory. On the Convex path a BYOK credential
+is posted once and stored only as an AES-256-GCM blob under `MODELS_ENC_KEY` (`modelCreds`,
+and `mcpConnections` for a user-owned MCP server); every read re-derives `owner` and never
+returns the plaintext. On the SvelteKit path (`src/lib/byok_key.ts`) the key is a module-scope
+value: no storage, no URL, no log, gone when the tab closes. Memories
+(`src/lib/memories.ts`) are `localStorage` notes that reach a model as untrusted context, never
+as an instruction. The git surface (`src/lib/server/git.ts`, `src/routes/api/git/+server.ts`)
+is read-only, root-allowlisted and subcommand-bounded. Tool output is untrusted data; MCP calls
 require configured or per-user endpoint/tool allowlists and explicit review, never automatic model execution. See the focused
 [Svelte](docs/svelte-best-practices.md) and [Convex](docs/convex-best-practices.md) rules.
 

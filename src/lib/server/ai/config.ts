@@ -23,6 +23,7 @@ const chatSchema = z
 		provider: z.enum(['openai', 'anthropic', 'google', 'nine-router']),
 		model: modelName,
 		apiKey: keySchema,
+		memory: z.string().max(2000).optional(),
 		messages: z
 			.array(
 				z.discriminatedUnion('role', [
@@ -62,7 +63,13 @@ export function aiSettings(env: IntegrationEnv) {
 export function parseChat(
 	env: IntegrationEnv,
 	value: unknown
-): { provider: AiProvider; model: string; apiKey: string; messages: ChatMessage[] } {
+): {
+	provider: AiProvider;
+	model: string;
+	apiKey: string;
+	messages: ChatMessage[];
+	memory?: string;
+} {
 	const settings = aiSettings(env);
 	if (!settings.enabled) throw new Error('AI is disabled');
 	const input = chatSchema.parse(value);

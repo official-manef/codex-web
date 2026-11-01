@@ -61,6 +61,8 @@ The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 | `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                 |
 | `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing. |
 | `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                        |
+| `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                            |
+| `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                    |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.
@@ -82,6 +84,7 @@ in every environment including production. `LOG_FILE` overrides the destination;
 |                   | `ai.chat.end`   | provider, model, `ok`/`error`                                   |
 | `/api/mcp/tools`  | `mcp.tools`     | action, alias, tool name (execute only), `ok`/`error`           |
 | `/api/mcp/server` | `mcp.server`    | JSON-RPC method name, HTTP status, `ok`/`error`                 |
+| `/api/git`        | `git`           | root name, file count, commit count, `ok`/`error`               |
 
 Never recorded: request or response bodies, message text, `authorization` and `cookie`
 headers, API keys or tokens, and full URLs carrying a query string. Fields are flat

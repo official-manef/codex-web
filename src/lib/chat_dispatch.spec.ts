@@ -116,6 +116,53 @@ describe('chat backend resolution and dispatch', () => {
 		expect(result.text).not.toContain('stub');
 	});
 
+	it('sends the saved memory block in the request body, and omits the field when empty', async () => {
+		const streamPayload = JSON.stringify({ type: 'done' }) + '\n';
+		const encoder = new TextEncoder();
+		const mockFetch = vi.fn().mockImplementation(() =>
+			Promise.resolve(
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(encoder.encode(streamPayload));
+							controller.close();
+						}
+					}),
+					{ status: 200 }
+				)
+			)
+		);
+
+		await streamServerChat(
+			{
+				provider: 'openai',
+				model: 'gpt-4o',
+				apiKey: 'key',
+				messages: [{ role: 'user', content: 'hi' }],
+				memory: '- Prefers short answers'
+			},
+			() => {},
+			undefined,
+			mockFetch as unknown as typeof fetch
+		);
+		expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toMatchObject({
+			memory: '- Prefers short answers'
+		});
+
+		await streamServerChat(
+			{
+				provider: 'openai',
+				model: 'gpt-4o',
+				apiKey: 'key',
+				messages: [{ role: 'user', content: 'hi' }]
+			},
+			() => {},
+			undefined,
+			mockFetch as unknown as typeof fetch
+		);
+		expect(JSON.parse(mockFetch.mock.calls[1][1].body)).not.toHaveProperty('memory');
+	});
+
 	it('surfaces errors from POST /api/ai/chat instead of hiding them', async () => {
 		const mockFetch = vi.fn().mockResolvedValue(
 			new Response('Check the approved provider/model, key and conversation limits.', {

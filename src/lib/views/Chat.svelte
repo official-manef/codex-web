@@ -22,6 +22,13 @@
   import ChatTools from "#lib/ChatTools.svelte";
   import { api, get, post, postAudio } from "#lib/http.js";
   import { projectStore } from "#lib/projects.js";
+  import { memoryStore } from "#lib/memories.js";
+  import {
+    readProviderKey,
+    saveProviderKey,
+    clearProviderKey,
+    hasProviderKey,
+  } from "#lib/byok_key.js";
   import {
     resolveChatBackend,
     streamServerChat,
@@ -295,6 +302,13 @@
     enabled: boolean;
     providers: { id: AiProvider; label: string; models: string[] }[];
   } | null>(null);
+  // BYOK for the SvelteKit route. The key lives in `#lib/byok_key`, never in storage, so
+  // these are only the form field, its feedback line, and which provider/model to use.
+  let byokKeyDraft = $state("");
+  let byokKeyNotice = $state("");
+  let byokKeyHeld = $state(false);
+  let serverProvider = $state<AiProvider | "">("");
+  let serverModel = $state("");
   let activeAbortController: AbortController | null = null;
 
   function serverAiAvailable(): boolean {
@@ -979,11 +993,14 @@
     }
   }
   onMount(() => {
+    byokKeyHeld = hasProviderKey();
     fetch("/api/ai/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.ai?.enabled && Array.isArray(data.ai.providers) && data.ai.providers.length > 0) {
           serverAiConfig = data.ai;
+          serverProvider = data.ai.providers[0].id as AiProvider;
+          serverModel = data.ai.providers[0].models[0] ?? "";
         }
       })
       .catch(() => {});
@@ -1219,12 +1236,27 @@
     ]);
     const messages: ChatMessage[] = [...history, { role: "user" as const, content }];
 
-    const providerEntry = serverAiConfig?.providers?.[0];
+    const providerEntry =
+      serverAiConfig?.providers.find((entry) => entry.id === serverProvider) ??
+      serverAiConfig?.providers?.[0];
     const provider: AiProvider = (providerEntry?.id as AiProvider) ?? "openai";
-    const chosenModel = providerEntry?.models?.[0] ?? modelId;
-    const apiKey =
-      readDraft<string>("byok-key", "") ||
-      (typeof localStorage !== "undefined" ? localStorage.getItem("byok-key") ?? "" : "");
+    const chosenModel =
+      providerEntry?.models.find((name) => name === serverModel) ??
+      providerEntry?.models?.[0] ??
+      modelId;
+    const apiKey = readProviderKey();
+    // Saved notes reach the model as untrusted context, never as an instruction. `context()`
+    // is already bounded to MAX_CONTEXT_CHARS, so the server never sees more than that.
+    const memory = memoryStore.context();
+
+    // Without a key the route is guaranteed to reject the body, so say that here instead of
+    // spending a round trip on a 400 the user cannot read.
+    if (!apiKey) {
+      error =
+        "This server has AI enabled but holds no key for this tab. Add one under Chat settings → Bring your own key.";
+      pending = "";
+      return;
+    }
 
     activeAbortController = new AbortController();
     const startMs = Date.now();
@@ -1236,6 +1268,7 @@
           model: chosenModel,
           apiKey,
           messages,
+          ...(memory ? { memory } : {}),
         },
         (partial) => {
           job = { ...job, partial };
@@ -3002,6 +3035,72 @@
             disabled={busy || voiceWorking || micActive}
           />
           <h3 class="mt-6">Model & device</h3>
+          {#if serverAiAvailable()}<section class="inspector-section">
+              <h4>Bring your own key</h4>
+              <p class="inspector-note">
+                Sent with each turn to this server, which relays it to the provider. Held in this
+                tab's memory only — never written to storage, never logged, gone when the tab
+                closes. Save it through Model keys instead if you want the server to keep it
+                encrypted.
+              </p>
+              <div class="inspector-field">
+                <span>Provider</span><AppSelect
+                  label="BYOK provider"
+                  bind:value={serverProvider}
+                  options={(serverAiConfig?.providers ?? []).map((entry) => ({
+                    value: entry.id,
+                    label: entry.label,
+                  }))}
+                  disabled={busy || !!operation}
+                />
+              </div>
+              <div class="inspector-field">
+                <span>Model</span><AppSelect
+                  label="BYOK model"
+                  bind:value={serverModel}
+                  options={(
+                    serverAiConfig?.providers.find((entry) => entry.id === serverProvider)?.models ??
+                    []
+                  ).map((name) => ({ value: name, label: name }))}
+                  disabled={busy || !!operation}
+                />
+              </div>
+              <label class="inspector-field"
+                >Provider key<input
+                  class="field mono"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  bind:value={byokKeyDraft}
+                  placeholder={byokKeyHeld ? "Key held in this tab" : "sk-..."}
+                /></label
+              >
+              <div class="inspector-button-row">
+                <button
+                  class="btn"
+                  type="button"
+                  disabled={!byokKeyDraft.trim()}
+                  onclick={() => {
+                    byokKeyNotice = saveProviderKey(byokKeyDraft)
+                      ? "Key held in this tab. Send a message to use it."
+                      : "That does not look like a key: 8 or more characters, no spaces.";
+                    byokKeyHeld = hasProviderKey();
+                    if (byokKeyHeld) byokKeyDraft = "";
+                  }}>Use this key</button
+                ><button
+                  class="btn"
+                  type="button"
+                  disabled={!byokKeyHeld}
+                  onclick={() => {
+                    clearProviderKey();
+                    byokKeyHeld = false;
+                    byokKeyDraft = "";
+                    byokKeyNotice = "Key discarded from this tab.";
+                  }}>Forget key</button
+                >
+              </div>
+              {#if byokKeyNotice}<p class="inspector-note" role="status">{byokKeyNotice}</p>{/if}
+            </section>{/if}
           <div class="inspector-field">
             <span>Model</span><AppSelect
               label="Model"
@@ -3697,6 +3796,21 @@
   }
   .shared-chat-panel .inspector-field {
     font-size: 12px;
+  }
+  .shared-chat-panel .inspector-section {
+    padding-block: 12px;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .shared-chat-panel .inspector-section > h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .shared-chat-panel .inspector-note {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-ink-2);
+    margin: 0 0 10px;
   }
   .shared-chat-panel :global(.speech-controls),
   .shared-chat-panel :global(.microphone-select) {
