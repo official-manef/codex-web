@@ -114,6 +114,8 @@
   let recentSort = $state("updated");
   let recentFilter = $state("all");
   let pinnedIds = $state<string[]>([]);
+  /** Set when the browser refused the last session write; the chat is live but not saved. */
+  let storageWarning = $state("");
   let pinsOpen = $state(true);
   let recentsOpen = $state(true);
   type CompareTarget = { model_id: string; device: string };
@@ -817,6 +819,16 @@
   async function refreshSessions() {
     const d = checked(await api.sessions());
     sessions = d.sessions ?? [];
+    // A full quota used to be entirely silent: the turn appeared saved, then vanished on the
+    // next reload. The store reports the failed write and the view says it out loud.
+    storageWarning =
+      d.storage?.persisted === false
+        ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
+        : (d.storage?.dropped ?? 0) > 0
+          ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
+              d.storage.dropped === 1 ? " was" : "s were"
+            } dropped when this browser ran out of room.`
+          : "";
   }
   function applySession(d: any) {
     clearVoice();
@@ -967,7 +979,10 @@
     }
   }
   async function pollJob() {
-    if (!jobId || polling) return;
+    // Only a local stub job is tracked by `/api/chat/job`. A BYOK or cloud turn keeps a
+    // synthetic id in `jobId` so the composer stays busy, and polling it used to throw
+    // "That generation is no longer available" over a reply that had already arrived.
+    if (!jobId || polling || !jobId.startsWith("job-")) return;
     polling = true;
     try {
       const d = checked(await api.chatJob(jobId));
@@ -1262,11 +1277,19 @@
     const memory = memoryStore.context();
 
     // Without a key the route is guaranteed to reject the body, so say that here instead of
-    // spending a round trip on a 400 the user cannot read.
+    // spending a round trip on a 400 the user cannot read. The synthetic job must be cleared
+    // too: leaving `jobId` set kept `busy` true, so the composer stayed disabled and the draft
+    // was gone — the chat had to be reloaded to type again.
     if (!apiKey) {
       error =
         "This server has AI enabled but holds no key for this tab. Add one under Chat settings → Bring your own key.";
+      jobId = "";
+      job = null;
       pending = "";
+      // Give the user their message and files back so nothing has to be retyped.
+      draft = content;
+      attachments = pendingAttachments;
+      pendingAttachments = [];
       return;
     }
 
@@ -1290,7 +1313,31 @@
       );
 
       const elapsed = Date.now() - startMs;
-      if (result.error) {
+      if (result.aborted) {
+        // Stopped by the user: keep what arrived and say so, instead of writing an error row
+        // and leaving the partial text only in the live job object.
+        const reply = {
+          text: result.text,
+          model_id: chosenModel,
+          model_label: `${provider}/${chosenModel}`,
+          device: "BYOK",
+          ms: elapsed,
+          error: null,
+        };
+        const newTurn = {
+          id: turnId,
+          content,
+          attachments: pendingAttachments,
+          status: "cancelled",
+          created_at: Date.now(),
+          replies: result.text ? [reply] : [],
+        };
+        const turns = [...(session?.turns ?? []), newTurn];
+        session = { ...session, turns };
+        notice = "Generation stopped. Any partial reply was kept in this session.";
+        await api.sessionUpdate(session.id, { turns, settings: settings() });
+        await refreshSessions();
+      } else if (result.error) {
         error = result.error;
         const reply = {
           text: result.text,
@@ -1337,6 +1384,27 @@
         renameTitle = session.title;
         await api.sessionUpdate(session.id, { title, turns, settings: settings() });
         await refreshSessions();
+      }
+    } catch (e: any) {
+      // A transport failure (not a stop) used to escape to `send()`, which only set an error
+      // banner: the message the user typed disappeared with no turn row, so nothing was left
+      // to retry from. Record the turn as failed and keep the text.
+      const message = e?.message || "The reply could not be completed.";
+      error = message;
+      const newTurn = {
+        id: turnId,
+        content,
+        attachments: pendingAttachments,
+        status: "error",
+        created_at: Date.now(),
+        error: message,
+        replies: [],
+      };
+      const turns = [...(session?.turns ?? []), newTurn];
+      if (session) {
+        session = { ...session, turns };
+        await api.sessionUpdate(session.id, { turns, settings: settings() }).catch(() => {});
+        await refreshSessions().catch(() => {});
       }
     } finally {
       activeAbortController = null;
@@ -2011,16 +2079,14 @@
                     <ModelCapabilities capabilities={reply.model_capabilities} compact />
                   {/if}
                 </div>
-                {#if reply.error}<RecoveryNotice message={reply.error} />{:else}<div
-                    class="reply-text"
-                  >
-                    <RichText text={reply.text ?? ""} />
-                    {#if extractArtifact(reply.text ?? "")}
-                      {@const view = extractArtifact(reply.text ?? "")!}
+                {#if reply.text}<div class="reply-text">
+                    <RichText text={reply.text} />
+                    {#if extractArtifact(reply.text)}
+                      {@const view = extractArtifact(reply.text)!}
                       <ArtifactFrame html={view.html} title={view.title} />
                     {/if}
-                  </div>
-                {/if}
+                  </div>{/if}
+                {#if reply.error}<RecoveryNotice message={reply.error} />{/if}
                 {#if reply.comparison_timing}<p class="reply-note">
                     Parallel · preparation {Math.round(reply.comparison_timing.preparation_ms)} ms · inference
                     {m.ms ?? reply.ms ?? "—"} ms<br />Shared host resources; this is a concurrent
@@ -2759,6 +2825,7 @@
           retryLabel="Reconnect chat"
         />{/if}
       {#if notice}<p class="conversation-notice" role="status">{notice}</p>{/if}
+      {#if storageWarning}<p class="conversation-notice" role="status">{storageWarning}</p>{/if}
       {#if !isCompare && model && selectedDevices.length && !modelCompatible}<div
           class="model-compatibility"
           role="status"

@@ -153,14 +153,56 @@ export type LocalJob = {
 
 const SESSIONS_KEY = 'workspace-template:sessions';
 const JOB_MS = 700;
+/** Oldest chats beyond this are not written; the session list says how many were dropped. */
+const MAX_SESSIONS = 50;
 
 let sessions: LocalSession[] = load();
 const jobs = new Map<string, { job: LocalJob; startedAt: number }>();
 let sequence = 0;
+let persistFailed = false;
+/** Sessions that exist in memory but are past the write cap, so the view can say so. */
+let droppedFromStorage = 0;
 
 function nextId(prefix: string): string {
 	sequence += 1;
 	return `${prefix}-${Date.now().toString(36)}-${sequence}`;
+}
+
+/** A turn this build can render. Shared by storage load and the update route. */
+function cleanTurns(value: unknown): LocalTurn[] {
+	if (!Array.isArray(value)) return [];
+	return value.filter((turn): turn is LocalTurn => {
+		if (!turn || typeof turn !== 'object') return false;
+		const candidate = turn as Partial<LocalTurn>;
+		return (
+			typeof candidate.id === 'string' &&
+			typeof candidate.content === 'string' &&
+			Array.isArray(candidate.replies)
+		);
+	});
+}
+
+/**
+ * Storage is user-writable and may hold a row written by an older build. Trusting the array
+ * shape alone was not enough: `[null]`, a row without `turns`, and `turns: null` each threw
+ * during `initialize()`, which left the composer disabled with no way back — "New chat" could
+ * not run because `session` was never assigned. Every row is therefore rebuilt here, and a row
+ * that cannot be rebuilt is dropped rather than trusted.
+ */
+function loadSession(value: unknown): LocalSession | null {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+	const row = value as Partial<LocalSession>;
+	if (typeof row.id !== 'string' || !row.id) return null;
+	const created = typeof row.created_at === 'number' ? row.created_at : Date.now();
+	return {
+		id: row.id,
+		title: typeof row.title === 'string' && row.title ? row.title : 'New chat',
+		settings: row.settings && typeof row.settings === 'object' ? row.settings : {},
+		turns: cleanTurns(row.turns),
+		tool_events: Array.isArray(row.tool_events) ? row.tool_events : [],
+		created_at: created,
+		updated_at: typeof row.updated_at === 'number' ? row.updated_at : created
+	};
 }
 
 function load(): LocalSession[] {
@@ -168,18 +210,35 @@ function load(): LocalSession[] {
 		if (typeof sessionStorage === 'undefined') return [];
 		const raw = sessionStorage.getItem(SESSIONS_KEY);
 		const parsed: unknown = raw ? JSON.parse(raw) : [];
-		return Array.isArray(parsed) ? (parsed as LocalSession[]) : [];
+		if (!Array.isArray(parsed)) return [];
+		return parsed.map(loadSession).filter((row): row is LocalSession => row !== null);
 	} catch {
 		return [];
 	}
 }
 
-function persist() {
+/**
+ * `false` means this turn exists only in memory. The caller has to say so: a full quota used
+ * to drop everything past the write with no message at all, and the chat looked saved until
+ * the next reload.
+ */
+function persist(): boolean {
 	try {
-		sessionStorage?.setItem(SESSIONS_KEY, JSON.stringify(sessions.slice(0, 50)));
+		const kept = sessions.slice(0, MAX_SESSIONS);
+		droppedFromStorage = sessions.length - kept.length;
+		sessionStorage?.setItem(SESSIONS_KEY, JSON.stringify(kept));
+		persistFailed = false;
+		return true;
 	} catch {
 		// Quota or private mode: losing persistence must not break the live session.
+		persistFailed = true;
+		return false;
 	}
+}
+
+/** Read by the session list so the view can tell the user their turn was not written. */
+function persistState(): { persisted: boolean; dropped: number } {
+	return { persisted: !persistFailed, dropped: droppedFromStorage };
 }
 
 function findSession(id: string): LocalSession {
@@ -328,7 +387,8 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
 					updated_at: item.updated_at,
 					turns: item.turns.length,
 					json: null
-				}))
+				})),
+				storage: persistState()
 			};
 
 		case '/api/sessions/create': {
@@ -354,6 +414,9 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
 			if (typeof body.title === 'string' && body.title.trim()) session.title = body.title.trim();
 			if (body.settings && typeof body.settings === 'object')
 				session.settings = { ...session.settings, ...(body.settings as Record<string, unknown>) };
+			// The BYOK and cloud paths send the whole turn list back; ignoring it meant every
+			// one of those replies lived only until the next reload.
+			if (Array.isArray(body.turns)) session.turns = cleanTurns(body.turns);
 			touch(session);
 			return { session };
 		}
@@ -452,7 +515,17 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
 
 		// ── attachments ──────────────────────────────────────────────────────────────────
 		case '/api/attachments':
-			return { id: nextId('attachment'), name: 'attachment', status: 'ready' };
+			// Echo what the caller actually chose. Returning a fixed `name: 'attachment'` threw
+			// the filename away, so every chip read "attachment" and an image could not be
+			// previewed because `kind` was never set.
+			return {
+				id: nextId('attachment'),
+				name: typeof body.name === 'string' && body.name ? body.name.slice(0, 255) : 'attachment',
+				kind: typeof body.type === 'string' && body.type.startsWith('image/') ? 'image' : 'file',
+				type: typeof body.type === 'string' ? body.type : '',
+				size: typeof body.size === 'number' ? body.size : 0,
+				status: 'ready'
+			};
 
 		case '/api/attachments/delete':
 			return { deleted: true };
