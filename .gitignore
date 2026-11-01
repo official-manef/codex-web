@@ -30,7 +30,15 @@ coverage
 *.tsbuildinfo
 
 # Local MSO runtime state — never commit
+# Holds account.json, config.json, private/, agent-session-archive/ and session history.
 .mso/
+mso.local/
+*.mso.local
 
 # Local activity log (LOG_LEVEL / LOG_FILE) — never commit
 .local-logs/
+
+# Working notes that must stay off the repo
+progress.local.md
+PROGRESS.local.md
+*.progress.local.*
