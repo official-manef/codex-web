@@ -60,10 +60,10 @@
           class:offline={connection === "offline"}
           class="status-dot"
         ></span>{connection === "online"
-          ? "Local"
+          ? "Stub · no runtime"
           : connection === "checking"
-            ? "Connecting…"
-            : "Offline"}</span
+            ? "Starting…"
+            : "No runtime"}</span
       >
       {#if showCompute}<BackendChip {backends} {backend} {onPick} />{/if}
       {#if showOptions}<Popover.Root bind:open={optionsOpen}>

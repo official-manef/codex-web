@@ -117,7 +117,7 @@
         error =
           e instanceof Error
             ? e.message
-            : "Cannot reach automation. Reconnect to the local server.";
+            : "Automation status did not load. Reload the page to try again.";
     }
   }
   function receive(value: any) {
@@ -723,12 +723,16 @@
             >{/each}</select
         >
         <p>Stored locally with frame hashes. Replay never repeats an action.</p>
+        {#if !status?.recordings?.length}<p>
+            No recording is saved yet. A finished run appears in this list with the frames it
+            captured.
+          </p>{/if}
         {#if status?.limits?.max_runs}<p>
             {status.recordings?.length ?? 0} / {status.limits.max_runs} saved recordings
           </p>{/if}
         {#if run?.run_id && !running}
           {#if deleteConfirmation === run.run_id}<div class="recording-delete">
-              <p>Delete this recording and its captured frames from this laptop?</p>
+              <p>Delete this recording and the frames it captured?</p>
               <button class="btn" onclick={deleteRecording} disabled={requesting || reading}
                 >{reading ? "Deleting…" : "Delete permanently"}</button
               ><button class="btn" onclick={() => (deleteConfirmation = "")} disabled={reading}
@@ -764,11 +768,11 @@
       {#if archived}This archived workflow controlled a local HTML game in an isolated browser. Its
         screenshots remain available for replay. New game automation uses the installed Windows app.
       {:else if native}The installed Microsoft Solitaire app on this Windows computer. Local
-        text/OCR observations go to the selected local model. The action policy stops when a control
-        cannot be established; it does not reset your game.{:else}Google search in an isolated
+        text and OCR observations go to the selected local model. The action policy stops when it
+        cannot establish a control, and it never resets your game.{:else}Google search in an isolated
         browser profile. No existing profile or saved login is used. This is a deterministic browser
-        recipe, separate from local AI decisions.{/if} Recordings contain actual application screenshots
-      and stay on this laptop.
+        recipe, separate from local AI decisions.{/if} In the desktop app a recording holds real
+        screenshots of the app it drove and stays on that machine. This build records nothing.
     </p>
     {#if run?.provenance}<p>
         {run.provenance.app || run.provenance.browser || (native ? "Windows app" : "Chromium")} · {run

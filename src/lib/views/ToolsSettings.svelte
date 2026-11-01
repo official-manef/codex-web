@@ -32,7 +32,7 @@
       id: "terminal" as const,
       label: "Terminal",
       needs: "terminal",
-      reason: "Runs a shell on a paired device. Off until you enable it.",
+      reason: "Runs a shell on a paired device. Off until you enable it, and needs a terminal device paired first.",
     },
     {
       id: "browser" as const,
@@ -63,8 +63,8 @@
   const localRows = $derived(rows.filter((row) => row.requirement === "local-runtime"));
   const anyRows = $derived(rows.filter((row) => row.requirement === "any"));
   const groups = $derived([
-    { heading: "Runs on this machine", rows: localRows },
-    { heading: "Works anywhere", rows: anyRows },
+    { heading: "Needs a runtime on this machine", rows: localRows },
+    { heading: "Works without a runtime", rows: anyRows },
   ]);
   const canShowAll = $derived(featureSettings.hidden().length > 0);
   const canHideLocal = $derived(
@@ -85,7 +85,7 @@
 <View
   title="Tools"
   icon="sliders"
-  subtitle={`Surface: ${surface}. ${surfaceReason(surface)}`}
+  subtitle={`${surfaceReason(surface)} A switch here changes what the rail and the tab strip show. It changes nothing the app is allowed to do.`}
 >
   <div class="mb-4 flex flex-wrap items-center gap-2">
     <Button size="sm" variant="outline" disabled={!canShowAll} onclick={showAll}>
@@ -156,7 +156,7 @@
             {:else if !cloudUrl}
               Cloud mode is not configured, so no device can be paired in this build.
             {:else if !hasDevice(row.needs)}
-              Pair a {row.needs} device on <a class="underline" href="#devices">Devices</a> first.
+              Pair a {row.needs} device on <a class="underline" href="#devices">Paired devices</a> first.
             {:else}
               {row.reason}
             {/if}

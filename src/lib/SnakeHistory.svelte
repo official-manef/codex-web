@@ -209,7 +209,7 @@
         <table>
           <thead
             ><tr
-              ><th>Run / engine</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
+              ><th>Run / device</th><th>Samples</th><th>Correct</th><th>Inference mean</th><th
                 >Server mean</th
               ><th>HTTP mean</th><th>Hardware / model</th></tr
             ></thead
@@ -266,7 +266,7 @@
           <table>
             <thead
               ><tr
-                ><th>Engine</th><th>Answer</th><th>Confidence</th><th>Policy move</th><th
+                ><th>Device</th><th>Answer</th><th>Confidence</th><th>Policy move</th><th
                   >Inference</th
                 ><th>HTTP</th></tr
               ></thead

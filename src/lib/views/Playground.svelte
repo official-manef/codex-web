@@ -194,7 +194,7 @@
   let device = $derived(
     comparisonActive
       ? comparisonIds.map(engineLabel).join(" + ") || "Select engines"
-      : (backends.find((b) => b.id === backend)?.device ?? "—"),
+      : (backends.find((b) => b.id === backend)?.device ?? "No device"),
   );
   let selectedBackend = $derived(backends.find((item) => item.id === backend));
   let executionLabel = $derived(
@@ -216,7 +216,7 @@
 
   async function evaluate(engine: string, signal: AbortSignal): Promise<any> {
     if (tab === "guardrail") {
-      if (!guardText.trim()) throw new Error("state is empty — press Demo");
+      if (!guardText.trim()) throw new Error("The input is empty. Load the example or type something first.");
       const d: any = await api.analyse(guardText, "guard", { backend: engine }, signal);
       if (d.error) throw new Error(d.error);
       return d;
@@ -299,7 +299,7 @@
   async function run() {
     if (busy) return;
     if (comparisonActive && !comparisonIds.length) {
-      error = "Select at least one local engine in the header.";
+      error = "Select at least one local device in the header.";
       return;
     }
     const request = ++runGeneration;
@@ -364,7 +364,7 @@
 <View
   title="Decision simulation"
   icon="play"
-  subtitle="Explore model answers and policy outcomes on the selected device. Laya reads the input; your rules decide the next step."
+  subtitle="Four examples of a decision: a guardrail, a routing choice, a readiness score and an invoice policy. Each shows the label and its probability, and the rule that follows. This build has no model, so a run stops with an error instead of a result."
 >
   {#snippet actions()}<a class="btn" href="#apps"
       ><Icon name="workflow" size={13} />Open Automations</a
@@ -399,10 +399,9 @@
   </div>
 
   <p class="mb-3 text-[12px] leading-relaxed text-ink-2">
-    Use English text with the bundled Laya checkpoint. Inputs and options are kept in this tab
-    across refresh. These examples return a decision preview. Open <a class="text-link" href="#apps"
-      >Workflow Studio</a
-    > to approve real file, browser or desktop actions.
+    Use short English text, which is what the decision checkpoint expects. Inputs and options stay
+    in this tab across a refresh. A run here evaluates a rule and returns a preview; approving a real
+    file, browser or desktop action happens in <a class="text-link" href="#apps">Automation</a>.
   </p>
   {#if tab === "guardrail"}<p class="mb-3 text-[12px] leading-relaxed text-ink-2" role="note">
       <strong
@@ -429,8 +428,8 @@
         <label for="guard-input" class="label mb-1.5 block">Text to check</label>
         <textarea id="guard-input" class="field mono" rows="8" bind:value={guardText}></textarea>
         <p class="mt-2 text-[11px] leading-relaxed text-ink-3">
-          Checks for jailbreak, prompt injection, sensitive data and harm. Each model question runs
-          separately; the policy combines the answers.
+          Checks for a jailbreak, prompt injection, sensitive data and harm. Each model question runs
+          on its own, and the policy combines the answers.
         </p>
       {:else if tab === "routing"}
         <label for="routing-input" class="label mb-1.5 block">Message to route</label>
@@ -514,8 +513,8 @@
           class="w-full accent-white"
         />
         <p class="mt-1 text-[11.5px] text-ink-2">
-          Score at or above <span class="font-semibold text-ink">{lLevels[lThreshold] ?? "—"}</span> →
-          route to an account executive
+          Score at or above <span class="font-semibold text-ink">{lLevels[lThreshold] ?? "the chosen level"}</span>,
+          and the policy routes to an account executive
         </p>
       {:else}
         <label for="rpa-input" class="label mb-1.5 block">Invoice information</label>
@@ -546,7 +545,7 @@
             : tab === "rpa"
               ? "Evaluate invoice policy"
               : comparisonActive
-                ? "Compare selected engines"
+                ? "Compare selected devices"
                 : "Run classification"}
           <Icon name="play" size={10} />
         </button>
@@ -557,18 +556,18 @@
       {#if error}
         <RecoveryNotice message={error} retry={run} retryLabel="Run again" />
       {:else if compareResults.length}
-        <section class="comparison-output" aria-label="Engine comparison results">
-          <h3>Same input, selected engines</h3>
+        <section class="comparison-output" aria-label="Device comparison results">
+          <h3>Same input, selected devices</h3>
           {#if busy}<p role="status">{runningPhase}</p>{/if}
           <p>
-            One warmup per engine is excluded. Each measured request uses the identical text,
-            question and policy. Devices run sequentially.
+            One warmup run per device is excluded. Each measured request uses the same text, question
+            and policy, and the devices run one after another so they do not compete for the host.
           </p>
           <div class="comparison-table">
             <table>
               <thead
                 ><tr
-                  ><th>Engine</th><th>Inference total</th><th>Server total</th><th>HTTP total</th
+                  ><th>Device</th><th>Inference total</th><th>Server total</th><th>HTTP total</th
                   ><th>Warmup HTTP</th></tr
                 ></thead
               ><tbody>
@@ -589,9 +588,9 @@
                 </details>{/if}
             </div>{/each}
           <p class="text-[12px] text-ink-2">
-            Timing totals cover {compareResults.find((row) => row.data)?.data?.questions ?? "all"} model
-            question(s) per measured request. Labels may differ slightly across devices. Missing inference
-            instrumentation is shown as a dash.
+            The totals cover {compareResults.find((row) => row.data)?.data?.questions ?? "all"} model
+            question(s) per measured request. Labels can differ slightly between devices. A missing
+            inference figure shows as a dash rather than a guess.
           </p>
         </section>
       {:else if !result && !rpaResult}
@@ -601,7 +600,7 @@
             {busy
               ? runningPhase ||
                 "Running on the selected backend. The first call may compile the model."
-              : "An example is ready. Run it as-is, or edit the input first."}
+              : "An example is loaded. Run it as it stands, or edit the input first."}
           </p>
         </div>
       {:else if rpaResult}
@@ -619,8 +618,8 @@
             </div>
           </div>
           <p class="mb-3 text-[12px] text-ink-2">
-            Policy evaluated. Open <a class="text-link" href="#apps">Automations</a> to review and approve
-            an action on this laptop.
+            Policy evaluated. <a class="text-link" href="#apps">Automation</a> is where an action
+            gets reviewed and approved.
           </p>
           <p class="mb-3 font-mono text-[11px] leading-relaxed text-ink-3">
             Model assessment: {rpaResult.decision.selected_workflow} at {rpaResult.decision

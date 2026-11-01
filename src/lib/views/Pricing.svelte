@@ -4,22 +4,22 @@
     [
       "Local decisions",
       "No per-request fee",
-      "Laya classifies on the device you select; the desktop app this shell is copied from bills nothing per request.",
+      "In the desktop app the classifier runs on the device you select, so no provider bills per request. This browser build runs no inference at all.",
     ],
     [
       "Local transcription",
       "No per-minute fee",
-      "Whisper runs on the same device; no provider is in the path, so nothing is metered per minute.",
+      "In the desktop app speech recognition runs on the same device, so nothing is metered per minute. This build has no speech model.",
     ],
     [
-      "Local chat",
+      "Chat",
       "No per-token fee",
-      "A generative model you installed writes replies on that device. This browser build has no such model and says so instead of replying.",
+      "In the desktop app a generative model you installed writes replies on that device. This build has no such model and says so instead of replying.",
     ],
     [
       "Model downloads",
       "Internet and storage",
-      "Fetching a model costs bandwidth and disk space; no price is quoted here because it depends on the model and your connection.",
+      "Fetching a model costs bandwidth and disk space. No price is quoted here because it depends on the model and your connection, and this build downloads nothing.",
     ],
     [
       "Hardware and power",
@@ -29,7 +29,7 @@
     [
       "Your own endpoint",
       "Provider-side billing",
-      "That provider charges your account for its own requests; this app neither meters nor resells it.",
+      "That provider charges your account for its own requests. This app neither meters nor resells it, and no endpoint is connected in this build.",
     ],
   ];
 </script>
@@ -37,11 +37,11 @@
 <View
   title="Costs"
   icon="tag"
-  subtitle="Informational overview, not a bill. This browser build has no billing route and no metering: nothing here charges for local inference and no subscription exists. The rows describe the laya-npu desktop app this shell is copied from."
+  subtitle="Informational overview, not a bill. This browser build has no billing route and no metering, and no endpoint is connected. The rows below describe the desktop app this workspace is copied from."
 >
   <p class="mb-4 max-w-[70ch] text-[12px] leading-relaxed text-ink-2">
     A row marked <em>provider-side</em> applies only when you connect your own endpoint. No price
-    list is shown because none would be backed by anything in this repository.
+    list is shown because nothing in this repository would back one.
   </p>
   <dl class="card overflow-hidden">
     {#each ROWS as [item, cost, detail], i}<div
@@ -58,9 +58,11 @@
     <h2 class="text-[15px] font-semibold">Compare costs for your own workload</h2>
     <p class="mt-2 text-[13px] leading-relaxed text-ink-2">
       Use the same task, input size and quality requirement when comparing local inference with a
-      hosted service. A short classification and a generated chat reply perform different jobs.
-      Check your provider’s current pricing and measure throughput on your own laptop.
+      hosted service. A short classification and a generated chat reply do different jobs and are
+      not interchangeable per-token numbers. Check your provider's current pricing and measure the
+      round trip on your own machine in
+      <a class="text-link" href="#playground">Decision simulation</a>.
     </p>
-    <a class="btn mt-3" href="#playground">Compare engines on this machine</a>
+    <a class="btn mt-3" href="#playground">Open Decision simulation</a>
   </div>
 </View>

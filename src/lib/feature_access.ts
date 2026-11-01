@@ -90,6 +90,8 @@ export function isHiddenBySurface(id: string, surface: Surface): boolean {
 
 /** Short helper copy for a toggle row. */
 export function accessLabel(requirement: FeatureRequirement, surface: Surface): string {
-	if (requirement === 'any') return 'Works anywhere';
-	return surface === 'cloud' ? 'Needs a paired device or this machine' : 'Runs on this machine';
+	if (requirement === 'any') return 'Works in any build';
+	return surface === 'cloud'
+		? 'Needs a paired device or a configured runtime'
+		: 'Needs a runtime on this machine';
 }

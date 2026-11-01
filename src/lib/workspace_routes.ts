@@ -56,12 +56,14 @@ export const canvasPresentation = {
 
 /** Connection copy. The template runs in the browser, so it says that. */
 export const workspaceLabels: Partial<WorkspaceLabels> = {
-	statusOnline: 'Local workspace',
-	hostedConnection: 'Local connection',
-	connectedTooltip: 'Running in this browser',
-	disconnectedTooltip: 'Browser session ended',
-	connectionFailed: 'The local workspace could not be reached.',
-	connectionLost: 'The local workspace disconnected.',
+	// Nothing is connected in this template: no runtime answers, so a green "online" claim
+	// would be the fabrication the audit removed from Setup. The stub is the connection.
+	statusOnline: 'Stub answers · no runtime',
+	hostedConnection: 'Connection settings',
+	connectedTooltip: 'Every request is answered by the in-page stub; no runtime is connected',
+	disconnectedTooltip: 'No runtime is answering',
+	connectionFailed: 'The workspace could not load its stub.',
+	connectionLost: 'The in-page stub stopped answering. Reload the page.',
 	moreTools: 'More tools',
 	moreToolsTitle: 'More tools'
 };

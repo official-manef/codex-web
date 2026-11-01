@@ -32,7 +32,7 @@
   let hydrated = $state(false);
   const recommendationTasks = [
     ["decision", "Typed decisions"],
-    ["chat", "Local chat"],
+    ["chat", "Chat"],
     ["speech", "Speech to text"],
     ["embedding", "Search by meaning"],
     ["vision", "Image understanding"],
@@ -185,9 +185,9 @@
 </script>
 
 <View
-  title="Models & compatibility"
+  title="Models & downloads"
   icon="cpu"
-  subtitle="Choose what you want to do. Download a model that fits your device."
+  subtitle="Find a model that fits a task and a device, check what a repository actually contains, then download it. This build has no download route, so the lists below stay empty and say why."
 >
   {#snippet actions()}
     <button class="btn h-7" onclick={loadModels} disabled={loading}>Refresh</button>
@@ -238,13 +238,18 @@
       </p>{/if}
     {#if recommendations}<p class="recommendation-note">
         Detected: {recommendations.hardware.devices.join(" / ") || "no OpenVINO devices"}. Ranked by
-        preparation and installed files, then catalogue compatibility. This does not benchmark model
-        quality or speed.
+        what is already prepared and installed, then by catalogue compatibility. This ranks
+        compatibility, not model quality or speed.
       </p>
       {#if recommendations.hardware.runtime_error}<RecoveryNotice
           message={recommendations.hardware.runtime_error}
         />{/if}
       {#each recommendations.tasks as task}<p class="recommendation-note">{task.reason}</p>
+        {#if !task.candidates.length}<p class="recommendation-note">
+            No candidate was returned for this task. That means none is known to fit the task and
+            the detected devices, not that every model would fail.
+          </p>
+        {/if}
         {#each task.candidates as row}<article class="recommendation-row">
             <div>
               <h3>
@@ -288,8 +293,8 @@
           </article>{/each}
       {/each}
       <p class="recommendation-note">
-        No download or model preparation starts during this check. Installed bytes can exceed
-        download size because graphs and device caches use additional disk space.
+        This check starts no download and prepares no model. Installed bytes can exceed the
+        download size, because graphs and device caches take extra disk space.
       </p>
     {/if}
   </section>
@@ -313,9 +318,9 @@
         <span class="text-[12.5px] font-semibold">What gets downloaded, and where</span>
       </div>
       <p class="mb-3 text-[11.5px] leading-relaxed text-ink-2">
-        Files are saved under <code class="mono text-ink">{cat?.where ?? "…"}</code>, in one
-        directory per model named after the repo. Nothing is written outside that folder, and no
-        download starts until the repo has been checked.
+        Files are saved under <code class="mono text-ink">{cat?.where ?? "unknown; no runtime reported a path"}</code>,
+        one directory per model named after its repo. Nothing is written outside that folder, and no
+        download starts before the repo has been checked.
       </p>
       <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
         {#each [["openvino_model.xml", "the compiled graph"], ["rl_agent_config.json", "question types, temperatures"], ["tokenizer/", "must match the graph"]] as [f, why]}
@@ -335,6 +340,14 @@
     <!-- Best option -->
     <span class="label mb-2 block">Decision model catalogue</span>
     <div class="mb-5 flex flex-col gap-2.5">
+      {#if loading}
+        <p class="text-[11.5px] text-ink-3">Reading the catalogue…</p>
+      {:else if !cat?.entries?.length}
+        <p class="text-[11.5px] leading-relaxed text-ink-2">
+          The catalogue is empty. This build has no runtime to report one, so the list above is the
+          whole of it. The desktop app fills this in from its installed models.
+        </p>
+      {/if}
       {#each cat?.entries ?? [] as e}
         <div class="card p-4 {e.recommended ? 'ring-1 ring-white/20' : ''}">
           <div class="flex flex-wrap items-baseline justify-between gap-2">
@@ -382,8 +395,8 @@
         </button>
       </div>
       <p class="mt-2 text-[10.5px] leading-relaxed text-ink-3">
-        Checking reads the repo's file list over the network and downloads nothing. If the format is
-        wrong you find out in a second, not after 400 MB.
+        A check reads the repository file list over the network and downloads nothing, so a wrong
+        format fails in a second rather than after 400 MB.
       </p>
 
       {#if probe}
@@ -450,7 +463,8 @@
       </div>
       {#if job.state === "running"}
         <p class="mt-1.5 text-[11px] text-ink-2">
-          Fetching from Hugging Face. A 400 MB model takes a few minutes; the page keeps polling.
+          Fetching from Hugging Face. A 400 MB model takes a few minutes, and the page keeps
+          polling until the job finishes.
         </p>
       {:else if job.state === "done"}
         <p class="mt-1.5 text-[11px] text-ink-2">
@@ -458,9 +472,9 @@
           <code class="mono text-ink">{job.dir}</code>.
         </p>
         <p class="mt-1.5 text-[11px] leading-relaxed text-ink-3">
-          The model is loaded once at startup, so the new file is picked up after a restart. Restart
-          the app from its shortcut after selecting the model directory in the server configuration;
-          downloading a different repo does not activate it automatically.
+          The app loads a model once at startup, so a new file applies after a restart. Restart it
+          from its shortcut after you point the configuration at the model directory. Downloading a
+          different repo does not switch the active model.
         </p>
         <button class="btn mt-2 h-7 !text-[11px]" onclick={onReload}>Re-check backends</button>
       {:else if job.state === "error"}

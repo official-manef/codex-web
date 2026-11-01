@@ -33,7 +33,7 @@
     try {
       st = await get<Deps>("/api/deps");
     } catch {
-      msg = "Setup check is unavailable while the server restarts.";
+      msg = "Dependency status did not load. Reload the page to try again.";
     }
   }
 
@@ -93,7 +93,7 @@
         {#if !st}
           Checking dependencies…
         {:else if st.stub}
-          No dependency report · this build runs in the browser
+          No dependency report: this build runs in the browser
         {:else if missing.length === 0}
           All dependencies installed
         {:else}
@@ -109,7 +109,7 @@
     {/if}
     {#if busy}
       <span class="deps-busy"
-        >Installing {st?.job.packages?.join(", ") ?? "…"} — downloading packages can take a few minutes.</span
+        >Installing {st?.job.packages?.join(", ") ?? "…"}. This can take a few minutes.</span
       >
     {/if}
   </div>
@@ -119,7 +119,7 @@
   {#if open && st}
     {#if st.stub}
       <p class="deps-sub">
-        No local server or Python runtime is configured. This template runs with in-browser stubs.
+        No server or Python runtime is configured. This browser build answers every request from a stub in the page.
       </p>
     {:else}
       <p class="deps-sub">

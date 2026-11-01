@@ -217,8 +217,8 @@
 					</p>
 				{:else if current?.docsUrl}
 					<p class="providers-help">
-						Create a key on the provider's page, then paste it here. The provider shows it once — it
-						is encrypted and cannot be read back.
+						Create a key on the provider's page, then paste it here. The provider shows it once, and
+						it cannot be read back after it is saved.
 					</p>
 					{#if docsHref}
 						<!-- An external provider page, not an app route: `rel="external"` marks it for SvelteKit. -->

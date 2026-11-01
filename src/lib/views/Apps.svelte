@@ -118,7 +118,7 @@
       }
     } catch {
       if (alive && version === configVersion)
-        error = "Cannot reach the local automation server. Reconnect and try again.";
+        error = "Automation status did not load. Reload the page to try again.";
     }
   }
   $effect(() => {
@@ -149,7 +149,7 @@
     const version = ++readVersion;
     const suffix = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
     if (maxBytes === null || !extensions.length) {
-      error = "Document limits are unavailable. Reconnect to the local server and try again.";
+      error = "Document limits did not load. Reload the page to try again.";
       input.value = "";
       return;
     }
@@ -275,11 +275,16 @@
   }
 </script>
 
-<View title="Automation" icon="grid" subtitle="Connect steps. Review actions. Run on your terms.">
+<View
+  title="Automation"
+  icon="grid"
+  subtitle="Four recipes that change something outside this page, or preview a change: a browser run, the installed Windows app, a workflow, and a document save. Each one shows what it will do before it does it."
+>
   <p class="workflow-distinction">
-    Actions need your approval. Just testing an answer? <a href="#playground" class="text-link"
-      >Try a simulation</a
-    >.
+    Every action waits for your approval. Testing an answer changes nothing, so use <a
+      href="#playground"
+      class="text-link">Decision simulation</a
+    > for that.
   </p>
   <div class="recipe-tabs" role="tablist" aria-label="Automation tools">
     {#each MODES as item, index}<button
@@ -345,8 +350,8 @@
         <div>
           <h3 id="recipe-title">Organise a text document</h3>
           <p>
-            Choose a file or paste English text. Invoices, receipts and meeting notes get their own
-            folders in <strong>Documents / Laya Automations</strong>.
+            Choose a file or paste English text. Invoices, receipts and meeting notes each go to
+            their own folder under <strong>Documents / Laya Automations</strong>.
           </p>
         </div>
         <span class="chip">{selected?.device || "Local device"} · runs locally</span>
@@ -354,8 +359,8 @@
 
       {#if !local}
         <div role="status" class="notice">
-          Select NPU, GPU or CPU in Compute to run this local recipe. BYOK is not used for document
-          automation.
+          Select NPU, GPU or CPU in Compute &amp; devices to run this local recipe. An endpoint is not
+          used for document automation.
         </div>
       {/if}
       {#if error}<RecoveryNotice

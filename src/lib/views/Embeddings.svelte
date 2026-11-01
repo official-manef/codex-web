@@ -262,9 +262,9 @@
 </script>
 
 <View
-  title="Embeddings"
+  title="Embedding search"
   icon="layers"
-  subtitle="Find text with the same meaning, even when the words differ."
+  subtitle="Rank documents by meaning rather than by matching words. Needs an embedding model, separate from the decision and chat models; this build ships none, so the panel names what is missing instead of ranking."
 >
   <div class="embedding-page">
     <div class="flow" aria-label="Embedding workflow">
@@ -287,14 +287,14 @@
       </div>
     </div>
     {#if loading}<p class="status" role="status">
-        Checking the local embedding model…
+        Checking for an embedding model…
       </p>{:else if !status?.installed}<div class="setup-note">
         <Icon name="cpu" size={18} />
         <div>
           <strong>Install an embedding model to try this.</strong>
           <p>
             {status?.reason ||
-              "An embedding model is separate from Laya's decision model and the chat LLM."}
+              "An embedding model is separate from the decision model and the chat model."}
           </p>
           <div class="install-actions">
             <Button onclick={install} disabled={installRequest || installing || !!status?.custom}
@@ -311,7 +311,7 @@
         </div>
       </div>{/if}
     {#if backend === "byok"}<p class="status">
-        Choose a local CPU, GPU or NPU engine in the header for this embedding workflow.
+        Choose a CPU, GPU or NPU device in the header for this embedding workflow.
       </p>{/if}
     {#if error}<RecoveryNotice
         message={error}
@@ -444,6 +444,10 @@
                 </p>{/each}
               <p>{result.truncation?.note}</p>
             </details>{/if}
+          {#if !result.results?.length}<p class="hint">
+              The model returned no ranked document. That happens when every input was empty after
+              truncation; check the query and the documents above.
+            </p>{/if}
           <ol class="ranking">
             {#each result.results as item, rank}<li class:best={rank === 0}>
                 <div class="match-heading">
@@ -463,7 +467,7 @@
                   <div style:width={width(item.similarity)}></div>
                 </div>
                 {#if item.similarity < 0}<span class="hint"
-                    >Negative similarity · meanings point in different directions</span
+                    >Negative similarity: the two meanings point in different directions</span
                   >{/if}
               </li>{/each}
           </ol>

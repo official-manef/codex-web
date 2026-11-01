@@ -954,7 +954,7 @@
         await readSession(sessions.find((item) => item.id === saved)?.id ?? sessions[0].id);
       else await newSession();
     } catch (e: any) {
-      error = e.message ?? "Cannot reach local chat. Reconnect the server and try again.";
+      error = e.message ?? "The chat could not load. Reload the page to try again.";
     } finally {
       sessionLoading = false;
     }
@@ -1449,7 +1449,7 @@
       session = checked(await api.sessionUpdate(session.id, { title: renameTitle })).session;
       await refreshSessions();
       renaming = false;
-      notice = "Session renamed.";
+      notice = "Chat renamed.";
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -1487,7 +1487,7 @@
       }
       confirmation = "";
       await refreshSessions();
-      notice = action === "clear" ? "Session messages cleared." : "Session deleted.";
+      notice = action === "clear" ? "Chat messages cleared." : "Chat deleted.";
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -1919,7 +1919,7 @@
 {#snippet transcriptContent(lane?: CompareTarget, laneIndex = 0)}
   {#if sessionLoading}<div class="conversation-empty">
       <h1>Loading your chats</h1>
-      <p>Connecting to sessions saved on this laptop…</p>
+      <p>Reading the chats saved in this tab…</p>
     </div>{:else if !lane && !session?.turns?.length && !pending}<div class="conversation-empty">
       <h1>
         {presentationMode === "work" ? "What should we work on?" : "What would you like to do?"}
@@ -2174,7 +2174,7 @@
 {/snippet}
 
 {#snippet chatToolbar()}
-  <ChatHeader title={session?.title ?? "Local chat"}>
+  <ChatHeader title={session?.title ?? "Chat"}>
     {#snippet leading()}
       {#if !splitLayout}<button
           id="session-drawer-trigger"
@@ -2221,7 +2221,7 @@
             >
             <DropdownMenu.Separator class="chat-menu-separator" />
             <DropdownMenu.Item class="workspace-overflow-item" onSelect={() => openPanel("utils")}
-              >Session</DropdownMenu.Item
+              >Chat details</DropdownMenu.Item
             >
             <DropdownMenu.Item class="workspace-overflow-item" onSelect={() => openPanel("tools")}
               >Resources</DropdownMenu.Item
@@ -2281,7 +2281,7 @@
         >Current chat configuration and permissions</Dialog.Description
       >
       <h3>Local model</h3>
-      <p>{model?.label ?? "Choose a model"}<br />{device || "Choose compute"}</p>
+      <p>{model?.label ?? "No model selected"}<br />{device || "No device selected"}</p>
       <ModelCapabilities capabilities={model?.capabilities} compact />
       <h3>Context</h3>
       <button class="summary-row" onclick={() => openPanel("utils")}
@@ -2293,7 +2293,7 @@
       </p>
       <h3>Access</h3>
       <p>
-        Local chat. Each computer action or document write needs a separate review and approval.
+        Nothing runs from this panel. Each computer action or document write needs its own review and approval.
       </p>
       <button class="btn" onclick={() => openPanel("tools")}>Manage tools</button>
       <Dialog.Close class="btn">Close</Dialog.Close></Dialog.Content
@@ -2503,7 +2503,7 @@
         ><button onclick={() => openPanel(panel === "mcp" ? "" : "mcp")}
           ><Icon name="server" size={16} />MCP connections</button
         >
-        <p>Sessions are saved on this laptop.</p>
+        <p>Chats are saved in this browser tab.</p>
       </div>{/if}
   </aside>
   {#if splitLayout && navBounds}<div class="chat-pane-resize navigation-resize">
@@ -2532,7 +2532,7 @@
     style={`--chat-composer-max:calc(var(${entryEmpty ? "--chat-entry-width" : "--chat-reading-width"},${entryEmpty ? "640px" : "738px"}) + 48px)`}
   >
     {#snippet header()}
-      <h1 class="sr-only">{session?.title ?? "Local chat"}</h1>
+      <h1 class="sr-only">{session?.title ?? "Chat"}</h1>
       {@render chatToolbar()}
     {/snippet}
     {#snippet modes()}
@@ -2935,7 +2935,7 @@
                 ><span class="sr-only">Generative model</span><AppSelect
                   bind:value={modelId}
                   options={modelOptions}
-                  displayLabel={`${model?.label ?? "Choose model"} · ${device || "—"}`}
+                  displayLabel={`${model?.label ?? "No model selected"} · ${device || "no device"}`}
                   label="Chat model"
                   disabled={busy || !!operation}
                 /></label
@@ -3114,8 +3114,8 @@
           </div>
           <ModelCapabilities capabilities={model?.capabilities} />
           <div class="inspector-field">
-            <span>Compute engine</span><AppSelect
-              label="Chat compute engine"
+            <span>Device</span><AppSelect
+              label="Chat device"
               value={device}
               options={engineOptions}
               onchange={(value) => onPick(`local:${value.toLowerCase()}`)}
@@ -3127,7 +3127,7 @@
                 <dt>Installation</dt>
                 <dd>
                   {(model as any).stub
-                    ? "Template stub · no model is installed"
+                    ? "No model is installed in this build"
                     : model.installed
                       ? "Installed"
                       : "Download needed"}
@@ -3142,7 +3142,7 @@
               </div>
               <div>
                 <dt>Download</dt>
-                <dd>{model.download_mb ? `${model.download_mb} MB` : "—"}</dd>
+                <dd>{model.download_mb ? `${model.download_mb} MB` : "Size not reported"}</dd>
               </div>
             </dl>
             <button
@@ -3155,7 +3155,7 @@
             onclick={() => refreshModels().catch((e) => (error = e.message))}>Refresh models</button
           >
           <details class="inspector-description">
-            <summary>Engine & comparison details</summary>
+            <summary>Device and comparison details</summary>
             <p>
               OpenVINO GenAI runs on your chosen device. Switching can require compilation.
               Comparison prepares isolated pipelines first, then starts generation together.
@@ -3164,12 +3164,12 @@
             </p>
           </details>
           <button class="btn" onclick={() => onNavigate("models")}>Decision model catalogue</button>
-          <button class="btn" onclick={() => openPanel("utils")}>Session actions</button>
+          <button class="btn" onclick={() => openPanel("utils")}>Chat utilities</button>
         </section>
       </div>{/if}
     {#if sessionVisited}<div hidden={panel !== "utils"} inert={panel !== "utils"}>
         <section class="chat-inspector-section">
-          <h2 class:sr-only={externalPanels}>Session & utilities</h2>
+          <h2 class:sr-only={externalPanels}>Chat and utilities</h2>
           <div class="inspector-button-row">
             <Button
               variant="outline"

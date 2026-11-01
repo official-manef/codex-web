@@ -113,7 +113,7 @@
 <View
 	title="MANEF AI"
 	icon="layers"
-	subtitle="Four independent products under one versioned contract. Declarations, pins and previews only — no product is started, called or granted authority here."
+	subtitle="Four independent products under one versioned contract. What you see are declarations, source pins and previews: no product is started, called or granted authority here."
 >
 	<div class="mb-4 flex flex-wrap items-center gap-2">
 		<Button size="sm" variant="outline" onclick={refresh} disabled={loading}>
@@ -153,7 +153,7 @@
 				{:else if declaredReadOnly}
 					read / none only
 				{:else}
-					Mixed — review per capability
+					Mixed: review each capability
 				{/if}
 			</dd>
 		</div>
@@ -242,8 +242,8 @@
 
 	<h2 class="mb-2 text-[13px] font-semibold">Compose a preview</h2>
 	<p class="mb-3 max-w-[70ch] text-[12.5px] leading-relaxed text-ink-2">
-		Plans describe declared effects and required scopes. They never call a service, and a plan carries
-		no principal, tenant, scope or approval — those come from each product at call time.
+		A plan describes declared effects and required scopes. It never calls a service, and it carries
+		no principal, tenant, scope or approval: each product supplies those when it makes its own call.
 	</p>
 
 	<div class="grid gap-4 pb-2 lg:grid-cols-2">
