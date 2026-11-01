@@ -119,8 +119,10 @@ registry, the access rules and the routes name the same ids.
 - Whether `cloud/chat.ts` being unused is intentional or drift.
 - Whether `BrowserCanvas` ever renders a real page — depends on the target's `X-Frame-Options`;
   no test, no fixture.
-- `Corpus.svelte`, `Reference.svelte`, `Schema.svelte` exist but are **not registered** — dead
-  views. Pruning or drift, unknown.
+- ~~`Corpus.svelte`, `Reference.svelte`, `Schema.svelte` exist but are **not registered** — dead
+  views. Pruning or drift, unknown.~~ **Resolved:** all three were deleted in `d52e006`. They
+  were registered by nothing and called by nothing, so drift was ruled out — they were
+  fabrications, and they are gone rather than left as dead weight.
 
 ## Recommended order
 
