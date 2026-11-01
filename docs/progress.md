@@ -13,9 +13,11 @@ file, no build step, no native dependency: it serves `GET /v1/health` and a
 one shell per socket.
 
 It runs on the user's machine, never on the app server — that is the whole point of the BYOK
-device model. Six tests in `src/lib/runtime/terminal-bridge.spec.ts` spawn it on a random port
+device model. Ten tests in `src/lib/runtime/terminal-bridge.spec.ts` spawn it on a random port
 and check a good token, a bad token, a shell that keeps state between frames, a handshake with
-no subprotocol, a foreign origin, and a binary frame. No mocks.
+no subprotocol, a foreign origin, a binary frame, the token's absence from the shell's
+environment, a forged `Host` against the same-host rule, and a non-numeric connection cap.
+No mocks.
 
 One trap worth recording: a WebSocket subprotocol name allows only RFC 6455 `tchar`, so a plain
 base64 token contains `+`, `/` and `=` and every handshake dies with "invalid or duplicated
@@ -60,21 +62,21 @@ whichever slug you choose.
 
 ## Where we are
 
-| Area                       | State                       | Evidence                                                       |
-| -------------------------- | --------------------------- | -------------------------------------------------------------- |
-| Shell + workspace routes   | shipped                     | `slices/workspace-shell`, `/` mounts the workspace             |
-| Chat surface + composer    | shipped                     | `slices/chat`, local runtime adapter                           |
-| Terminal panel             | shipped                     | `src/lib/runtime/terminal.ts`, `src/lib/views/Terminal.svelte` |
-| Device pairing             | shipped                     | `src/lib/views/Devices.svelte`, `src/lib/auth_state.ts`        |
-| BYOK providers (`cloud`)   | shipped, 11 providers       | `src/convex/providers.ts`                                      |
-| BYOK providers (SvelteKit) | shipped, 4 providers        | `src/lib/server/ai/config.ts`                                  |
-| `nine-router` provider     | shipped on both paths       | both files above; see the note below                           |
-| BYOK chat (SvelteKit path) | shipped                     | `src/lib/server/ai/{chat,config}.ts`                           |
-| Outbound MCP client        | shipped                     | `src/lib/cloud/mcp.ts`, allowlist + manual confirm             |
-| Inbound MCP server         | shipped, read-only          | `/api/mcp/server`, one `starter_status` tool                   |
-| MANEF AI hub bridge        | shipped, loopback allowlist | `src/routes/api/manef/[...path]`, three paths only             |
-| Feature access + toggles   | shipped                     | `src/lib/feature_access.ts`, `src/lib/config/surface.ts`       |
-| ChatGPT parity evidence    | shipped                     | `docs/chatgpt-desktop-parity-windows.md`                       |
+| Area                       | State                       | Evidence                                                                                                                              |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell + workspace routes   | shipped                     | `slices/workspace-shell`, `/` mounts the workspace                                                                                    |
+| Chat surface + composer    | shipped                     | `slices/workspace-shell/shared/chat-ui`, `src/lib/views/Chat.svelte`                                                                  |
+| Terminal panel             | shipped                     | `src/lib/runtime/terminal.ts`, `src/lib/views/Terminal.svelte`                                                                        |
+| Device pairing             | shipped                     | `src/lib/views/Devices.svelte`, `src/lib/auth_state.ts`                                                                               |
+| BYOK providers (`cloud`)   | shipped, 11 providers       | `src/convex/providers.ts`                                                                                                             |
+| BYOK providers (SvelteKit) | shipped, 4 providers        | `src/lib/server/ai/config.ts`                                                                                                         |
+| `nine-router` provider     | shipped on both paths       | both files above; see the note below                                                                                                  |
+| BYOK chat (SvelteKit path) | shipped                     | `src/lib/server/ai/{chat,config}.ts`                                                                                                  |
+| Outbound MCP client        | shipped                     | operator path `src/lib/server/mcp/client.ts` (allowlist + manual confirm); per-user path `src/lib/cloud/mcp.ts` → `src/convex/mcp.ts` |
+| Inbound MCP server         | shipped, read-only          | `/api/mcp/server`, one `starter_status` tool                                                                                          |
+| MANEF AI hub bridge        | shipped, loopback allowlist | `src/routes/api/manef/[...path]`, three paths only                                                                                    |
+| Feature access + toggles   | shipped                     | `src/lib/feature_access.ts`, `src/lib/config/surface.ts`                                                                              |
+| ChatGPT parity evidence    | shipped                     | `docs/chatgpt-desktop-parity-windows.md`                                                                                              |
 
 ### `nine-router` on both paths, deliberately duplicated
 
@@ -93,15 +95,21 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
-Run on `dff55b3`, 2026-11-02 (`vitest run`, `npx prettier --check .`):
+Run on `337850c`, 2026-11-02 (`vitest run`, `npx prettier --check .`, `npx playwright test`):
 
 ```
-vitest run          36 files / 197 passed / 3 skipped
+vitest run          50 files / 441 passed / 3 skipped
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
 tsc -p src/convex   clean
+playwright          102 passed   (--workers=1; see below)
 ```
+
+`playwright` needs `--workers=1` on this host. At the default worker count Playwright's own
+webServer lifetime ends before the last files run and 77 tests fail with
+`net::ERR_CONNECTION_REFUSED` against a server that was already torn down. That is environmental,
+not a defect in the app, but it means the browser number is only true with one worker.
 
 This block is the only place gate numbers belong. Other documents link here instead of
 copying them; a count repeated in three files is how `138 passed (27 files)` survived two

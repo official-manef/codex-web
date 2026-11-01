@@ -1,8 +1,11 @@
 # The gate
 
 `bin/gate` is the single command that decides whether this branch is shippable. There is no CI
-in this repository, so it is also the only thing that does. It replaces a habit of running
-`bun run check && bun run lint && bun run test` by hand and reading a green tail as proof.
+**that runs it** — `.github/workflows/ci.yml` exists and runs `bun run verify`, the browser
+suites and a Node smoke on every push and PR, but it cannot run this gate because the `vitest`
+step needs a real Convex deployment. So `bin/gate` is the only thing that decides what CI cannot.
+It replaces a habit of running `bun run check && bun run lint && bun run test` by hand and
+reading a green tail as proof.
 
 ```bash
 bin/gate
@@ -24,10 +27,10 @@ Two green runs of the same commit disagreed about the same suite:
 
 ```
 npx vitest run   # with a live-but-empty local Convex deployment
-      Tests  197 passed | 3 skipped (200)
+      Tests  441 passed | 3 skipped (444)
 
 npx vitest run   # with nothing answering
-      Tests  197 passed | 3 skipped (200)
+      Tests  441 passed | 3 skipped (444)
 ```
 
 That pair is reproducible on this branch today, but the handover for this repository reported
@@ -35,6 +38,10 @@ That pair is reproducible on this branch today, but the handover for this reposi
 They are a property of **what happened to be listening on `127.0.0.1:3210`** when the suite
 ran. A reader of the summary line alone cannot tell which run produced which number — the skip
 count moved for reasons the summary does not name.
+
+The counts in this document are the `441 / 3` measured on `337850c`. They will drift again; the
+point they illustrate is the **identical** pair, not the digit, so read them as a shape rather
+than a value and re-measure before quoting.
 
 The damage is not hypothetical. A sibling repository pinned `CONVEX_URL` to a dead port
 `9999`. Four security tests — anonymous queries refused, anonymous mutations refused, forged
@@ -99,7 +106,7 @@ When Convex is missing, the gate also prints what is missing and the fix:
 
 ```
   UNPROVEN  vitest         12.0s
-            3 test(s) skipped, Convex is absent: Tests  197 passed | 3 skipped (200)
+            3 test(s) skipped, Convex is absent: Tests  441 passed | 3 skipped (444)
             fix: npx convex dev
 ```
 
@@ -126,7 +133,7 @@ CONVEX_URL=http://127.0.0.1:9999 npx vitest run --reporter=verbose
 ```
  ↓ src/convex/deployment.spec.ts > ... > queries refuse an anonymous caller
      [no Convex deployment: nothing answered at http://127.0.0.1:9999 (fetch failed). Auth boundary NOT exercised — start one with `npx convex dev`.]
-      Tests  197 passed | 3 skipped (200)
+      Tests  441 passed | 3 skipped (444)
 ```
 
 **State B — a deployment answering, with no functions pushed.** This is the state a developer
@@ -139,12 +146,12 @@ npx vitest run --reporter=verbose
 ```
  ↓ src/convex/deployment.spec.ts > ... > queries refuse an anonymous caller
      [deployment reachable but auth boundary NOT proven: http://127.0.0.1:3210 is up but has no functions pushed: devices:list is not deployed. Run `npx convex dev` to push schema + functions.]
-      Tests  197 passed | 3 skipped (200)
+      Tests  441 passed | 3 skipped (444)
 ```
 
 Identical counts, different reality. Without the verbose reason line, these two runs are the
 same green output. That is the whole failure mode: **the summary line cannot tell you whether the
-auth boundary was exercised, and it prints `197 passed | 3 skipped` either way.**
+auth boundary was exercised, and it prints `441 passed | 3 skipped` either way.**
 
 Now the same two states through the gate — the difference is unmissable and both exit `2`:
 
@@ -152,14 +159,14 @@ Now the same two states through the gate — the difference is unmissable and bo
 $ bin/gate                                  # State B
   convex    EMPTY     http://127.0.0.1:3210 is up but has no functions pushed: devices:list is not deployed
   UNPROVEN  vitest         12.0s
-            3 test(s) skipped, Convex is empty: Tests  197 passed | 3 skipped (200)
+            3 test(s) skipped, Convex is empty: Tests  441 passed | 3 skipped (444)
             fix: npx convex dev
   6 passed, 1 unproven, 0 failed                     -> exit 2
 
 $ CONVEX_URL=http://127.0.0.1:9999 bin/gate  # State A
   convex    ABSENT    nothing answered at http://127.0.0.1:9999 (fetch failed)
   UNPROVEN  vitest         17.2s
-            3 test(s) skipped, Convex is absent: Tests  197 passed | 3 skipped (200)
+            3 test(s) skipped, Convex is absent: Tests  441 passed | 3 skipped (444)
             fix: npx convex dev
   6 passed, 1 unproven, 0 failed                     -> exit 2
 ```
@@ -178,31 +185,42 @@ content` is load-sensitive. Measured on a 16-core host:
 clientHeight < 2`) or at "New messages marker clears after reaching the bottom". Different
   tests and different project counts failed run to run — 2 failed/52 passed once, 1 failed/53
   passed another time, 54 passed a third.
-- `npx playwright test --workers=1`: 54/54 passed, twice.
+- `npx playwright test --workers=1`: passed twice then, and `102/102` on `337850c`, where the
+  suite had grown to five files and three projects.
 - Isolated (`--grep AC17`): 3/3 passed, repeatedly.
+
+**Wider than AC17, and worse.** On `337850c` the default-worker run does not merely flake: 77 of
+102 tests fail with `net::ERR_CONNECTION_REFUSED` against `vite preview`, because Playwright's
+`webServer` is torn down (its log ends `script "preview" exited with code 143`) while other
+workers are still navigating. `--workers=1` takes 2.1 minutes and passes cleanly. So "playwright
+passes" is only true single-worker on this host, and the gate's `playwright` step reports `FAIL`
+at default workers for a reason that is not the app.
 
 So it is a genuine parallel-load flake in the test's assumption that a programmatic `scrollTop`
 assignment survives a concurrent render, not a broken feature. The gate reports it as `FAIL`
 when it happens and does not retry: **`retries` is deliberately left at `0`** in
 `playwright.config.ts`. Retrying until green is the same dishonesty as skipping, just slower.
 
-`ponytail:` the honest fix is to make the assertion wait on the scroll settle rather than read
-`scrollTop` immediately after assigning it. That is a change to a test's semantics, so it is
-left out of a gate-only change. Add it when AC17 starts failing locally often enough to be worth
-the review.
+`ponytail:` two honest fixes, neither in a docs change: make the AC17 assertion wait on the
+scroll settle instead of reading `scrollTop` immediately, and give the `webServer` a longer
+`timeout`/`reuseExistingServer` policy so the preview is not reaped mid-run. The first changes a
+test's semantics; the second belongs with whoever owns `playwright.config.ts`. Add them when the
+default-worker run is next used as a gate.
 
 ## Adding CI
 
-There is deliberately no `.github/workflows/gate.yml`. A workflow that runs this gate correctly
-needs a Convex deployment, and getting a meaningful `vitest` step in Actions means supplying
-`CONVEX_URL` plus credentials to reach one as secrets. A workflow without them would run the
-gate in the `absent` state and publish an `UNPROVEN` result — or, worse, someone would "fix" it
-by pinning a port and turn the auth tests into the permanent silent skip this gate exists to
-prevent. A gate that has to lie to be green in CI is worse than no CI: it manufactures the exact
-false confidence being removed here.
+There is deliberately no `.github/workflows/gate.yml`. **A workflow for the other gates does
+exist** — `.github/workflows/ci.yml` since `f184e49` runs `bun run verify`, `bun run test:e2e`,
+`bun run test:dev` and a Node smoke, and it is green. What is absent is a workflow that runs
+`bin/gate`, because the gate's `vitest` step needs a Convex deployment. Getting a meaningful
+`vitest` step in Actions means supplying `CONVEX_URL` plus credentials to reach one as secrets. A
+workflow without them would run the gate in the `absent` state and publish an `UNPROVEN` result
+— or, worse, someone would "fix" it by pinning a port and turn the auth tests into the permanent
+silent skip this gate exists to prevent. A gate that has to lie to be green in CI is worse than
+no CI: it manufactures the exact false confidence being removed here.
 
-If CI is wanted later, the honest shape is: provision a real deployment per run (or use
-`convex dev --once` against a throwaway deployment id), pass it as `CONVEX_URL`, and let the
+If a gate workflow is wanted later, the honest shape is: provision a real deployment per run (or
+use `convex dev --once` against a throwaway deployment id), pass it as `CONVEX_URL`, and let the
 gate exit `2` when it is not there. The gate already fails closed, so the workflow needs no
 special-casing — only a real backend.
 

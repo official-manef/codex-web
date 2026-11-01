@@ -85,16 +85,30 @@ codex-web is a console: it owns none of those and reaches the user's machine onl
 
 ### 1.4 Verification and tooling
 
-| Capability             | codex-desktop                                | codex-web                                                    | Verdict |
-| ---------------------- | -------------------------------------------- | ------------------------------------------------------------ | ------- |
-| One command per repo   | `qcheck` (clone + real + caps, one verdict)  | `bun run verify`; `bunx playwright test`; `bun run test:dev` | parity  |
-| Disk-level assertions  | PASS — probe the file, never the model       | `tests/dev-smoke.e2e.ts` + `tests/surfaces.e2e.ts`           | parity  |
-| Secret scan            | `scripts/secret-scan.sh`                     | absent (relies on `.gitignore` + review)                     | gap     |
-| Live capability matrix | `bin/codex-caps-quicktest` prints and probes | absent — `docs/view-audit` is a static reading               | gap     |
+| Capability             | codex-desktop                                | codex-web                                                               | Verdict |
+| ---------------------- | -------------------------------------------- | ----------------------------------------------------------------------- | ------- |
+| One command per repo   | `qcheck` (clone + real + caps, one verdict)  | `bun run verify`; `bunx playwright test`; `bun run test:dev`            | parity  |
+| Disk-level assertions  | PASS — probe the file, never the model       | `tests/dev-smoke.e2e.ts` + `tests/surfaces.e2e.ts`                      | parity  |
+| Secret scan            | `scripts/secret-scan.sh`                     | `scripts/secret-scan.sh` — same file, `--staged` mode for a commit hook | parity  |
+| Live capability matrix | `bin/codex-caps-quicktest` prints and probes | absent — `docs/view-audit` is a static reading                          | gap     |
 
 ### 1.5 Score
 
-Counting §1.1–1.4 rows: **parity 8, partial 9, gap 20, n/a/blocked 5.**
+Counting every verdict row in §1.1–1.4 mechanically (40 rows): **parity 9, partial 5, gap 21,
+n/a/blocked 5.**
+
+| Section | parity | partial | gap | n/a / blocked | rows |
+| ------- | ------ | ------- | --- | ------------- | ---- |
+| 1.1     | 4      | 1       | 3   | 0             | 8    |
+| 1.2     | 2      | 1       | 12  | 4             | 19   |
+| 1.3     | 0      | 3       | 5   | 1             | 9    |
+| 1.4     | 3      | 0       | 1   | 0             | 4    |
+| total   | 9      | 5       | 21  | 5             | 40   |
+
+An earlier revision said `parity 8, partial 9, gap 20, n/a/blocked 5` — 42 rows, three of the
+four columns wrong. It was written before the secret-scan row was corrected from `gap` to
+`parity`, and `partial` had been over-counted by four rows that are actually `gap`. Recount from
+the table itself before quoting this number again.
 
 The gap mass is not evenly spread. Three root causes produce almost all of it:
 
@@ -272,8 +286,8 @@ Unchanged from the repo contract, and no phase is "done" without it:
 
 ```bash
 bun run verify          # check + lint + unit + build
-bunx playwright test    # 390 / 768 / 1440
-bun run test:dev        # dev-server hydration + navigation
+bunx playwright test    # 102 tests x 3 projects: iPhone SE, iPhone 13, Desktop Chrome
+bun run test:dev        # dev-server hydration + navigation, desktop project only
 ```
 
 Plus, per phase: one spec that proves the **denied** path, and one line added to

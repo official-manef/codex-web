@@ -2,7 +2,8 @@
 
 Read `src/convex/schema.ts` and the existing functions before editing. `convex.json`
 selects this backend directory. `starter.status` exposes public build metadata; the
-`notes` table and CRUD functions require verified identity and indexed ownership.
+`notes` no longer exists (`023aa02`). Owner-scoped private data lives in `memories` and
+`projects`; both require verified identity and indexed ownership, the same rule described here.
 Optional Google auth is described in [auth.md](auth.md). Workspace UI grants no permissions.
 
 ## Types, validation and visibility

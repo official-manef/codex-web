@@ -45,6 +45,11 @@ Google issuer is fixed by the implemented provider. Legacy recipe placeholders
 `AUTH_ISSUER_URL` and `AUTH_AUDIENCE` are removed; arbitrary issuers are not supported
 by changing an environment string. Migrate subjects and sessions when changing providers.
 
+Also absent from `.env.example` on purpose, because they are host/adapter settings rather than app
+settings: `DEPLOY_TARGET` (build target), `ORIGIN`, `HOST`, `PORT` (Node adapter runtime),
+`LOG_LEVEL`/`LOG_FILE` (optional activity log), and `GOOGLE_APPLICATION_CREDENTIALS` (commented out
+as recipe-only). Every one is documented in its own section below.
+
 ## AI and MCP: implemented, off by default
 
 The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
@@ -152,10 +157,16 @@ A string placeholder does not provision a resource or bridge runtime boundaries.
 
 ## Convex deployment
 
-| Setting             | Runtime                        | Consumer                                                             |
-| ------------------- | ------------------------------ | -------------------------------------------------------------------- |
-| `CONVEX_DEPLOYMENT` | CLI-managed local `.env.local` | Selects the linked development deployment.                           |
-| `CONVEX_DEPLOY_KEY` | Hosting/CI secret store        | Deployment script/CLI. Scope preview and production keys separately. |
+| Setting             | Runtime                        | Consumer                                                                                                                                                                                                                       |
+| ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MODELS_ENC_KEY`    | Convex deployment only         | AES-256-GCM master key for stored provider keys and per-user MCP credentials. `openssl rand -base64 32`. Losing it makes every stored credential unreadable; rotating it is a migration, not a restart. Never in `.env.local`. |
+| `CONVEX_DEPLOYMENT` | CLI-managed local `.env.local` | Selects the linked development deployment.                                                                                                                                                                                     |
+| `CONVEX_DEPLOY_KEY` | Hosting/CI secret store        | Deployment script/CLI. Scope preview and production keys separately.                                                                                                                                                           |
+
+`MODELS_ENC_KEY` is the one setting in this file that is deliberately absent from `.env.example`'s
+active block: it belongs on the Convex deployment (`npx convex env set MODELS_ENC_KEY …`), never in
+a frontend env file. The same holds for `LOG_LEVEL` and `LOG_FILE`, which are optional and ship
+unset.
 
 Backend settings belong on the corresponding Convex deployment, not only the frontend
 host. Never copy another project's deployment identifiers, secrets or private files into

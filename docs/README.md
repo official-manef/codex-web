@@ -41,16 +41,22 @@ is not always the last time its content was true.
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------- | ---------- |
 | [architecture.md](architecture.md)                                     | Boundaries, module map, source-of-truth table                    | 2026-11-02 | current    |
 | [progress.md](progress.md)                                             | Living status, gate numbers, known-unproven claims               | 2026-11-02 | current    |
+| [gate.md](gate.md)                                                     | `bin/gate`, its three verdicts and what each step does not prove | 2026-11-02 | current    |
 | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)                 | AC01–AC18 verdict per criterion against the live app             | 2026-11-02 | current    |
 | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)                   | Every registry id classified real/partial/stub/guess             | 2026-11-02 | current    |
-| [laya-parity.md](laya-parity.md)                                       | Provenance of the vendored Laya shell, deliberate deviations     | 2026-10-29 | current    |
-| [terminal.md](terminal.md)                                             | Terminal panel client + the bridge contract and reference bridge | 2026-11-01 | current    |
-| [byok.md](byok.md)                                                     | Three engines, the never-hold-a-key rule, Jev boundary           | 2026-11-01 | current    |
+| [parity-checklist-2026-11-02.md](parity-checklist-2026-11-02.md)       | Desktop-vs-web capability matrix and the migration phases        | 2026-11-02 | current    |
+| [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md)               | Every checkable claim in these docs, verified or marked wrong    | 2026-11-02 | current    |
+| [a11y-2026-11-02.md](a11y-2026-11-02.md)                               | Accessibility defects found, fixed, and deliberately not fixed   | 2026-11-02 | current    |
+| [security-review-2026-11-02.md](security-review-2026-11-02.md)         | Trust-boundary review of routes, Convex, bridge, key handling    | 2026-11-02 | current    |
+| [terminology.md](terminology.md)                                       | One term per concept, and the strings tests hold in place        | 2026-11-02 | current    |
+| [laya-parity.md](laya-parity.md)                                       | Provenance of the vendored Laya shell, deliberate deviations     | 2026-11-02 | current    |
+| [terminal.md](terminal.md)                                             | Terminal panel client + the bridge contract and reference bridge | 2026-11-02 | current    |
+| [byok.md](byok.md)                                                     | Three engines, the never-hold-a-key rule, Jev boundary           | 2026-11-02 | current    |
 | [auth.md](auth.md)                                                     | Optional Google OIDC, private notes, auth boundary proof         | 2026-11-02 | current    |
 | [ai-mcp.md](ai-mcp.md)                                                 | Optional BYOK chat routes and the MCP client/server panels       | 2026-10-30 | current    |
 | [integrations.md](integrations.md)                                     | Payment/email transport adapters, boundaries                     | 2026-09-08 | current    |
 | [deployment.md](deployment.md)                                         | Vercel vs Node targets, build selection, host requirements       | 2026-11-01 | current    |
-| [environment.md](environment.md)                                       | Every env var, default, and its actual consumer                  | 2026-11-01 | current    |
+| [environment.md](environment.md)                                       | Every env var, default, and its actual consumer                  | 2026-11-02 | current    |
 | [assets.md](assets.md)                                                 | Brand identity, asset paths, placeholder/custom status           | 2026-09-08 | current    |
 | [assets-prompts.md](assets-prompts.md)                                 | Generated image briefs (`bun run assets:prompts`)                | 2026-10-29 | current    |
 | [linting.md](linting.md)                                               | What prettier/eslint/Svelte-5 guard enforce                      | 2026-09-08 | current    |
@@ -68,10 +74,10 @@ is not always the last time its content was true.
 | [handover-2026-11-01.md](handover-2026-11-01.md)                       | Private cross-repo session handover                              | 2026-11-02 | historical |
 | [chatgpt-desktop-parity.md](chatgpt-desktop-parity.md)                 | Parity scope brief written without the app present               | 2026-10-30 | historical |
 | [implementation-plan.md](implementation-plan.md)                       | Build order, paths and exit checks for the 0.3.0 shell           | 2026-11-02 | superseded |
-| [ui-spec.md](ui-spec.md)                                               | Region hierarchy, tokens, responsive and focus contract          | 2026-10-27 | superseded |
-| [state-model.md](state-model.md)                                       | Ten state axes, transitions, persistence, races                  | 2026-10-27 | superseded |
-| [placeholder-copy.md](placeholder-copy.md)                             | Copy token contract and the `t()` resolver                       | 2026-10-28 | superseded |
-| [cloud-handoff.md](cloud-handoff.md)                                   | Cloud start guide for the 0.3.0 shell and its route family       | 2026-10-28 | superseded |
+| [ui-spec.md](ui-spec.md)                                               | Region hierarchy, tokens, responsive and focus contract          | 2026-11-02 | superseded |
+| [state-model.md](state-model.md)                                       | Ten state axes, transitions, persistence, races                  | 2026-11-02 | superseded |
+| [placeholder-copy.md](placeholder-copy.md)                             | Copy token contract and the `t()` resolver                       | 2026-11-02 | superseded |
+| [cloud-handoff.md](cloud-handoff.md)                                   | Cloud start guide for the 0.3.0 shell and its route family       | 2026-11-02 | superseded |
 
 † **PRD.md is mixed.** §5 (AC01–AC18) is the live acceptance bar and should not be rewritten
 to match whatever currently passes — a bar that moves to meet the code measures nothing. §3.1
@@ -119,29 +125,32 @@ not have. Do not "clean them up" from guesswork.
 
 1. **View and registry counts disagree across four documents, and no two agree.**
 
-   | Document                                         | Claim                     | Measured on `dff55b3` |
-   | ------------------------------------------------ | ------------------------- | --------------------- |
-   | `handover-2026-11-01.md` (this repo)             | 23 views, 27 registry ids | 21 views, 25 ids      |
-   | desktop `docs/HANDOVER-2026-11-01.md`            | 23 views, 29 registry ids | 21 views, 25 ids      |
-   | `view-audit-2026-11-01.md` header                | "27 registry entries"     | 25 ids                |
-   | `view-audit-2026-11-01.md` follow-up (same file) | "25 ids, not 27"          | 25 ids                |
+   | Document                                         | Claim                     | Measured on `337850c`                     |
+   | ------------------------------------------------ | ------------------------- | ----------------------------------------- |
+   | `handover-2026-11-01.md` (this repo)             | 23 views, 27 registry ids | 24 views, 28 ids                          |
+   | desktop `docs/HANDOVER-2026-11-01.md`            | 23 views, 29 registry ids | 24 views, 28 ids                          |
+   | `view-audit-2026-11-01.md` header                | "27 registry entries"     | 28 ids                                    |
+   | `view-audit-2026-11-01.md` follow-up (same file) | "25 ids, not 27"          | 25 was true at `dff55b3`; 28 at `337850c` |
 
-   `src/lib/registry.ts` holds 25 ids today (18 in `SECTIONS`, 7 in `CHAT_OUTPUTS`), and
-   `src/lib/views/` holds 21 files. The audit's own follow-up section is the version that
-   matches the tree; its header is the pre-deletion snapshot. The 27 and 29 figures are
-   unrecoverable from this branch without knowing exactly when each was counted, so they stay
-   as written. **Treat [view-audit-2026-11-01.md](view-audit-2026-11-01.md) as the authority
-   and the rest as dated observations.**
+   `src/lib/registry.ts` holds 28 ids today (21 in `SECTIONS`, 7 in `CHAT_OUTPUTS`), and
+   `src/lib/views/` holds 24 files. At `dff55b3` the same counts were 25 ids (18 + 7) and 21
+   files; `memories`, `git` and `automations` shipped after it. The audit's own follow-up
+   section is the version that matched the tree when it was written; its header is the
+   pre-deletion snapshot. The 27 and 29 figures are unrecoverable from this branch without
+   knowing exactly when each was counted, so they stay as written. **Treat
+   [view-audit-2026-11-01.md](view-audit-2026-11-01.md) as the authority and the rest as dated
+   observations.**
 
 2. **`laya-parity.md` §2 lists a view set that does not exist.** It names 21 views including
    `Files`, `Browser`, `Performance`, `Parameters`, `Corpus`, `Schema` and `Reference`. Those
    files are gone (`6ed1f3e` removed `src/lib/views/` entirely; `d52e006` restored a different
-   21). The real 21 are `Apps, BrowserCanvas, Chat, Compute, Devices, Embeddings, Faq,
-FileCanvas, Manef, ModelKeys, Models, Overview, Playground, Pricing, Providers, Setup,
-Snake, Terminal, ToolsSettings, Transcribe, Voice`. The count happens to match at 21, which
-   is exactly why this was never caught. The §2 block is provenance — what Laya contained —
-   not a claim about this tree; the file does not say which it means. **Unresolved: whether §2
-   describes the copy at `84c1823` or the tree after the deletions.**
+   set). The real 24 today are `Apps, Automations, BrowserCanvas, Chat, Compute, Devices,
+Embeddings, Faq, FileCanvas, Git, Manef, Memories, ModelKeys, Models, Overview, Playground,
+Pricing, Providers, Setup, Snake, Terminal, ToolsSettings, Transcribe, Voice`. At `dff55b3`
+   the count was 21 with a different membership, which is exactly why the mismatch was never
+   caught. The §2 block is provenance — what Laya contained — not a claim about this tree; the
+   file does not say which it means. **Unresolved: whether §2 describes the copy at `84c1823`
+   or the tree after the deletions.**
 
 3. **The two handover copies are not mirrors and neither is a superset.** `docs/handover-2026-11-01.md`
    here and `docs/HANDOVER-2026-11-01.md` in `rahmanef63/codex-desktop` share the identity
@@ -181,10 +190,11 @@ Recorded so the next reader does not have to reconstruct the reasoning:
   pass/fail summary at all.
 - **Gate numbers had four homes** (progress.md, byok.md §7, handover, README). `byok.md` §7's
   table was replaced by a pointer; it had drifted `95` → `138` while progress.md said `194`.
-  Measured now: **36 files / 197 passed / 3 skipped** on `dff55b3`.
+  Measured now: **50 files / 441 passed / 3 skipped** on `337850c` (it was `36 / 197 / 3` on
+  `dff55b3`; three features landed in between).
 - **`terminal.md` contradicted itself**: the opening sentence said the bridge "is not part of
   this template" while §"The bridge that ships here" documents `bridge/terminal-bridge.mjs`,
-  which exists and is exercised by six tests in
+  which exists and is exercised by ten tests in
   `src/lib/runtime/terminal-bridge.spec.ts`. Resolved by evidence: the bridge ships. The
   opening was corrected to say the panel is the client half and the _remote_ bridge on the
   user's machine is theirs, which is what the rest of the file already said.

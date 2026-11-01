@@ -1,13 +1,16 @@
 # Laya parity — shipped template shape
 
 > **§2 is provenance, not a claim about this tree.** The block lists the 21 views Laya shipped
-> at `84c1823`. This tree holds 21 view files with a **different membership** (`6ed1f3e`
-> deleted them all; `d52e006` restored a subset, and `fa5aa54` deleted two more). The count
-> matching at 21 is a coincidence, not a check. Whether §2 describes the copy or the tree is
-> recorded as unresolved in [README.md](README.md) §Unresolved contradictions.
+> at `84c1823`. This tree holds 24 view files with a **different membership** (`6ed1f3e`
+> deleted them all; `d52e006` restored a subset; `fa5aa54` deleted two more; `memories`, `git`
+> and `automations` were added after). Do not infer today's view set from this block — measure
+> it with `ls src/lib/views/*.svelte`. The coincidence that both counts were once 21 is exactly
+> why the mismatch went unnoticed for two rebuilds, and it is recorded as unresolved in
+> [README.md](README.md) §Unresolved contradictions.
 
 This repository is the shared workspace template. Its UI is `rahmanef63/laya-npu`, copied,
-not reimplemented. `docs/REBUILD-PLAN-laya-parity.md` is the plan this executed.
+not reimplemented — copied, then repaired where the copy was broken. See §1 for exactly which
+files deviate and why. `docs/REBUILD-PLAN-laya-parity.md` is the plan this executed.
 
 ## 1. Provenance
 
@@ -17,11 +20,20 @@ not reimplemented. `docs/REBUILD-PLAN-laya-parity.md` is the plan this executed.
 | Source commit     | **`84c1823`** `test(browser): isolate Linux CI launch and retain startup diagnostics`     |
 | Copied shell      | `slices/workspace-shell/**` (shell + 10 shared sub-slices, 2098-line shell)               |
 | Copied shared     | `shared/**` (icons, layout math, token source)                                            |
-| Copied views      | `src/lib/views/**` — all 21, including the 3531-line `Chat.svelte`                        |
+| Copied views      | `src/lib/views/**` — all 21 at source, including the 3531-line `Chat.svelte`              |
 | Copied helpers    | the `src/lib/*` modules those views import (`http` excluded), one `ui/checkbox` primitive |
 | Copied CSS        | `src/app.css` → `src/app-laya.css`, imported from `src/routes/layout.css`                 |
 
-Rewrites applied to the copy, and nothing else:
+"Copied" is not "unmodified". Measured file by file against `84c1823`:
+
+| Tree                                   | State                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared/**` (5 files)                  | identical after the `$shared` alias rewrite; the rewrite is the only difference                                                                                                                                                                                                                                                                                                                       |
+| `slices/workspace-shell/**` (51 files) | identical after the alias rewrite, except four files: `workspace-shell.svelte` (+70 lines: the a11y focus-return repair in [a11y-2026-11-02.md](a11y-2026-11-02.md) §1), `shared/menu/WorkspaceMenubar.svelte` and `shared/menu/menu-items.svelte` (`:focus-visible` outlines, §6), and `labels.ts` (`outputWorkspace` renamed `Output workspace` → `Output panel`, [terminology.md](terminology.md)) |
+| `src/lib/views/**`                     | 21 copied, 6 added, every copied file deviated — see §2                                                                                                                                                                                                                                                                                                                                               |
+| `src/app-laya.css`                     | 1818 lines against the source's 1820; the two missing lines are the stripped `@import`                                                                                                                                                                                                                                                                                                                |
+
+Rewrites applied uniformly to the copy:
 
 1. `../../../../shared/…` → `$shared/…` (alias; this repo keeps `shared/` at the root).
 2. `#lib/utils.js` → `$lib/utils.js` in the copied `ui/checkbox` primitive only, because this
@@ -143,7 +155,8 @@ This is a recorded P1 deviation, not an oversight.
 
 ## 7. Evidence
 
-Recorded 2026-10-29 on this repository:
+Recorded 2026-10-29 on this repository. **Dated observation, not current** — gate numbers live
+in [progress.md](progress.md) §Gates. Kept because it is what the copy was accepted on.
 
 | Check         | Command                                          | Result                                           |
 | ------------- | ------------------------------------------------ | ------------------------------------------------ |
