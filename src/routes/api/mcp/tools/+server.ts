@@ -3,7 +3,7 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { requireCapabilityAccess, readJsonBody } from '$lib/server/access';
 import { byokToken } from '$lib/server/ai/config';
-import { connectionFor } from '$lib/server/mcp/config';
+import { connectionFor, mcpConnections } from '$lib/server/mcp/config';
 import { executeRemoteTool, listRemoteTools } from '$lib/server/mcp/client';
 import { logEvent } from '$lib/server/log';
 import type { RequestHandler } from './$types';
@@ -29,6 +29,15 @@ export const POST: RequestHandler = async (event) => {
 	const value = await readJsonBody(event.request);
 	let input: z.infer<typeof bodySchema>;
 	let connection: ReturnType<typeof connectionFor>;
+	// A broken MCP_SERVERS_JSON is the operator's fault, not the caller's. Separate it from the
+	// caller's own mistakes below, or an unparseable catalog is reported as a 400 that blames the
+	// request body and sends whoever reads it hunting for a field that was never wrong.
+	try {
+		mcpConnections(env);
+	} catch {
+		await logEvent('warn', 'mcp.tools', { outcome: 'invalid-configuration' });
+		error(503, 'Remote tool setup is incomplete. Check the private server configuration.');
+	}
 	try {
 		input = bodySchema.parse(value);
 		byokToken(input.token);
