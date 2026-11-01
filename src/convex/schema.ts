@@ -130,5 +130,42 @@ export default defineSchema({
 		completionTokens: v.number(),
 		status: v.string(),
 		at: v.number()
-	}).index('by_owner_at', ['owner', 'at'])
+	}).index('by_owner_at', ['owner', 'at']),
+
+	// ── memories & projects ───────────────────────────────────────────────────────────────
+	memories: defineTable({
+		owner: v.string(),
+		text: v.string(), // ≤ 400 chars, enforced in the handler
+		createdAt: v.number(),
+		usedAt: v.optional(v.number())
+	}).index('by_owner', ['owner']),
+
+	projects: defineTable({
+		owner: v.string(),
+		name: v.string(), // ≤ 60 chars
+		instructions: v.optional(v.string()), // ≤ 2000 chars
+		createdAt: v.number()
+	}).index('by_owner', ['owner']),
+
+	projectChats: defineTable({
+		owner: v.string(),
+		projectId: v.id('projects'),
+		sessionId: v.string()
+	})
+		.index('by_owner', ['owner'])
+		.index('by_project', ['projectId']),
+
+	// ── automations ───────────────────────────────────────────────────────────────────────
+	automations: defineTable({
+		owner: v.string(),
+		sessionId: v.optional(v.id('sessions')),
+		prompt: v.string(),
+		intervalMinutes: v.number(),
+		nextRunAt: v.number(),
+		enabled: v.boolean(),
+		failureCount: v.number(),
+		lastRunAt: v.optional(v.number())
+	})
+		.index('by_owner', ['owner'])
+		.index('by_due', ['enabled', 'nextRunAt'])
 });

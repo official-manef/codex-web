@@ -31,6 +31,27 @@ function assertValidRoot(root: GitRoot): void {
 	}
 }
 
+function safePath(value: unknown, allowAbsolute = false): string {
+	if (
+		typeof value !== 'string' ||
+		value.length === 0 ||
+		value.length > 500 ||
+		value.includes('\0') ||
+		value.startsWith('-') ||
+		value.split(/[/\\]/).includes('..')
+	) {
+		throw new Error('Invalid path');
+	}
+	if (allowAbsolute) {
+		if (!isAbsolute(value)) {
+			throw new Error('Invalid path');
+		}
+	} else if (isAbsolute(value)) {
+		throw new Error('Invalid path');
+	}
+	return value;
+}
+
 function defaultRunner(root: GitRoot): Runner {
 	return (args: string[]) =>
 		new Promise<{ code: number; stdout: string }>((resolve) => {
@@ -181,4 +202,220 @@ export async function gitLog(root: GitRoot, run?: Runner): Promise<GitCommit[]> 
 		if (commits.length === 20) break;
 	}
 	return commits;
+}
+
+export async function gitDiff(
+	root: GitRoot,
+	opts: { staged?: boolean; path?: string } = {},
+	run?: Runner
+): Promise<string> {
+	assertValidRoot(root);
+	if (!opts || typeof opts !== 'object') {
+		throw new Error('Invalid options');
+	}
+	if (opts.path !== undefined) {
+		safePath(opts.path);
+	}
+	const runner = run ?? defaultRunner(root);
+	const args = [
+		'diff',
+		'--no-color',
+		'--no-ext-diff',
+		...(opts.staged ? ['--staged'] : []),
+		...(opts.path ? ['--', opts.path] : [])
+	];
+	let res: { code: number; stdout: string };
+	try {
+		res = await runner(args);
+	} catch {
+		throw new Error('git diff failed');
+	}
+	if (res.code !== 0) {
+		throw new Error('git diff failed');
+	}
+
+	if (res.stdout.length > 40_000) {
+		return res.stdout.slice(0, 40_000) + '\n[diff truncated]\n';
+	}
+	return res.stdout;
+}
+
+export async function gitStage(root: GitRoot, paths: string[], run?: Runner): Promise<void> {
+	assertValidRoot(root);
+	if (!Array.isArray(paths) || paths.length < 1 || paths.length > 50) {
+		throw new Error('Invalid paths');
+	}
+	for (const p of paths) {
+		safePath(p);
+		if (p.startsWith(':')) {
+			throw new Error('Invalid path');
+		}
+	}
+	const runner = run ?? defaultRunner(root);
+	const args = ['add', '--', ...paths];
+	let res: { code: number; stdout: string };
+	try {
+		res = await runner(args);
+	} catch {
+		throw new Error('git stage failed');
+	}
+	if (res.code !== 0) {
+		throw new Error('git stage failed');
+	}
+}
+
+export async function gitCommit(
+	root: GitRoot,
+	message: string,
+	run?: Runner
+): Promise<{ hash: string }> {
+	assertValidRoot(root);
+	if (typeof message !== 'string') {
+		throw new Error('Invalid commit message');
+	}
+	const trimmed = message.trim();
+	if (trimmed.length === 0 || trimmed.length > 2000) {
+		throw new Error('Invalid commit message');
+	}
+	if (message.startsWith('-') || trimmed.startsWith('-')) {
+		throw new Error('Invalid commit message');
+	}
+
+	const runner = run ?? defaultRunner(root);
+	let commitRes: { code: number; stdout: string };
+	try {
+		commitRes = await runner(['commit', '-m', message]);
+	} catch {
+		throw new Error('git commit failed');
+	}
+	if (commitRes.code !== 0) {
+		throw new Error('git commit failed');
+	}
+
+	let revRes: { code: number; stdout: string };
+	try {
+		revRes = await runner(['rev-parse', '--short', 'HEAD']);
+	} catch {
+		throw new Error('git commit failed');
+	}
+	if (revRes.code !== 0) {
+		throw new Error('git commit failed');
+	}
+
+	const hash = revRes.stdout.trim();
+	if (!hash) {
+		throw new Error('git commit failed');
+	}
+	return { hash };
+}
+
+export async function gitWorktreeList(
+	root: GitRoot,
+	run?: Runner
+): Promise<{ path: string; branch: string }[]> {
+	assertValidRoot(root);
+	const runner = run ?? defaultRunner(root);
+	let res: { code: number; stdout: string };
+	try {
+		res = await runner(['worktree', 'list', '--porcelain']);
+	} catch {
+		throw new Error('git worktree list failed');
+	}
+	if (res.code !== 0) {
+		throw new Error('git worktree list failed');
+	}
+
+	const lines = res.stdout.split('\n');
+	const worktrees: { path: string; branch: string }[] = [];
+	let currentPath = '';
+	let currentBranch = '';
+
+	const flush = () => {
+		if (currentPath) {
+			worktrees.push({
+				path: currentPath,
+				branch: currentBranch || '(detached)'
+			});
+			currentPath = '';
+			currentBranch = '';
+		}
+	};
+
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+		if (!line) {
+			flush();
+			continue;
+		}
+		if (line.startsWith('worktree ')) {
+			flush();
+			currentPath = line.slice('worktree '.length).trim();
+		} else if (line.startsWith('branch ')) {
+			const ref = line.slice('branch '.length).trim();
+			currentBranch = ref.replace(/^refs\/heads\//, '');
+		} else if (line === 'detached') {
+			currentBranch = '(detached)';
+		}
+	}
+	flush();
+
+	return worktrees;
+}
+
+export async function gitWorktreeAdd(
+	root: GitRoot,
+	path: string,
+	branch: string,
+	run?: Runner
+): Promise<void> {
+	assertValidRoot(root);
+	safePath(path, true);
+	if (path === root.path) {
+		throw new Error('Invalid worktree path');
+	}
+	if (
+		typeof branch !== 'string' ||
+		!/^[A-Za-z0-9._/-]{1,100}$/.test(branch) ||
+		branch.includes('..') ||
+		branch.startsWith('-')
+	) {
+		throw new Error('Invalid branch');
+	}
+
+	const runner = run ?? defaultRunner(root);
+	let res: { code: number; stdout: string };
+	try {
+		res = await runner(['worktree', 'add', path, branch]);
+	} catch {
+		throw new Error('git worktree add failed');
+	}
+	if (res.code !== 0) {
+		throw new Error('git worktree add failed');
+	}
+}
+
+export async function gitWorktreeRemove(root: GitRoot, path: string, run?: Runner): Promise<void> {
+	assertValidRoot(root);
+	if (
+		typeof path !== 'string' ||
+		path.length === 0 ||
+		path.length > 500 ||
+		path.includes('\0') ||
+		path.startsWith('-') ||
+		path.split(/[/\\]/).includes('..') ||
+		path === root.path
+	) {
+		throw new Error('Invalid worktree path');
+	}
+
+	const runner = run ?? defaultRunner(root);
+	let res: { code: number; stdout: string };
+	try {
+		res = await runner(['worktree', 'remove', path]);
+	} catch {
+		throw new Error('git worktree remove failed');
+	}
+	if (res.code !== 0) {
+		throw new Error('git worktree remove failed');
+	}
 }

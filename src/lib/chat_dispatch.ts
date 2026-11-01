@@ -24,6 +24,7 @@ export interface StreamServerChatInput {
 	apiKey: string;
 	messages: ChatMessage[];
 	memory?: string;
+	toolUse?: boolean;
 }
 
 export interface StreamServerChatResult {
@@ -41,10 +42,19 @@ export async function streamServerChat(
 	signal?: AbortSignal,
 	fetcher: typeof fetch = fetch
 ): Promise<StreamServerChatResult> {
+	const body: Record<string, unknown> = {
+		provider: input.provider,
+		model: input.model,
+		apiKey: input.apiKey,
+		messages: input.messages
+	};
+	if (input.memory !== undefined) body.memory = input.memory;
+	if (input.toolUse !== undefined) body.toolUse = input.toolUse;
+
 	const response = await fetcher('/api/ai/chat', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(input),
+		body: JSON.stringify(body),
 		signal
 	});
 

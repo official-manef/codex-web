@@ -279,3 +279,28 @@ bun run test:dev        # dev-server hydration + navigation
 Plus, per phase: one spec that proves the **denied** path, and one line added to
 `docs/progress.md` naming what is still not implemented. A parity row that is claimed without a
 runtime probe is the mistake `docs/view-audit-2026-11-01.md` was written about.
+
+## 6. What landed on 2026-11-02 (implementation status)
+
+Ten parallel agents built the phases below. Each row names the file that carries it, so the next
+session can check the claim instead of trusting this table.
+
+| Phase | What exists now                                                                                                                                                                                         | Not done                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | `src/lib/server/policy.ts` — 9 verbs, deny-by-default, `parsePolicy` never throws; `AI_POLICY_JSON` + `GIT_POLICY_JSON` parsed in the routes, malformed JSON falls back to deny                         | A Convex `policies` table: today the policy is one server env var, not per-owner rows                                                             |
+| 1     | `src/lib/server/ai/tools.ts` — 4 verbs, `parseToolRequest` + `runTool`, policy checked **before** any dep; `chat.ts` bounded to 8 steps; `AI_TOOLS_ENABLED` + per-request `toolUse`                     | A bridge connection, so `/api/ai/chat` passes the policy but no exec/file deps. Every tool refuses with "denied by policy" rather than pretending |
+| 2     | `gitDiff`/`gitStage`/`gitCommit`/`gitWorktree{List,Add,Remove}` with fixed argv, `safePath`, no `--amend`/`-S`/`--force`; `POST /api/git` with a closed action union; `Git.svelte` diff/stage/commit UI | PR review: no forge credential in reach, recorded as a gap                                                                                        |
+| 3     | Multimodal wire (`ChatContent`, `textOf`, `imagesOf`), ≤2 images × 4 MB; **no silent downgrade** for `nine-router`/`google`; `artifact.ts` + `ArtifactFrame.svelte` with `sandbox=""`                   | An upload route: images travel in the request body, capped, not stored                                                                            |
+| 4     | Convex `memories`/`projects`/`projectChats` with owner checks and limits, `memories.spec.ts`                                                                                                            | The client still reads `localStorage`; the Convex path is unused by the UI today                                                                  |
+| 5     | `src/lib/automations.ts` + Convex `automations` table, 20-cap, 3-failure disable, `Automations.svelte`                                                                                                  | **No runner.** Nothing executes a scheduled prompt, and the view says so                                                                          |
+| 6     | `src/lib/mcp_app_host.ts` + `McpAppFrame.svelte` — origin-checked `postMessage`, `sandbox="allow-scripts"`, no `allow-same-origin`                                                                      | No manifest loader, no `mcp_app` approval gate wired, no MCP 2.0 events                                                                           |
+
+Three things a reader should not over-read:
+
+1. **Phase 1 is a gate, not an agent.** The loop, the caps and the refusal path are real and
+   tested; the execution deps are absent, so a tool call currently ends in a policy refusal. That
+   is the honest state and the reason `/api/ai/chat` passes no `tools` object.
+2. **Phase 4 backend has no client.** The Convex functions work and are tested; the UI still uses
+   the local store. Wiring the client is a separate change with its own migration test.
+3. **Phase 5 records, does not run.** Deliberate (see the phase table), and the e2e test asserts
+   the copy says so.

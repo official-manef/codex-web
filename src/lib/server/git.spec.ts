@@ -1,6 +1,18 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { gitLog, gitRoots, gitStatus, type GitRoot, type Runner } from './git';
+import {
+	gitCommit,
+	gitDiff,
+	gitLog,
+	gitRoots,
+	gitStage,
+	gitStatus,
+	gitWorktreeAdd,
+	gitWorktreeList,
+	gitWorktreeRemove,
+	type GitRoot,
+	type Runner
+} from './git';
 
 describe('gitRoots', () => {
 	test('parses valid colon-separated absolute paths', () => {
@@ -251,6 +263,444 @@ describe('gitLog', () => {
 	test('throws on root path containing .. segment', async () => {
 		const invalidRoot: GitRoot = { name: 'dotdot', path: '/home/../secret' };
 		await expect(gitLog(invalidRoot)).rejects.toThrow('Invalid git root');
+	});
+});
+
+describe('gitDiff', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('passes unstaged arguments when staged is omitted or false', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: 'diff --git a/file b/file\n' };
+		};
+		const out = await gitDiff(validRoot, {}, runner);
+		expect(receivedArgs).toEqual(['diff', '--no-color', '--no-ext-diff']);
+		expect(out).toBe('diff --git a/file b/file\n');
+	});
+
+	test('passes staged argument when staged is true', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitDiff(validRoot, { staged: true }, runner);
+		expect(receivedArgs).toEqual(['diff', '--no-color', '--no-ext-diff', '--staged']);
+	});
+
+	test('passes path argument with separator', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitDiff(validRoot, { staged: true, path: 'src/lib/server/git.ts' }, runner);
+		expect(receivedArgs).toEqual([
+			'diff',
+			'--no-color',
+			'--no-ext-diff',
+			'--staged',
+			'--',
+			'src/lib/server/git.ts'
+		]);
+	});
+
+	test('refuses path traversal with .. segment', async () => {
+		await expect(gitDiff(validRoot, { path: '../secret.ts' })).rejects.toThrow('Invalid path');
+		await expect(gitDiff(validRoot, { path: 'foo/../../bar' })).rejects.toThrow('Invalid path');
+	});
+
+	test('refuses absolute path', async () => {
+		await expect(gitDiff(validRoot, { path: '/etc/passwd' })).rejects.toThrow('Invalid path');
+	});
+
+	test('refuses path starting with - or containing NUL', async () => {
+		await expect(gitDiff(validRoot, { path: '--staged' })).rejects.toThrow('Invalid path');
+		await expect(gitDiff(validRoot, { path: 'file\0.ts' })).rejects.toThrow('Invalid path');
+	});
+
+	test('truncates output at 40 000 chars and appends marker', async () => {
+		const longDiff = 'a'.repeat(40050);
+		const runner: Runner = async () => ({ code: 0, stdout: longDiff });
+		const out = await gitDiff(validRoot, {}, runner);
+		expect(out).toHaveLength(40_000 + '\n[diff truncated]\n'.length);
+		expect(out.endsWith('\n[diff truncated]\n')).toBe(true);
+		expect(out.slice(0, 40_000)).toBe('a'.repeat(40_000));
+	});
+
+	test('leaves diff output <= 40 000 chars untruncated', async () => {
+		const exactDiff = 'b'.repeat(40_000);
+		const runner: Runner = async () => ({ code: 0, stdout: exactDiff });
+		const out = await gitDiff(validRoot, {}, runner);
+		expect(out).toBe(exactDiff);
+	});
+
+	test('throws on non-zero exit without leaking command line or paths', async () => {
+		const runner: Runner = async () => ({
+			code: 1,
+			stdout: 'fatal: ambiguous argument in /home/user/my-repo'
+		});
+		await expect(gitDiff(validRoot, {}, runner)).rejects.toThrow('git diff failed');
+	});
+
+	test('throws on rejected runner without leaking errors', async () => {
+		const runner: Runner = async () => {
+			throw new Error('/usr/bin/git diff failed in /secret/path');
+		};
+		await expect(gitDiff(validRoot, {}, runner)).rejects.toThrow('git diff failed');
+	});
+
+	test('throws on invalid git root', async () => {
+		const invalidRoot: GitRoot = { name: 'bad', path: 'relative/dir' };
+		await expect(gitDiff(invalidRoot, {})).rejects.toThrow('Invalid git root');
+	});
+});
+
+describe('gitStage', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('sends ONE call for 3 paths', async () => {
+		let callCount = 0;
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			callCount++;
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitStage(validRoot, ['file1.ts', 'src/file2.ts', 'dir/file3.ts'], runner);
+		expect(callCount).toBe(1);
+		expect(receivedArgs).toEqual(['add', '--', 'file1.ts', 'src/file2.ts', 'dir/file3.ts']);
+	});
+
+	test('rejects a :pathspec prefix', async () => {
+		await expect(gitStage(validRoot, [':(top)file.ts'])).rejects.toThrow('Invalid path');
+		await expect(gitStage(validRoot, [':/file.ts'])).rejects.toThrow('Invalid path');
+	});
+
+	test('rejects more than 50 paths', async () => {
+		const paths = Array.from({ length: 51 }, (_, i) => `file_${i}.ts`);
+		await expect(gitStage(validRoot, paths)).rejects.toThrow('Invalid paths');
+	});
+
+	test('rejects empty paths array', async () => {
+		await expect(gitStage(validRoot, [])).rejects.toThrow('Invalid paths');
+	});
+
+	test('rejects an absolute path', async () => {
+		await expect(gitStage(validRoot, ['/home/user/my-repo/file.ts'])).rejects.toThrow(
+			'Invalid path'
+		);
+	});
+
+	test('rejects path traversal', async () => {
+		await expect(gitStage(validRoot, ['../outside.ts'])).rejects.toThrow('Invalid path');
+	});
+
+	test('rejects path with NUL byte or leading -', async () => {
+		await expect(gitStage(validRoot, ['safe.ts', 'bad\0.ts'])).rejects.toThrow('Invalid path');
+		await expect(gitStage(validRoot, ['-p'])).rejects.toThrow('Invalid path');
+	});
+
+	test('throws on non-zero exit without leaking command line or paths', async () => {
+		const runner: Runner = async () => ({ code: 1, stdout: 'fatal: pathspec did not match' });
+		await expect(gitStage(validRoot, ['file.ts'], runner)).rejects.toThrow('git stage failed');
+	});
+
+	test('throws on rejected runner without leaking error details', async () => {
+		const runner: Runner = async () => {
+			throw new Error('/usr/bin/git add failed in /secret/path');
+		};
+		await expect(gitStage(validRoot, ['file.ts'], runner)).rejects.toThrow('git stage failed');
+	});
+});
+
+describe('gitCommit', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('passes exact argv containing no --amend, -S, or -a and returns short hash', async () => {
+		const receivedCalls: string[][] = [];
+		const runner: Runner = async (args) => {
+			receivedCalls.push(args);
+			if (args[0] === 'commit') {
+				return { code: 0, stdout: '[main 5f6e0ac] feat: commit message\n' };
+			}
+			if (args[0] === 'rev-parse') {
+				return { code: 0, stdout: '5f6e0ac\n' };
+			}
+			return { code: 0, stdout: '' };
+		};
+
+		const res = await gitCommit(validRoot, 'feat: commit message', runner);
+		expect(res).toEqual({ hash: '5f6e0ac' });
+		expect(receivedCalls).toHaveLength(2);
+		expect(receivedCalls[0]).toEqual(['commit', '-m', 'feat: commit message']);
+		expect(receivedCalls[1]).toEqual(['rev-parse', '--short', 'HEAD']);
+
+		const commitArgv = receivedCalls[0];
+		expect(commitArgv).not.toContain('--amend');
+		expect(commitArgv).not.toContain('-S');
+		expect(commitArgv).not.toContain('-a');
+		expect(commitArgv).not.toContain('--no-verify');
+	});
+
+	test('rejects a leading - in commit message', async () => {
+		await expect(gitCommit(validRoot, '--amend')).rejects.toThrow('Invalid commit message');
+		await expect(gitCommit(validRoot, '-m evil')).rejects.toThrow('Invalid commit message');
+		await expect(gitCommit(validRoot, '  -S sign')).rejects.toThrow('Invalid commit message');
+	});
+
+	test('rejects a 2001-char message', async () => {
+		const longMessage = 'a'.repeat(2001);
+		await expect(gitCommit(validRoot, longMessage)).rejects.toThrow('Invalid commit message');
+	});
+
+	test('accepts a 2000-char message', async () => {
+		const maxMessage = 'a'.repeat(2000);
+		const runner: Runner = async (args) => {
+			if (args[0] === 'rev-parse') return { code: 0, stdout: 'abcdef1\n' };
+			return { code: 0, stdout: '' };
+		};
+		const res = await gitCommit(validRoot, maxMessage, runner);
+		expect(res).toEqual({ hash: 'abcdef1' });
+	});
+
+	test('rejects empty or whitespace-only commit message', async () => {
+		await expect(gitCommit(validRoot, '')).rejects.toThrow('Invalid commit message');
+		await expect(gitCommit(validRoot, '   \n\t  ')).rejects.toThrow('Invalid commit message');
+	});
+
+	test('throws on commit failure without leaking details', async () => {
+		const runner: Runner = async (args) => {
+			if (args[0] === 'commit') {
+				return { code: 1, stdout: 'error: nothing to commit' };
+			}
+			return { code: 0, stdout: '5f6e0ac\n' };
+		};
+		await expect(gitCommit(validRoot, 'feat: something', runner)).rejects.toThrow(
+			'git commit failed'
+		);
+	});
+
+	test('throws on rev-parse failure without leaking details', async () => {
+		const runner: Runner = async (args) => {
+			if (args[0] === 'rev-parse') {
+				return { code: 1, stdout: 'fatal: ambiguous argument' };
+			}
+			return { code: 0, stdout: '' };
+		};
+		await expect(gitCommit(validRoot, 'feat: something', runner)).rejects.toThrow(
+			'git commit failed'
+		);
+	});
+
+	test('throws on rejected runner without leaking details', async () => {
+		const runner: Runner = async () => {
+			throw new Error('/usr/bin/git commit failed in /secret/path');
+		};
+		await expect(gitCommit(validRoot, 'feat: something', runner)).rejects.toThrow(
+			'git commit failed'
+		);
+	});
+});
+
+describe('gitWorktreeList', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('passes exact arguments to runner', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitWorktreeList(validRoot, runner);
+		expect(receivedArgs).toEqual(['worktree', 'list', '--porcelain']);
+	});
+
+	test('parses porcelain form including detached head and stripped refs/heads/', async () => {
+		const stdout = [
+			'worktree /home/user/my-repo',
+			'HEAD 5f6e0ac9c9da1c3387096c7fc1539cac6b2abd0b',
+			'branch refs/heads/main',
+			'',
+			'worktree /home/user/wt/feature-x',
+			'HEAD 731a470f25eb0a6139edd3474eb6601eb94e5cd8',
+			'branch refs/heads/feat/ac-e2e',
+			'',
+			'worktree /home/user/wt/detached-wt',
+			'HEAD dff55b3edd590e89aa1597654c6580dcc9293d1f',
+			'detached',
+			''
+		].join('\n');
+
+		const runner: Runner = async () => ({ code: 0, stdout });
+		const worktrees = await gitWorktreeList(validRoot, runner);
+
+		expect(worktrees).toEqual([
+			{ path: '/home/user/my-repo', branch: 'main' },
+			{ path: '/home/user/wt/feature-x', branch: 'feat/ac-e2e' },
+			{ path: '/home/user/wt/detached-wt', branch: '(detached)' }
+		]);
+	});
+
+	test('falls back to (detached) when branch line is missing', async () => {
+		const stdout = ['worktree /home/user/wt/bare', 'HEAD 1234567'].join('\n');
+		const runner: Runner = async () => ({ code: 0, stdout });
+		const worktrees = await gitWorktreeList(validRoot, runner);
+		expect(worktrees).toEqual([{ path: '/home/user/wt/bare', branch: '(detached)' }]);
+	});
+
+	test('handles empty stdout without error', async () => {
+		const runner: Runner = async () => ({ code: 0, stdout: '' });
+		const worktrees = await gitWorktreeList(validRoot, runner);
+		expect(worktrees).toEqual([]);
+	});
+
+	test('throws on non-zero exit without leaking details', async () => {
+		const runner: Runner = async () => ({ code: 1, stdout: 'fatal: not a git repository' });
+		await expect(gitWorktreeList(validRoot, runner)).rejects.toThrow('git worktree list failed');
+	});
+
+	test('throws on rejected runner without leaking details', async () => {
+		const runner: Runner = async () => {
+			throw new Error('git worktree failed in /secret/path');
+		};
+		await expect(gitWorktreeList(validRoot, runner)).rejects.toThrow('git worktree list failed');
+	});
+});
+
+describe('gitWorktreeAdd', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('passes exact arguments without -b', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitWorktreeAdd(validRoot, '/home/user/my-repo/wt-1', 'feature-branch', runner);
+		expect(receivedArgs).toEqual(['worktree', 'add', '/home/user/my-repo/wt-1', 'feature-branch']);
+		expect(receivedArgs).not.toContain('-b');
+	});
+
+	test('rejects a .. branch', async () => {
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', 'feat/../bad')).rejects.toThrow(
+			'Invalid branch'
+		);
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', '..')).rejects.toThrow(
+			'Invalid branch'
+		);
+	});
+
+	test('rejects branch with illegal characters or leading -', async () => {
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', '-b')).rejects.toThrow(
+			'Invalid branch'
+		);
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', 'feature branch')).rejects.toThrow(
+			'Invalid branch'
+		);
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', 'a'.repeat(101))).rejects.toThrow(
+			'Invalid branch'
+		);
+	});
+
+	test('rejects path equal to the root', async () => {
+		await expect(gitWorktreeAdd(validRoot, validRoot.path, 'feature-branch')).rejects.toThrow(
+			'Invalid worktree path'
+		);
+	});
+
+	test('rejects non-absolute path', async () => {
+		await expect(gitWorktreeAdd(validRoot, 'relative/wt', 'feature-branch')).rejects.toThrow(
+			'Invalid path'
+		);
+	});
+
+	test('rejects path containing .. segment', async () => {
+		await expect(
+			gitWorktreeAdd(validRoot, '/home/user/../secret', 'feature-branch')
+		).rejects.toThrow('Invalid path');
+	});
+
+	test('rejects path starting with -', async () => {
+		await expect(gitWorktreeAdd(validRoot, '-wt', 'feature-branch')).rejects.toThrow(
+			'Invalid path'
+		);
+	});
+
+	test('throws on non-zero exit without leaking details', async () => {
+		const runner: Runner = async () => ({
+			code: 1,
+			stdout: 'fatal: already exists at /secret/path'
+		});
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', 'main', runner)).rejects.toThrow(
+			'git worktree add failed'
+		);
+	});
+
+	test('throws on rejected runner without leaking details', async () => {
+		const runner: Runner = async () => {
+			throw new Error('failed in /secret/path');
+		};
+		await expect(gitWorktreeAdd(validRoot, '/home/user/wt-1', 'main', runner)).rejects.toThrow(
+			'git worktree add failed'
+		);
+	});
+});
+
+describe('gitWorktreeRemove', () => {
+	const validRoot: GitRoot = { name: 'my-repo', path: '/home/user/my-repo' };
+
+	test('passes exact arguments containing no --force', async () => {
+		let receivedArgs: string[] = [];
+		const runner: Runner = async (args) => {
+			receivedArgs = args;
+			return { code: 0, stdout: '' };
+		};
+		await gitWorktreeRemove(validRoot, '/home/user/my-repo/wt-1', runner);
+		expect(receivedArgs).toEqual(['worktree', 'remove', '/home/user/my-repo/wt-1']);
+		expect(receivedArgs).not.toContain('--force');
+		expect(receivedArgs).not.toContain('-f');
+	});
+
+	test('rejects path starting with - such as --force or -f', async () => {
+		await expect(gitWorktreeRemove(validRoot, '--force')).rejects.toThrow('Invalid worktree path');
+		await expect(gitWorktreeRemove(validRoot, '-f')).rejects.toThrow('Invalid worktree path');
+	});
+
+	test('rejects path equal to root.path', async () => {
+		await expect(gitWorktreeRemove(validRoot, validRoot.path)).rejects.toThrow(
+			'Invalid worktree path'
+		);
+	});
+
+	test('rejects path containing .. segment or NUL byte', async () => {
+		await expect(gitWorktreeRemove(validRoot, '/home/user/../secret')).rejects.toThrow(
+			'Invalid worktree path'
+		);
+		await expect(gitWorktreeRemove(validRoot, '/home/user/wt\0')).rejects.toThrow(
+			'Invalid worktree path'
+		);
+	});
+
+	test('throws on non-zero exit without leaking details', async () => {
+		const runner: Runner = async () => ({
+			code: 1,
+			stdout: 'fatal: contains modified or untracked files in /secret/path'
+		});
+		await expect(gitWorktreeRemove(validRoot, '/home/user/wt-1', runner)).rejects.toThrow(
+			'git worktree remove failed'
+		);
+	});
+
+	test('throws on rejected runner without leaking details', async () => {
+		const runner: Runner = async () => {
+			throw new Error('failed in /secret/path');
+		};
+		await expect(gitWorktreeRemove(validRoot, '/home/user/wt-1', runner)).rejects.toThrow(
+			'git worktree remove failed'
+		);
 	});
 });
 

@@ -38,7 +38,8 @@ export const FEATURE_ACCESS: Readonly<Record<string, FeatureRequirement>> = Obje
 	tools: 'any',
 	devices: 'any',
 	memories: 'any',
-	git: 'any'
+	git: 'any',
+	automations: 'any'
 });
 
 /** Navigation that must stay reachable, including the Tools screen that re-enables the rest. */

@@ -7,6 +7,7 @@
 
 	type GitFile = { path: string; code: string };
 	type GitCommit = { hash: string; date: string; subject: string };
+	type GitWorktree = { path: string; branch: string };
 	type GitData = {
 		root: { name: string };
 		status: {
@@ -22,6 +23,68 @@
 	let noRoot = $state(false);
 	let error = $state<string | null>(null);
 	let data = $state<GitData | null>(null);
+
+	// Action & policy states
+	let actionLoading = $state<string | null>(null);
+	let policyNotice = $state<string | null>(null);
+	let actionError = $state<string | null>(null);
+
+	// Selection & staging
+	let selectedPaths = $state<string[]>([]);
+
+	// Diff state
+	let selectedDiffPath = $state<string | null>(null);
+	let diffStaged = $state(false);
+	let diffContent = $state<string | null>(null);
+
+	// Commit state
+	let commitMessage = $state("");
+	let lastCommitHash = $state<string | null>(null);
+
+	// Worktrees state
+	let worktrees = $state<GitWorktree[] | null>(null);
+	let newWorktreePath = $state("");
+	let newWorktreeBranch = $state("");
+
+	function hasStagedFiles(): boolean {
+		if (!data?.status.files || data.status.files.length === 0) return false;
+		return data.status.files.some((f) => f.code !== "??" && f.code !== "!");
+	}
+
+	let isCommitDisabled = $derived(
+		Boolean(actionLoading) || commitMessage.trim().length === 0 || !hasStagedFiles()
+	);
+
+	function verbForAction(action: string): string {
+		if (action === "diff") return "git_diff";
+		if (action === "stage") return "git_stage";
+		if (action === "commit") return "git_commit";
+		if (action.startsWith("worktree")) return "git_worktree";
+		return action;
+	}
+
+	async function postGit(payload: Record<string, unknown>): Promise<Response> {
+		const action = typeof payload.action === "string" ? payload.action : "";
+		const url = data?.root.name ? `/api/git?root=${encodeURIComponent(data.root.name)}` : "/api/git";
+		const res = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(payload)
+		});
+
+		if (res.status === 403) {
+			const body = (await res.json().catch(() => null)) as {
+				verb?: string;
+				message?: string;
+				error?: string;
+			} | null;
+			const verb = body?.verb ?? verbForAction(action);
+			policyNotice = `Writes for "${verb}" are denied by default on this server (the operator must allow it in GIT_POLICY_JSON).`;
+			actionError = null;
+		}
+
+		return res;
+	}
 
 	async function load() {
 		loading = true;
@@ -42,6 +105,7 @@
 				data = null;
 			} else {
 				data = (await res.json()) as GitData;
+				await fetchWorktrees();
 			}
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : "Failed to load git status.";
@@ -51,16 +115,202 @@
 		}
 	}
 
+	async function loadDiff(path: string, staged: boolean) {
+		actionLoading = "diff";
+		policyNotice = null;
+		actionError = null;
+		try {
+			const res = await postGit({ action: "diff", path, staged });
+			if (res.status === 403) {
+				diffContent = null;
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Diff failed with status ${res.status}`;
+				diffContent = null;
+				return;
+			}
+			const body = (await res.json()) as { root: { name: string }; diff: string };
+			diffContent = body.diff;
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to load diff.";
+			diffContent = null;
+		} finally {
+			actionLoading = null;
+		}
+	}
+
+	async function selectDiff(path: string) {
+		selectedDiffPath = path;
+		await loadDiff(path, diffStaged);
+	}
+
+	async function toggleDiffStaged(staged: boolean) {
+		diffStaged = staged;
+		if (selectedDiffPath) {
+			await loadDiff(selectedDiffPath, staged);
+		}
+	}
+
+	function isSelected(path: string): boolean {
+		return selectedPaths.includes(path);
+	}
+
+	function toggleSelect(path: string) {
+		if (selectedPaths.includes(path)) {
+			selectedPaths = selectedPaths.filter((p) => p !== path);
+		} else {
+			selectedPaths = [...selectedPaths, path];
+		}
+	}
+
+	async function stageSelected() {
+		if (selectedPaths.length === 0) return;
+		actionLoading = "stage";
+		policyNotice = null;
+		actionError = null;
+		try {
+			const res = await postGit({ action: "stage", paths: selectedPaths });
+			if (res.status === 403) {
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Stage failed with status ${res.status}`;
+				return;
+			}
+			selectedPaths = [];
+			await load();
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to stage files.";
+		} finally {
+			actionLoading = null;
+		}
+	}
+
+	async function commitChanges() {
+		if (isCommitDisabled) return;
+		actionLoading = "commit";
+		policyNotice = null;
+		actionError = null;
+		lastCommitHash = null;
+		try {
+			const res = await postGit({ action: "commit", message: commitMessage });
+			if (res.status === 403) {
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Commit failed with status ${res.status}`;
+				return;
+			}
+			const result = (await res.json()) as { root: { name: string }; hash: string };
+			lastCommitHash = result.hash;
+			commitMessage = "";
+			await load();
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to create commit.";
+		} finally {
+			actionLoading = null;
+		}
+	}
+
+	async function fetchWorktrees() {
+		actionLoading = "worktree-list";
+		try {
+			const res = await postGit({ action: "worktree-list" });
+			if (res.status === 403) {
+				worktrees = [];
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Failed to list worktrees (${res.status})`;
+				worktrees = [];
+				return;
+			}
+			const result = (await res.json()) as {
+				root: { name: string };
+				worktrees: GitWorktree[];
+			};
+			worktrees = result.worktrees;
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to fetch worktrees.";
+			worktrees = [];
+		} finally {
+			actionLoading = null;
+		}
+	}
+
+	async function addWorktree() {
+		const path = newWorktreePath.trim();
+		const branch = newWorktreeBranch.trim();
+		if (!path || !branch) return;
+		actionLoading = "worktree-add";
+		policyNotice = null;
+		actionError = null;
+		try {
+			const res = await postGit({ action: "worktree-add", path, branch });
+			if (res.status === 403) {
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Failed to add worktree (${res.status})`;
+				return;
+			}
+			newWorktreePath = "";
+			newWorktreeBranch = "";
+			await fetchWorktrees();
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to add worktree.";
+		} finally {
+			actionLoading = null;
+		}
+	}
+
+	async function removeWorktree(path: string) {
+		const confirmed = window.confirm(`Remove worktree at "${path}"?`);
+		if (!confirmed) return;
+		actionLoading = "worktree-remove";
+		policyNotice = null;
+		actionError = null;
+		try {
+			const res = await postGit({ action: "worktree-remove", path });
+			if (res.status === 403) {
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => null)) as { error?: string } | null;
+				actionError = body?.error ?? `Failed to remove worktree (${res.status})`;
+				return;
+			}
+			await fetchWorktrees();
+		} catch (e: unknown) {
+			actionError = e instanceof Error ? e.message : "Failed to remove worktree.";
+		} finally {
+			actionLoading = null;
+		}
+	}
+
 	onMount(load);
 </script>
 
 <View
 	title="Git"
 	icon="fork"
-	subtitle="Read-only repository inspection for server-configured roots. Stage, commit, and push operations are not supported in this build."
+	subtitle="Repository inspection and guarded write operations. Status and commits are read-only; stage, commit, and worktree actions are gated by a server policy that denies by default. No push, no PR, no --amend."
 >
 	{#snippet actions()}
-		<button class="btn" onclick={load} disabled={loading}>Refresh</button>
+		<button
+			type="button"
+			class="btn"
+			onclick={load}
+			disabled={loading || Boolean(actionLoading)}
+		>
+			Refresh
+		</button>
 	{/snippet}
 
 	{#if loading && !data && !disabled && !noRoot && !error}
@@ -87,7 +337,30 @@
 			<span class="mono text-ink-2">{data.status.branch || "HEAD"}</span>
 		</div>
 
-		<h2 class="mb-2 text-[15px] font-semibold">Working tree</h2>
+		{#if policyNotice}
+			<p class="mb-4 text-[13px] leading-relaxed text-ink-2" role="status">
+				{policyNotice}
+			</p>
+		{/if}
+
+		{#if actionError}
+			<p class="mb-4 text-[13px] leading-relaxed text-ink-2" role="status">
+				{actionError}
+			</p>
+		{/if}
+
+		<div class="mb-2 flex items-center justify-between">
+			<h2 class="text-[15px] font-semibold text-ink">Working tree</h2>
+			<button
+				type="button"
+				class="btn text-[12px]"
+				onclick={stageSelected}
+				disabled={Boolean(actionLoading) || selectedPaths.length === 0}
+			>
+				Stage selected {selectedPaths.length > 0 ? `(${selectedPaths.length})` : ""}
+			</button>
+		</div>
+
 		{#if !data.status.files || data.status.files.length === 0}
 			<p class="text-[13px] text-ink-2" role="status">Working tree clean.</p>
 		{:else}
@@ -96,15 +369,38 @@
 					<caption class="sr-only">Working tree changes</caption>
 					<thead class="bg-panel-2 text-ink-2">
 						<tr>
+							<th scope="col" class="w-10 px-4 py-3 font-medium">
+								<span class="sr-only">Select</span>
+							</th>
 							<th scope="col" class="w-20 px-4 py-3 font-medium">Status</th>
 							<th scope="col" class="px-4 py-3 font-medium">Path</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each data.status.files as file}
-							<tr class="border-t border-line">
+							<tr
+								class="border-t border-line hover:bg-panel-2 cursor-pointer {selectedDiffPath === file.path ? 'bg-panel-2' : ''}"
+								onclick={() => selectDiff(file.path)}
+							>
+								<td class="w-10 px-4 py-2.5">
+									<input
+										type="checkbox"
+										aria-label={`Select ${file.path}`}
+										checked={isSelected(file.path)}
+										onchange={() => toggleSelect(file.path)}
+										onclick={(e) => e.stopPropagation()}
+									/>
+								</td>
 								<td class="mono px-4 py-2.5 font-medium text-ink-2">{file.code}</td>
-								<td class="mono px-4 py-2.5 text-ink">{file.path}</td>
+								<td class="mono px-4 py-2.5 text-ink">
+									<button
+										type="button"
+										class="mono w-full text-left text-ink hover:underline"
+										onclick={() => selectDiff(file.path)}
+									>
+										{file.path}
+									</button>
+								</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -114,6 +410,157 @@
 				<p class="mt-2 text-[12px] text-ink-3">Showing the first 500 entries.</p>
 			{/if}
 		{/if}
+
+		<div class="mt-6 flex flex-col gap-2">
+			<div class="flex items-center justify-between">
+				<h3 class="text-[14px] font-medium text-ink">
+					Diff: <span class="mono text-ink-2">{selectedDiffPath ?? "No file selected"}</span>
+				</h3>
+				<label class="inline-flex items-center gap-1.5 text-[12px] text-ink-2">
+					<input
+						type="checkbox"
+						checked={diffStaged}
+						onchange={(e) => toggleDiffStaged(e.currentTarget.checked)}
+						disabled={Boolean(actionLoading)}
+					/>
+					<span>Staged changes</span>
+				</label>
+			</div>
+			{#if actionLoading === "diff"}
+				<p class="text-[13px] text-ink-2" role="status">Loading diff…</p>
+			{:else if diffContent !== null}
+				{#if diffContent.length === 0}
+					<p class="text-[13px] text-ink-2" role="status">No changes in diff for {selectedDiffPath}.</p>
+				{:else}
+					<pre
+						class="mono max-h-80 overflow-y-auto rounded border border-line bg-panel p-3 text-[12px] leading-relaxed text-ink whitespace-pre-wrap">{diffContent}</pre>
+				{/if}
+			{:else}
+				<p class="text-[13px] text-ink-2" role="status">Select a row in the table above to view its diff.</p>
+			{/if}
+		</div>
+
+		<section class="mt-6">
+			<h2 class="mb-2 text-[15px] font-semibold text-ink">Commit changes</h2>
+			<div class="flex flex-col gap-2">
+				<label for="git-commit-message" class="text-[13px] font-medium text-ink-2">
+					Commit message
+				</label>
+				<textarea
+					id="git-commit-message"
+					class="w-full rounded border border-line bg-panel p-2.5 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-line"
+					rows="3"
+					maxlength="2000"
+					bind:value={commitMessage}
+					placeholder="Write a commit message…"
+					disabled={Boolean(actionLoading)}
+				></textarea>
+				<div class="flex items-center justify-between">
+					<span class="text-[12px] text-ink-3">{commitMessage.length} / 2000</span>
+					<button
+						type="button"
+						class="btn"
+						onclick={commitChanges}
+						disabled={isCommitDisabled}
+					>
+						Commit
+					</button>
+				</div>
+				{#if lastCommitHash}
+					<p class="text-[13px] text-ink" role="status">
+						Committed commit <span class="mono font-medium">{lastCommitHash}</span>.
+					</p>
+				{/if}
+			</div>
+		</section>
+
+		<section class="mt-6">
+			<div class="mb-2 flex items-center justify-between">
+				<h2 class="text-[15px] font-semibold text-ink">Worktrees</h2>
+				<button
+					type="button"
+					class="btn text-[12px]"
+					onclick={fetchWorktrees}
+					disabled={Boolean(actionLoading)}
+				>
+					Refresh worktrees
+				</button>
+			</div>
+
+			{#if actionLoading === "worktree-list"}
+				<p class="text-[13px] text-ink-2" role="status">Loading worktrees…</p>
+			{:else if !worktrees || worktrees.length === 0}
+				<p class="text-[13px] text-ink-2" role="status">No worktrees configured.</p>
+			{:else}
+				<div class="card overflow-x-auto">
+					<table class="w-full min-w-[480px] text-left text-[12px]">
+						<caption class="sr-only">Git worktrees</caption>
+						<thead class="bg-panel-2 text-ink-2">
+							<tr>
+								<th scope="col" class="px-4 py-3 font-medium">Path</th>
+								<th scope="col" class="w-36 px-4 py-3 font-medium">Branch</th>
+								<th scope="col" class="w-24 px-4 py-3 font-medium text-right">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each worktrees as wt}
+								<tr class="border-t border-line">
+									<td class="mono px-4 py-2.5 text-ink">{wt.path}</td>
+									<td class="mono px-4 py-2.5 text-ink-2">{wt.branch}</td>
+									<td class="px-4 py-2.5 text-right">
+										<button
+											type="button"
+											class="text-[12px] text-ink-2 hover:text-ink underline"
+											onclick={() => removeWorktree(wt.path)}
+											disabled={Boolean(actionLoading)}
+										>
+											Remove
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+
+			<div class="mt-3 flex flex-wrap items-end gap-2">
+				<div class="flex flex-col gap-1">
+					<label for="worktree-path-input" class="text-[12px] font-medium text-ink-2">
+						Worktree path
+					</label>
+					<input
+						id="worktree-path-input"
+						type="text"
+						class="rounded border border-line bg-panel px-2.5 py-1.5 text-[12px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-line"
+						placeholder="/absolute/path"
+						bind:value={newWorktreePath}
+						disabled={Boolean(actionLoading)}
+					/>
+				</div>
+				<div class="flex flex-col gap-1">
+					<label for="worktree-branch-input" class="text-[12px] font-medium text-ink-2">
+						Branch
+					</label>
+					<input
+						id="worktree-branch-input"
+						type="text"
+						class="rounded border border-line bg-panel px-2.5 py-1.5 text-[12px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-line"
+						placeholder="branch-name"
+						bind:value={newWorktreeBranch}
+						disabled={Boolean(actionLoading)}
+					/>
+				</div>
+				<button
+					type="button"
+					class="btn text-[12px]"
+					onclick={addWorktree}
+					disabled={Boolean(actionLoading) || !newWorktreePath.trim() || !newWorktreeBranch.trim()}
+				>
+					Add worktree
+				</button>
+			</div>
+		</section>
 
 		<h2 class="mt-6 mb-2 text-[15px] font-semibold">Recent commits</h2>
 		{#if !data.commits || data.commits.length === 0}

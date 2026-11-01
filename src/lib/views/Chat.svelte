@@ -18,6 +18,8 @@
   import { Icon } from "../../../shared/icons/index.js";
   import RecoveryNotice from "#lib/RecoveryNotice.svelte";
   import RichText from "#lib/RichText.svelte";
+  import ArtifactFrame from "#lib/ArtifactFrame.svelte";
+  import { extractArtifact } from "#lib/artifact.js";
   import ModelCapabilities from "#lib/ModelCapabilities.svelte";
   import { api, get, post, postAudio } from "#lib/http.js";
   import { projectStore } from "#lib/projects.js";
@@ -312,6 +314,9 @@
   let byokKeyHeld = $state(false);
   let serverProvider = $state<AiProvider | "">("");
   let serverModel = $state("");
+  // Tool use is off unless the server also sets AI_TOOLS_ENABLED. Three things must agree:
+  // this switch, the policy entry, and the server flag.
+  let serverToolUse = $state(false);
   let activeAbortController: AbortController | null = null;
 
   function serverAiAvailable(): boolean {
@@ -1144,8 +1149,10 @@
     attachments = [];
     await scrollEnd(true);
 
-    const history: ChatMessage[] = (session?.turns ?? []).flatMap((t: any) => [
-      { role: "user" as const, content: t.content },
+    // The Convex action takes text only, so this path stays on the plain string contract.
+    type CloudMessage = { role: "user" | "assistant"; content: string };
+    const history: CloudMessage[] = (session?.turns ?? []).flatMap((t: any) => [
+      { role: "user" as const, content: String(t.content ?? "") },
       ...(t.replies ?? [])
         .filter((r: any) => r.text && !r.error)
         .map((r: any) => ({
@@ -1153,7 +1160,7 @@
           content: r.text,
         })),
     ]);
-    const messages: ChatMessage[] = [...history, { role: "user" as const, content }];
+    const messages: CloudMessage[] = [...history, { role: "user" as const, content }];
     const ref = modelId.includes("/") ? modelId : `openai/${modelId}`;
 
     const startMs = Date.now();
@@ -1274,6 +1281,7 @@
           apiKey,
           messages,
           ...(memory ? { memory } : {}),
+          ...(serverToolUse ? { toolUse: true } : {}),
         },
         (partial) => {
           job = { ...job, partial };
@@ -2007,6 +2015,10 @@
                     class="reply-text"
                   >
                     <RichText text={reply.text ?? ""} />
+                    {#if extractArtifact(reply.text ?? "")}
+                      {@const view = extractArtifact(reply.text ?? "")!}
+                      <ArtifactFrame html={view.html} title={view.title} />
+                    {/if}
                   </div>
                 {/if}
                 {#if reply.comparison_timing}<p class="reply-note">
@@ -2133,6 +2145,10 @@
                 class="reply-text"
               >
                 <RichText text={completed.text ?? ""} />
+                {#if extractArtifact(completed.text ?? "")}
+                  {@const view = extractArtifact(completed.text ?? "")!}
+                  <ArtifactFrame html={view.html} title={view.title} />
+                {/if}
               </div>
               <div class="reply-footer">{@render replyMetrics(metrics(completed))}</div>{/if}
           </article>{/each}
@@ -3105,6 +3121,15 @@
                 >
               </div>
               {#if byokKeyNotice}<p class="inspector-note" role="status">{byokKeyNotice}</p>{/if}
+              <label class="inspector-check"
+                ><input type="checkbox" bind:checked={serverToolUse} disabled={busy || !!operation} />
+                Let this turn use tools</label
+              >
+              <p class="inspector-note">
+                Off by default, and only works when the server sets <code>AI_TOOLS_ENABLED=true</code>
+                and its policy allows the verb. A denied verb is shown as denied, never silently
+                skipped.
+              </p>
             </section>{/if}
           <div class="inspector-field">
             <span>Model</span><AppSelect
@@ -3816,6 +3841,13 @@
     line-height: 1.5;
     color: var(--color-ink-2);
     margin: 0 0 10px;
+  }
+  .shared-chat-panel .inspector-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    margin-bottom: 6px;
   }
   .shared-chat-panel :global(.speech-controls),
   .shared-chat-panel :global(.microphone-select) {

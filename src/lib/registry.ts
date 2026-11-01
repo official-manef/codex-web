@@ -193,9 +193,19 @@ export const SECTIONS = [
 		icon: 'fork',
 		group: 'Settings & help',
 		navigationRole: 'settings',
-		// Read-only status and history for roots the server operator allowlisted. No stage,
-		// commit or push: that needs a process boundary this build does not have.
+		// Read-only status and history for roots the server operator allowlisted. Stage,
+		// commit and worktree are gated by a policy that denies by default.
 		loadScreen: () => import('#lib/views/Git.svelte')
+	},
+	{
+		id: 'automations',
+		label: 'Scheduled tasks',
+		icon: 'workflow',
+		group: 'Settings & help',
+		navigationRole: 'settings',
+		// Records intent only. The runner that would call a model is not implemented, and the
+		// view says so rather than showing a scheduler that never fires.
+		loadScreen: () => import('#lib/views/Automations.svelte')
 	}
 ] as const;
 
