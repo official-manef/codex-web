@@ -230,6 +230,15 @@ const SURFACES: readonly Surface[] = [
 		honest: /not configured|does not run them yet/i
 	},
 	{
+		id: 'mcp-apps',
+		open: (page) => settings(page, 'MCP apps'),
+		root: dialogContent,
+		honest: /no apps|not configured|allowlist|nothing is registered/i,
+		// `/api/mcp/apps` answers 404 until an operator sets MCP_APPS_ENABLED and an allowlist.
+		// The view reports that as a closed panel, so the 404 is the honest state, not a failure.
+		degraded: /\/api\/mcp\/apps/
+	},
+	{
 		id: 'chat-tools',
 		open: (page) => userMenuItem(page, /^Integrations$/),
 		root: dialogContent,

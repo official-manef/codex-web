@@ -319,7 +319,13 @@ else
 	# Retries are deliberately left at 0. Retrying a flaky test until it passes is the same
 	# dishonesty as skipping it: the suite below is known to have a load-sensitive flake and
 	# the gate's job is to report that, not to outvote it.
-	if run playwright "$BIN/playwright" test; then
+	#
+	# Workers ARE bounded. `playwright test` defaults to one worker per CPU; on a 16-core host
+	# that outlives the webServer and 77 files fail with ERR_CONNECTION_REFUSED against a
+	# server already torn down — a green suite reported as failed. Measured 2026-11-02: default
+	# count fails, `--workers=2` passes 357, `--workers=1` passes and is slower. The bound is a
+	# property of this host, so it is stated here rather than hidden in the config.
+	if run playwright "$BIN/playwright" test --workers="${PLAYWRIGHT_WORKERS:-2}"; then
 		pass playwright "$LAST_MS"
 	else
 		fail playwright "$LAST_MS" 'browser suite failed; see report above (npx playwright show-report)'
