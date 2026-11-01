@@ -388,11 +388,14 @@
   {#if !resource}{@render resourceToolbar()}{/if}
 
   <div class="file-body" bind:clientWidth={bodyWidth}>
-    <main
+    <!-- A `main` inside the shell's own `main#workspace` gave the page two main landmarks; the
+         unnamed inner one was the only landmark in this view with no accessible name. -->
+    <div
       id="file-view-content"
       class="file-content"
       aria-live="polite"
-      role={selected ? "tabpanel" : undefined}
+      role={selected ? "tabpanel" : "region"}
+      aria-label={selected ? undefined : "File content"}
       aria-labelledby={selected ? `file-tab-${openFiles.indexOf(selected)}` : undefined}
     >
       {#if loading}
@@ -418,7 +421,7 @@
           >
         </div>
       {/if}
-    </main>
+    </div>
     {#if widthBounds.max > widthBounds.min}
       <PanelResizeHandle
         bind:value={treeWidth}

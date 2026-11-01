@@ -13,16 +13,17 @@ Last verified against the tree: `dff55b3`, 2026-11-02.
 
 ## Start here
 
-| If you need…                           | Read                                                            |
-| -------------------------------------- | --------------------------------------------------------------- |
-| What this build actually is right now  | [architecture.md](architecture.md)                              |
-| Whether a gate passes                  | [progress.md](progress.md)                                      |
-| Whether an acceptance criterion is met | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)          |
-| Which screen is real and which is not  | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)            |
-| Where the shell came from              | [laya-parity.md](laya-parity.md)                                |
-| Product scope and the AC bar           | [PRD.md](PRD.md) §5                                             |
-| Which env var does what                | [environment.md](environment.md)                                |
-| How to run, build and release          | [deployment.md](deployment.md), [CHECKLIST.md](../CHECKLIST.md) |
+| If you need…                             | Read                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| What this build actually is right now    | [architecture.md](architecture.md)                               |
+| Whether a gate passes                    | [progress.md](progress.md)                                       |
+| Whether an acceptance criterion is met   | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)           |
+| Which screen is real and which is not    | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)             |
+| Whether a screen is reachable and honest | [surface-coverage-2026-11-02.md](surface-coverage-2026-11-02.md) |
+| Where the shell came from                | [laya-parity.md](laya-parity.md)                                 |
+| Product scope and the AC bar             | [PRD.md](PRD.md) §5                                              |
+| Which env var does what                  | [environment.md](environment.md)                                 |
+| How to run, build and release            | [deployment.md](deployment.md), [CHECKLIST.md](../CHECKLIST.md)  |
 
 ## Index
 
@@ -43,6 +44,7 @@ is not always the last time its content was true.
 | [progress.md](progress.md)                                             | Living status, gate numbers, known-unproven claims               | 2026-11-02 | current    |
 | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)                 | AC01–AC18 verdict per criterion against the live app             | 2026-11-02 | current    |
 | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)                   | Every registry id classified real/partial/stub/guess             | 2026-11-02 | current    |
+| [surface-coverage-2026-11-02.md](surface-coverage-2026-11-02.md)       | Every registry id walked in a browser: reachable/named/honest    | 2026-11-02 | current    |
 | [laya-parity.md](laya-parity.md)                                       | Provenance of the vendored Laya shell, deliberate deviations     | 2026-10-29 | current    |
 | [terminal.md](terminal.md)                                             | Terminal panel client + the bridge contract and reference bridge | 2026-11-01 | current    |
 | [byok.md](byok.md)                                                     | Three engines, the never-hold-a-key rule, Jev boundary           | 2026-11-01 | current    |

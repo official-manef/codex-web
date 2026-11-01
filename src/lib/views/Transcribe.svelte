@@ -220,9 +220,13 @@
         onclick={() => fileInput?.click()}>Choose file</button
       >
       <p class="mt-2 text-[11.5px] text-ink-3">
-        {available
-          ? `Up to ${available.max_mb ?? "…"} MB and ${available.max_seconds ?? "…"} seconds.`
-          : "Waiting for the speech model status. Nothing is sent anywhere in this build."}
+        {#if available?.max_mb && available?.max_seconds}
+          Up to {available.max_mb} MB and {available.max_seconds} seconds.
+        {:else if available}
+          No file limit is reported: a speech model supplies it, and this build loads none.
+        {:else}
+          Waiting for the speech model status. Nothing is sent anywhere in this build.
+        {/if}
       </p>
     {/if}
   </div>
