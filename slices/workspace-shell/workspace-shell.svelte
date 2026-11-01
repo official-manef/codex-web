@@ -1706,6 +1706,18 @@
     gap: 8px;
     padding: 9px 5px 6px;
     background: var(--color-frame);
+    /* On a landscape phone the rail is taller than the viewport, and `margin-top: auto` on
+       `.rail-bottom` pinned Settings and Server controls below the fold with no way to reach
+       them. Scrolling turns an unreachable control into a reachable one; `auto` collapses to 0
+       while the content overflows, so nothing moves on a viewport that already fits. */
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .desktop-rail::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
   .desktop-rail > button {
     display: grid;

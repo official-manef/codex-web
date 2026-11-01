@@ -624,6 +624,22 @@ body {
 		cursor: pointer;
 	}
 
+	/* WCAG 2.2 SC 2.5.8 asks for a 24x24 CSS px target. The root size here is 13px, not 16px,
+	   so every rem-sized control lands at 81% of its nominal size: `h-7` is 22.75px, `h-6` is
+	   19.5px. The floor only grows controls that are already under the bar; anything at or
+	   above 24px keeps its exact size, so no layout moves. */
+	button,
+	summary,
+	[role='button'] {
+		min-height: 24px;
+	}
+
+	/* Square icon buttons are the one case where the width also falls short (`size-6` is
+	   19.5px). Text buttons are several times wider than 24px, so only these are floored. */
+	button:not(:has(> :is(span, small))) {
+		min-width: 24px;
+	}
+
 	::selection {
 		background: #3a3a3a;
 		color: #fff;
