@@ -196,6 +196,12 @@
     font-size: 12px;
     cursor: default;
   }
+  /* Keyboard highlight is `data-highlighted` only; give it an indicator that survives a
+     palette where --color-hover sits close to the menu background. */
+  :global(.workspace-menubar-item:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: -2px;
+  }
   :global(.workspace-menubar-item[data-highlighted]),
   :global(.workspace-menubar-item[data-state="open"]) {
     background: var(--color-hover);

@@ -565,6 +565,9 @@
           </p>
           <div class="comparison-table">
             <table>
+              <caption class="sr-only">
+                Total inference, server, HTTP and warmup timing per engine
+              </caption>
               <thead
                 ><tr
                   ><th>Device</th><th>Inference total</th><th>Server total</th><th>HTTP total</th

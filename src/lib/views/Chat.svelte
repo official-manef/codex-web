@@ -2414,6 +2414,7 @@
       onclick={closeSessionDrawer}
     ></button>{/if}
   <aside
+    id="chat-sessions"
     class="session-sidebar"
     class:session-drawer-open={navigationOpen}
     aria-label="Chat sessions"

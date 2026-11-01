@@ -129,7 +129,7 @@
       if (open) load();
     }}
     aria-expanded={open}
-    aria-controls={panelId}
+    aria-controls={open ? panelId : undefined}
     aria-label="Server controls"><Icon name="server" size={14} /><span>Server</span></button
   >
   {#if open}<section id={panelId} class="runtime-panel" aria-label="Local server controls">
