@@ -17,6 +17,7 @@ import type * as chat from "../chat.js";
 import type * as credentials from "../credentials.js";
 import type * as crypto from "../crypto.js";
 import type * as decisions from "../decisions.js";
+import type * as deployment_probe from "../deployment_probe.js";
 import type * as devices from "../devices.js";
 import type * as mcp from "../mcp.js";
 import type * as memories from "../memories.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   credentials: typeof credentials;
   crypto: typeof crypto;
   decisions: typeof decisions;
+  deployment_probe: typeof deployment_probe;
   devices: typeof devices;
   mcp: typeof mcp;
   memories: typeof memories;

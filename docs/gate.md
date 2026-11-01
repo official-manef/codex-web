@@ -109,9 +109,29 @@ count is the same in both:
 | State     | Environment line                                                                   | Skip reason starts with                                                     |
 | --------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `ready`   | `convex    READY     devices:list is deployed; anonymous call answered: ...`       | _(no skip permitted: a skip here is reported as UNPROVEN and investigated)_ |
-| `empty`   | `convex    EMPTY     http://127.0.0.1:3210 is up but has no functions pushed: ...` | `deployment reachable but auth boundary NOT proven: ...`                    |
+| `empty`   | `convex    EMPTY     http://127.0.0.1:3212 is up but has no functions pushed: ...` | `deployment reachable but auth boundary NOT proven: ...`                    |
 | `absent`  | `convex    ABSENT    nothing answered at http://127.0.0.1:9999 (fetch failed)`     | `no Convex deployment: nothing answered at ...`                             |
 | `unknown` | `convex    UNKNOWN   could not run src/convex/deployment_probe.ts`                 | whatever the suite reported; treated as not-ready                           |
+
+## The port is per project, so the gate resolves it instead of guessing
+
+Convex allocates the first free port pair from 3210 upwards, **per project**. On a machine with
+a second Convex project, `3210` is that project's backend: `ps` showed pid 63870 serving
+`/home/rahman/agent-work/kampungkomen/kampungkomen-shots`. A hardcoded port is therefore not
+just stale, it can measure somebody else's deployment — and a foreign `devices:list` answers
+`Please sign in.` exactly like ours, so the security tests would have gone green while proving
+nothing about this repo.
+
+This checkout's port lives in `.convex/local/default/config.json`. Both consumers read it
+through `scripts/convex-local.mjs`:
+
+- `vite.config.ts` sets `CONVEX_URL` before the suite runs;
+- `bin/gate` sets the same variable for its environment probe.
+
+An explicit `CONVEX_URL` in the environment still wins (that is how the table above is
+exercised), and `src/convex/deployment_probe.ts` no longer contains a default port at all: with
+none recorded, it reports `absent` — "no port was guessed". Pushing also needs Node 22 or 24;
+see `docs/convex-local-setup.md` for both traps and the exact reproduction.
 
 ## Worked example: the trap this gate was built for
 

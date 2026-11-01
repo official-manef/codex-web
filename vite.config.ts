@@ -1,6 +1,15 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { readLocalDeployment } from './scripts/convex-local.mjs';
+
+// Convex ports are per project, so the port this checkout owns is read from its own
+// `.convex/local/default/config.json` once, here, instead of being hardcoded in the spec. A
+// literal like 3210 is not merely fragile: on a machine running a second Convex project it is
+// that project's backend, and the auth spec would then be measuring a stranger's boundary.
+// An explicit `CONVEX_URL` in the environment still wins.
+const local = readLocalDeployment();
+if (local && !process.env.CONVEX_URL) process.env.CONVEX_URL = local.url;
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],

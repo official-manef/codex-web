@@ -36,9 +36,20 @@ $ curl -s -X POST http://127.0.0.1:3210/api/query -H 'Content-Type: application/
 Could not find public function for 'devices:list'."}
 ```
 
-So the anonymous-refusal claim is **unproven, not proven**. Run `npx convex dev` to push the
-schema and functions, then `npx vitest run` should report 0 skips in this file. An older gate
-pinned `CONVEX_URL=http://127.0.0.1:9999`, a dead port, which is what made the skip permanent.
+So the anonymous-refusal claim was **unproven at the time this was written**. It is now
+**proven** — see "The auth boundary is PROVEN" in `docs/progress.md` and
+`docs/convex-local-setup.md` for the reproduction. Push the schema and functions, then
+`npx vitest run` reports 0 skips in this file and all four auth tests pass:
+
+```sh
+export PATH="$HOME/.nvm/versions/node/v24.22.2/bin:$PATH"
+npx convex dev                  # pushes schema + functions, then watches
+npx vitest run src/convex/deployment.spec.ts --reporter=verbose
+```
+
+One trap worth knowing: the port is per project. `127.0.0.1:3210` on this machine belongs to
+another repository, so the spec no longer guesses a port — `CONVEX_URL` is resolved from
+`.convex/local/default/config.json` via `scripts/convex-local.mjs` (see the same doc).
 
 Convex needs **Node 22 or 24**, not 26 — it refuses to deploy `'use node'` actions otherwise,
 with `DeploymentNotConfiguredForNodeActions`. If `node -v` is 26, point the CLI at the version

@@ -31,20 +31,27 @@ const NO_FUNCTION = /could not find (?:public )?function/i;
 /** What `requireUser` and the Convex auth layer answer for a caller with no identity. */
 export const REFUSED = /[Ss]ign in|not_authenticated|Unauthorized|Not authenticated/;
 
-/**
- * The local `npx convex dev` port. Not 9999: that port is dead, so pointing a gate at it
- * forces this spec to skip forever while a real deployment sits here being ignored.
- */
-export const DEFAULT_DEPLOYMENT_URL = 'http://127.0.0.1:3210';
-
 /** A protected function that exists in every build; its absence means nothing was pushed. */
 const PROBE_PATH = 'devices:list';
 
-export function deploymentUrl(env: Record<string, string | undefined> = process.env): string {
+/**
+ * The deployment to probe, or `null` when this checkout has not named one.
+ *
+ * There is deliberately no hardcoded default. Ports are allocated per project from 3210
+ * upwards, so a literal number can point at a *different* project's backend — and a foreign
+ * deployment that happens to have a `devices:list` would answer "Please sign in." too, which
+ * would let this spec claim our boundary held while measuring somebody else's. The port is
+ * therefore resolved from `.convex/local/default/config.json` by `scripts/convex-local.mjs`
+ * and injected as `CONVEX_URL` (see `vite.config.ts` and `bin/gate`); an explicit env value
+ * still wins, which is how the state table in `docs/gate.md` is exercised.
+ */
+export function deploymentUrl(
+	env: Record<string, string | undefined> = process.env
+): string | null {
 	// A blank variable is an unset variable here: `CONVEX_URL= npx vitest run` must not turn
 	// into a request against the empty string.
 	const url = [env.CONVEX_URL, env.PUBLIC_CONVEX_URL].find((value) => value && value.trim());
-	return (url ?? DEFAULT_DEPLOYMENT_URL).trim().replace(/\/$/, '');
+	return url ? url.trim().replace(/\/$/, '') : null;
 }
 
 export type QueryAnswer = 'missing-functions' | 'ready' | 'unclassified';
@@ -74,9 +81,20 @@ function firstLine(text: string): string {
 }
 
 export async function probeDeployment(
-	url: string = deploymentUrl(),
+	url: string | null = deploymentUrl(),
 	fetcher: typeof fetch = fetch
 ): Promise<DeploymentProbe> {
+	if (url === null) {
+		// No deployment named and none recorded for this checkout. Reporting a guessed port here
+		// is exactly the mistake this module exists to stop, so it says so instead.
+		return {
+			url: '',
+			state: 'absent',
+			detail:
+				'this checkout names no Convex deployment (no CONVEX_URL/PUBLIC_CONVEX_URL and no ' +
+				'.convex/local/default/config.json), so no port was guessed'
+		};
+	}
 	const base = url.replace(/\/$/, '');
 
 	try {

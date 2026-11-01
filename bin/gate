@@ -108,9 +108,16 @@ CONVEX_DETAIL="probe did not run"
 CONVEX_FIX='npx convex dev'
 
 probe_convex() {
-	# Reuse the spec's own classifier instead of a second opinion implemented here.
+	# Reuse the spec's own classifier instead of a second opinion implemented here. `CONVEX_URL`
+	# is filled in from this checkout's `.convex/local/default/config.json` for the same reason
+	# `vite.config.ts` does it: ports are per project, so there is no safe constant to fall back
+	# on, and a stale one can point at a different project's backend.
 	local out
-	out="$(node -e "
+	out="$(CONVEX_URL="${CONVEX_URL:-$(node -e "
+		import('./scripts/convex-local.mjs')
+			.then((m) => process.stdout.write(m.readLocalDeployment()?.url ?? ''))
+			.catch(() => process.stdout.write(''));
+	" 2>/dev/null)}" node -e "
 		import('./src/convex/deployment_probe.ts')
 			.then(async (m) => {
 				const p = await m.probeDeployment();
