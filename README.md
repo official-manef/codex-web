@@ -94,14 +94,21 @@ matching credential per request. Boundaries and limits: [architecture](docs/arch
 ### Default model
 
 `nine-router` is the built-in self-hosted gateway. Its default catalog entry is
-`ctx/conextlab/ollama/deepseek-v4.1-flash:cloud` on priority 0, so that is the model a new
-session picks. Chat, shell execution and MCP all work through it.
+`cx/gpt-6.1-sol` on priority 0, so that is the model a new session picks. Chat, shell
+execution, MCP and sub-agents all work through it.
 
-It cannot do sub-agents: the gateway flattens a non-OpenAI upstream's `collaboration`
-namespace into one opaque function before the model sees it, so `spawn_agent` never
-arrives. `cx/gpt-6.1-sol` is the one upstream where sub-agents pass — switch to it when you
-need them, at the cost of a larger per-turn token count. Evidence and the failure
-signature: [progress](docs/progress.md), [AI/MCP](docs/ai-mcp.md).
+It is the default for two reasons, and both are silent failures on any other upstream:
+
+- **Sub-agents.** The gateway flattens a non-OpenAI upstream's `collaboration` namespace
+  into one opaque function before the model sees it, so `spawn_agent` never arrives.
+- **Images.** A screenshot sent through a non-OpenAI upstream comes back on a different
+  model entirely (`kimi-k2.7-code:cloud`, empty output), and its base64 is tokenised as
+  text — roughly 87× the real cost. A 2.3 MB full-page screenshot costs 17,274 tokens via
+  `cx/*` and blows past a million-token window anywhere else.
+
+`ctx/conextlab/ollama/deepseek-v4.1-flash:cloud` is still fine, and slightly cheaper, for
+text-only work. Evidence and the exact failure signatures: [progress](docs/progress.md),
+[AI/MCP](docs/ai-mcp.md).
 
 ## MANEF AI console
 

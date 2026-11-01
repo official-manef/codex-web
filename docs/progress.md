@@ -5,28 +5,39 @@ commit named at the top. If a line here disagrees with the code, the code wins �
 
 Baseline: `d839f75`, `main`, 2026-10-31.
 
-## Default model: `ctx/conextlab/ollama/deepseek-v4.1-flash:cloud`
+## Default model: `cx/gpt-6.1-sol`
 
-The `nine-router` catalog shipped in the companion Codex setup now puts
-`ctx/conextlab/ollama/deepseek-v4.1-flash:cloud` on priority 0, so it is what a new session
-picks. Measured 2026-11-01 against `https://router.antinrml.com/v1`:
+The `nine-router` catalog shipped in the companion Codex setup puts `cx/gpt-6.1-sol` on
+priority 0, so it is what a new session picks. Measured 2026-11-01 against
+`https://router.antinrml.com/v1`:
 
-| probe                    | result                                         |
-| ------------------------ | ---------------------------------------------- |
-| chat                     | pass, reply exact                              |
-| shell execution          | pass                                           |
-| `apply_patch`            | pass, verified on disk                         |
-| MCP tool call            | pass                                           |
-| token cost, trivial exec | 15,558                                         |
-| **sub-agents**           | **fail** — the upstream has no `collaboration` |
+| probe                          | `cx/gpt-6.1-sol`     | `ctx/conextlab/…deepseek-v4.1-flash:cloud`   |
+| ------------------------------ | -------------------- | -------------------------------------------- |
+| chat                           | pass                 | pass                                         |
+| shell execution                | pass                 | pass                                         |
+| `apply_patch`                  | pass, on disk        | pass                                         |
+| MCP tool call                  | pass                 | pass                                         |
+| sub-agents                     | **pass**             | **fail** — `unsupported call: collaboration` |
+| screenshot (2.3 MB, 1093×6000) | **pass, 17,274 tok** | **fail** — see below                         |
+| trivial exec, tokens           | ~14,700              | ~15,558                                      |
 
-Sub-agents are the one capability this model cannot carry. The gateway's Responses→Chat
-translator flattens a non-OpenAI upstream's `collaboration` namespace into a single opaque
-function, so `spawn_agent`, `wait_agent` and the other five members never reach the model;
-it calls `collaboration` and the router answers `unsupported call: collaboration`.
-`cx/gpt-6.1-sol` is OpenAI-native, survives the translation intact, and is the only
-catalog entry where sub-agents pass. Switch priority 0 back to it when sub-agents matter
-more than the cheaper default. Setting `DEFAULT_MODEL` when regenerating the catalog pins
+Two capabilities decide this, and both fail silently on a non-OpenAI upstream:
+
+**Sub-agents.** The gateway's Responses→Chat translator flattens the `collaboration`
+namespace into one opaque function, so `spawn_agent`, `wait_agent` and the other five
+members never reach the model. It calls `collaboration` and the router answers
+`unsupported call: collaboration`. `cx/*` is OpenAI-native and survives the translation.
+It is also the only catalog entry where sub-agents pass.
+
+**Images.** Sending a screenshot through a non-OpenAI upstream does two silent things.
+The upstream is **swapped** — an identical request comes back as `kimi-k2.7-code:cloud`
+with `output_tokens: 0` and an empty `output` — and the image base64 is **tokenised as
+text**, at ~3.11 characters per token. That is what `exceeded max context length by
+1633305 tokens` actually meant; the 1,000,000 window was never the cause. The same image
+through `cx/*` costs 17,274 tokens and the model really reads it.
+
+Use `ctx/*` for text-only work, where it is fine and slightly cheaper. Anything with a
+screenshot needs `cx/*`. Setting `DEFAULT_MODEL` when regenerating the catalog pins
 whichever slug you choose.
 
 ## Where we are
