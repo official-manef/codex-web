@@ -41,8 +41,9 @@ describe('convex deployment: auth boundary', () => {
 	test('the deployment state is classified, not assumed', () => {
 		expect(['absent', 'empty', 'ready']).toContain(probe.state);
 		expect(probe.detail.length).toBeGreaterThan(0);
-		expect(probe.url.startsWith('http')).toBe(true);
 		if (ready) {
+			// A ready probe must name the URL it actually measured; no URL, no claim.
+			expect(probe.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 			expect(reason).toBeNull();
 		} else {
 			// An absent or empty deployment must say which of the two it is.
@@ -51,23 +52,34 @@ describe('convex deployment: auth boundary', () => {
 		}
 	});
 
-	const client = new ConvexHttpClient(probe.url);
+	// Built per test rather than at module scope: with no deployment there is no URL, and
+	// `new ConvexHttpClient('')` throws before a single assertion could report the real state.
+	const client = () => new ConvexHttpClient(probe.url);
 
 	test('queries refuse an anonymous caller', async (ctx) => {
 		if (!ready) ctx.skip(reason ?? 'deployment not ready');
-		const rejection = await attempt(() => client.query(api.devices.list, {}));
+		const rejection = await attempt(() => client().query(api.devices.list, {}));
+		// Asserts the verdict, which `assertRefused` only enforces by throwing. Both are here
+		// because this suite runs with `expect.requireAssertions`: a test whose only check is a
+		// thrown error registers zero assertions and is failed by the runner itself.
+		expect(classifyAuthFailure(rejection), 'anonymous query was not refused by auth').toBe(
+			'refused'
+		);
 		assertRefused(rejection, 'query', probe.url);
 	});
 
 	test('mutations refuse an anonymous caller', async (ctx) => {
 		if (!ready) ctx.skip(reason ?? 'deployment not ready');
 		const rejection = await attempt(() =>
-			client.mutation(api.devices.register, {
+			client().mutation(api.devices.register, {
 				name: 'probe',
 				kind: 'terminal',
 				tokenHash: 'a'.repeat(64),
 				endpoint: 'http://127.0.0.1:8649'
 			})
+		);
+		expect(classifyAuthFailure(rejection), 'anonymous mutation was not refused by auth').toBe(
+			'refused'
 		);
 		assertRefused(rejection, 'mutation', probe.url);
 	});

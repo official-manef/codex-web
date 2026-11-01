@@ -93,26 +93,26 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
-Run on `dff55b3`, 2026-11-02 (`vitest run`, `npx prettier --check .`):
+Run 2026-11-02 on `test/convex` (`bin/gate`, exit 0):
 
 ```
-vitest run          36 files / 197 passed / 3 skipped
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
 tsc -p src/convex   clean
+vitest run          50 files / 446 passed / 0 skipped
+vite build          ok
+playwright          102 passed
+convex              READY (schema + functions pushed to this checkout's local backend)
 ```
+
+The earlier numbers (`36 files / 197 passed / 3 skipped`) were measured before the Convex push;
+the 3 skips were the anonymous-refusal assertions, which now execute. See "The auth boundary is
+PROVEN" below.
 
 This block is the only place gate numbers belong. Other documents link here instead of
 copying them; a count repeated in three files is how `138 passed (27 files)` survived two
 route rebuilds.
-
-The 3 skips are `src/convex/deployment.spec.ts`, and they are now explained in the output
-rather than silently counted: this machine's local deployment is reachable but has **zero
-functions pushed**, so the anonymous-refusal assertions cannot run. See "The auth boundary is
-unproven" below.
-
-Playwright is **not** green and cannot be claimed: see the correction below.
 
 ## Local activity log
 
@@ -134,7 +134,83 @@ primitives only — an object or array is dropped rather than serialized — `re
 and a write failure is swallowed. It is a developer aid, not an audit trail or a second
 source of truth: nothing in the app reads the file.
 
-## The auth boundary is unproven, not proven
+## The auth boundary is PROVEN (closes the section below)
+
+Measured 2026-11-02 on `test/convex`, `bin/gate` **exit 2 → exit 0**.
+
+The three auth assertions had never executed. The cause was three things stacked, none of them
+a broken boundary:
+
+1. **`127.0.0.1:3210` was another project's backend.** `ps` shows pid 63870 running with
+   `--local-storage /home/rahman/agent-work/kampungkomen/kampungkomen-shots/.convex/local/...`.
+   The CLI allocates ports per project from 3210 up, so a hardcoded number landed on a stranger.
+2. **Pushing needs Node 22 or 24.** Under the default `v26.7.0` the push died with
+   `DeploymentNotConfiguredForNodeActions: ... Node.js v22 or 24 is not installed`, because
+   `src/convex/chat.ts` is a `'use node'` module. `export PATH=~/.nvm/versions/node/v24.22.2/bin:$PATH`
+   fixes it.
+3. **`expect.requireAssertions: true`** (in `vite.config.ts`) fails any test that registers zero
+   assertions. Two of the three tests only called `assertRefused()`, which enforces its verdict by
+   throwing — so once they finally ran they failed with `expected any number of assertion, but got
+none`. A runner complaint, never a security finding.
+
+What the backend answered once the functions were pushed on this checkout's own port:
+
+```
+$ curl -s http://127.0.0.1:3212/instance_name
+anonymous-agent
+
+$ curl -s -X POST http://127.0.0.1:3212/api/query -H 'Content-Type: application/json' \
+    -d '{"path":"devices:list","args":{},"format":"json"}'
+{"status":"error","errorMessage":"[Request ID: ...] Server Error
+Uncaught ConvexError: Please sign in.
+    at requireUser (../../src/convex/_shared/auth.ts:20:8)
+    at async handler (../src/convex/devices.ts:36:15)
+","errorData":"Please sign in."}
+```
+
+`Please sign in.` is the pass condition: `requireUser` ran and no row was read. Before the push
+the same request said `Could not find public function for 'devices:list'.`
+
+```
+$ npx vitest run src/convex/deployment.spec.ts --reporter=verbose
+ ✓ the deployment state is classified, not assumed
+ ✓ queries refuse an anonymous caller
+ ✓ mutations refuse an anonymous caller
+ ✓ a caller cannot forge an identity through the client
+      Tests  4 passed (4)          # 0 skipped
+
+$ npx vitest run
+      Tests  446 passed (446)      # was 441 passed | 3 skipped
+
+$ bash bin/gate
+  convex    READY     devices:list is deployed; anonymous call answered: ... Please sign in.
+  PASS      prettier / eslint / svelte-check / convex-types / vitest / build / playwright
+  7 passed, 0 unproven, 0 failed
+  PASS — every step ran, nothing was skipped
+```
+
+The durable fix, so the port cannot go stale again:
+
+- `scripts/convex-local.mjs` reads `ports.cloud` + `deploymentName` from
+  `.convex/local/default/config.json` (Node built-ins stay out of `src/convex/`, which Convex
+  bundles and which would demand a `'use node'` module).
+- `vite.config.ts` sets `process.env.CONVEX_URL` from it; `bin/gate` does the same for its
+  environment probe. An explicit `CONVEX_URL` still wins, which is how the state table in
+  `docs/gate.md` is exercised.
+- `deploymentUrl()` has **no hardcoded default** any more. A checkout with no recorded
+  deployment reports `absent` — "no port was guessed" — instead of probing 3210.
+- The two tests now assert `classifyAuthFailure(rejection) === 'refused'` in addition to calling
+  `assertRefused`. The assertion is added, not weakened: the boundary is still required to
+  answer a refusal, and a successful anonymous call still fails.
+
+Setup is reproducible in `docs/convex-local-setup.md`. Still unproven: anything about a **cloud**
+deployment, and that a genuine Google identity is _accepted_ — `AUTH_CLIENT_ID` is unset locally,
+so `auth.config.ts` registers zero providers and only the refusal side is exercised.
+
+## [superseded 2026-11-02] The auth boundary is unproven, not proven
+
+> Kept because the reasoning about `Server Error` vs a refusal still holds, and because the
+> numbers below are what a hardcoded port really measures. Outcome: proven above.
 
 `docs/auth.md` used to say the anonymous-refusal assertions were covered. On this machine they
 are not, and the difference matters because the failure and the proof look alike.
@@ -173,10 +249,10 @@ run for real.
 
 A sibling gate (`bin/codex-clone-quicktest` in the other repo) pinned
 `CONVEX_URL="${CONVEX_URL:-http://127.0.0.1:9999}"`. Port 9999 is dead, so that gate forced the
-skip forever while the live deployment on 3210 was ignored — a green run that had silently
-dropped four tests. `bin/` in this worktree holds only `codex-cli.mjs`, so there is nothing to
-fix here; if that gate is ever used against this repo it must probe 3210 and report
-`skipped: functions not pushed`.
+skip forever while a live deployment was ignored — a green run that had silently dropped four
+tests. `bin/` in this worktree holds only `codex-cli.mjs`, so there is nothing to fix here; if
+that gate is ever used against this repo it must resolve the port from
+`.convex/local/default/config.json`, not pin one.
 
 ## Correction — the AC test suites do not exist (historical, superseded)
 

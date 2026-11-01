@@ -11,7 +11,6 @@
 import { describe, expect, test } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import {
-	DEFAULT_DEPLOYMENT_URL,
 	assertRefused,
 	classifyAuthFailure,
 	classifyQueryAnswer,
@@ -112,9 +111,12 @@ describe('the guard against a silent skip', () => {
 		expect(skipReason(probe)).toBeNull();
 	});
 
-	test('the default URL is the live dev port, not a dead one', () => {
-		expect(DEFAULT_DEPLOYMENT_URL).toBe('http://127.0.0.1:3210');
-		expect(deploymentUrl({})).toBe(DEFAULT_DEPLOYMENT_URL);
+	test('the default URL is resolved per checkout, never guessed', () => {
+		// The port is a property of this checkout's `.convex/local/default/config.json`, not a
+		// constant: two Convex projects on one machine get different ports from the same 3210
+		// sequence, so a literal here can point at somebody else's backend.
+		expect(deploymentUrl({})).toBeNull();
+		expect(deploymentUrl({ CONVEX_URL: '   ' })).toBeNull();
 		// An explicit env value still wins, and a trailing slash is trimmed.
 		expect(deploymentUrl({ CONVEX_URL: 'https://example.convex.cloud/' })).toBe(
 			'https://example.convex.cloud'
@@ -125,6 +127,39 @@ describe('the guard against a silent skip', () => {
 		expect(deploymentUrl({ CONVEX_URL: '', PUBLIC_CONVEX_URL: 'https://b.convex.cloud' })).toBe(
 			'https://b.convex.cloud'
 		);
+	});
+
+	test('the local deployment is read from this checkout config, not a constant', async () => {
+		const { readLocalDeployment } = await import('../../scripts/convex-local.mjs');
+		const config = JSON.stringify({ ports: { cloud: 3214, site: 3215 }, deploymentName: 'mine' });
+		const read = (): string => config;
+		expect(readLocalDeployment(read as never, 'x')).toEqual({
+			port: 3214,
+			url: 'http://127.0.0.1:3214',
+			deploymentName: 'mine'
+		});
+		// Anything unusable is "no local deployment", never a guessed port.
+		expect(readLocalDeployment((() => 'not json') as never, 'x')).toBeNull();
+		expect(readLocalDeployment((() => '{}') as never, 'x')).toBeNull();
+		expect(
+			readLocalDeployment(
+				(() => JSON.stringify({ ports: { cloud: '3214' }, deploymentName: 'x' })) as never,
+				'x'
+			)
+		).toBeNull();
+		expect(
+			readLocalDeployment(
+				(() => JSON.stringify({ ports: { cloud: 3214 }, deploymentName: '' })) as never,
+				'x'
+			)
+		).toBeNull();
+	});
+
+	test('a checkout with no deployment reports that, instead of probing a guessed port', async () => {
+		const probe = await probeDeployment(null);
+		expect(probe.state).toBe('absent');
+		expect(probe.detail).toMatch(/no port was guessed/);
+		expect(skipReason(probe)).toMatch(/no Convex deployment/);
 	});
 
 	// The historic bug in one assertion: the gate pointed at a dead port and four security
