@@ -1,7 +1,6 @@
 <script lang="ts">
   import View from "#lib/View.svelte";
   import { Icon } from "../../../shared/icons/index.js";
-  import { MEASURED } from "#lib/measured.js";
   type Props = { backend?: string; backends?: any[] };
   let { backend = "", backends = [] }: Props = $props();
   let selected = $derived(backends.find((item) => item.id === backend));
@@ -118,11 +117,10 @@
         </dd>
       </div>
       <div>
-        <dt>Measured reference</dt>
+        <dt>Benchmark measurements</dt>
         <dd>
-          {MEASURED.decision.NPU.ms} ms per Laya question on NPU; {MEASURED.asr.NPU.realtime}×
-          realtime for Whisper. Recorded {MEASURED.date} on {MEASURED.machine}.
-          <a class="text-link" href="#performance">See benchmark conditions.</a>
+          This template ships no saved measurements. Run local benchmarks on your machine to
+          measure actual device latency. <a class="text-link" href="#performance">See benchmarks</a>.
         </dd>
       </div>
     </dl>

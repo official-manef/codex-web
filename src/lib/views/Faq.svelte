@@ -1,6 +1,5 @@
 <script lang="ts">
   import View from "#lib/View.svelte";
-  import { MEASURED } from "#lib/measured.js";
   const GROUPS: [string, [string, string][]][] = [
     [
       "Getting started",
@@ -44,11 +43,11 @@
         ],
         [
           "Is NPU always the fastest device?",
-          "No. It depends on the model and workload. NPU performs well on this project’s recorded short decisions and speech sample, while sequential chat generation can be faster on GPU. Benchmarks are saved reference measurements; each chat reply reports its own measured speed.",
+          "No. It depends on the model and workload. NPU performs well on short decision questions and speech recognition, while sequential chat generation can be faster on GPU. Device speed depends on model architecture, quantization, and driver support.",
         ],
         [
           "Why does the first request take longer?",
-          `OpenVINO compiles a model for the selected device on first use. The saved Laya reference compile took ${MEASURED.decision.NPU.compile_s} s on NPU and ${MEASURED.decision.GPU.compile_s} s on GPU. Chat and speech have separate compile times. Cached kernels may make later starts faster.`,
+          "OpenVINO compiles a model for the selected device on first use. First compile time varies by device (NPU, GPU or CPU). Chat and speech have separate compile times, and cached kernels may make later starts faster.",
         ],
       ],
     ],

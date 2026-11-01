@@ -1,5 +1,8 @@
 import type { Component } from 'svelte';
 
+/** A lazily imported screen. `loadScreen` is what makes an entry navigable at all. */
+export type ScreenLoader = () => Promise<{ default: Component<Record<string, unknown>> }>;
+
 /**
  * Navigation and feature catalogue.
  *
@@ -235,12 +238,14 @@ export const CHAT_OUTPUTS = [
 
 export const WORKSPACE_VIEWS = [...SECTIONS, ...CHAT_OUTPUTS];
 
-export function hasFeatureScreen(id: string): boolean {
-	return WORKSPACE_VIEWS.some((view) => view.id === id && 'loadScreen' in view);
-}
+/** Every id the shell can navigate to. One list; nothing may hardcode a destination beside it. */
+export const WORKSPACE_VIEW_IDS: ReadonlySet<string> = new Set(WORKSPACE_VIEWS.map((v) => v.id));
 
-export async function loadFeatureScreen(id: string): Promise<Component> {
-	const view = WORKSPACE_VIEWS.find((item) => item.id === id);
-	if (!view || !('loadScreen' in view)) throw new Error('Unknown workspace view');
-	return (await view.loadScreen()).default as Component;
+/**
+ * `hasFeatureScreen`/`loadFeatureScreen` used to live here and were dead: the shell re-derives
+ * both from the `sections`/`auxiliaryViews` props so it stays reusable by another consumer.
+ * Kept as one predicate so a caller can ask the question without importing a component type.
+ */
+export function isWorkspaceView(id: string): boolean {
+	return WORKSPACE_VIEW_IDS.has(id);
 }

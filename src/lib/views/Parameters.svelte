@@ -2,7 +2,7 @@
   import View from "#lib/View.svelte";
   const GROUPS = [
     {
-      title: "POST /api/custom · request",
+      title: "Decision request payload schema (unimplemented)",
       rows: [
         [
           "state",
@@ -47,7 +47,7 @@
       ],
     },
     {
-      title: "UI API response",
+      title: "Decision response schema (unimplemented)",
       rows: [
         [
           "answers[]",
@@ -77,12 +77,11 @@
 <View
   title="Model parameters"
   icon="sliders"
-  subtitle="Reference for the local decision API. Chat uses a separate endpoint and model; its generation controls are in Local chat."
+  subtitle="Reference schema for hypothetical decision parameters. Note: POST /api/custom does not exist in this repository; no live endpoint is implemented."
 >
   <p class="mb-5 max-w-[75ch] text-[13px] leading-relaxed text-ink-2">
-    Start in <a class="text-link" href="#schema">Custom questions</a> to validate a format and export
-    a payload. The UI API returns summary arrays; the underlying Jev protocol returns answers keyed by
-    question ID. Use the matching format in your client.
+    This reference describes a hypothetical decision request format. No <code>POST /api/custom</code>
+    route is implemented in this repo, and no live decision server is connected.
   </p>
   {#each GROUPS as group}<section class="mb-6">
       <h2 class="mb-2 text-[14px] font-semibold">{group.title}</h2>

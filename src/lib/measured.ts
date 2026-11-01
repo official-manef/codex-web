@@ -1,16 +1,13 @@
-// Authoring source for saved reference measurements, not live runtime status.
-// One Laya question is not a whole preset: a preset asks several questions and
-// also includes tokenization/decoding/HTTP work. Never advertise this as preset latency.
-// Re-measure decision inference: python tests/bench_backends.py
-// Regenerate published numbers: python scripts/sync-measurements.py
+// Placeholder template structure for benchmark measurements.
+// This template ships no verified benchmark measurements for the local machine.
 
 export const MEASURED = {
-  date: "2026-10-26",
-  asrDate: "2026-10-24",
-  machine: "Intel Core Ultra 9 386H",
-  runtime: "OpenVINO 2026.4.1, INT8",
-  window: "256 tokens, 1 question per request",
-  iterations: 40,
+  date: "unmeasured",
+  asrDate: "unmeasured",
+  machine: "Template placeholder (unmeasured)",
+  runtime: "Not measured",
+  window: "256 tokens",
+  iterations: 0,
   model: {
     parameters: 421293830,
     parameters_millions: 421,
@@ -20,33 +17,33 @@ export const MEASURED = {
     export_source: "https://huggingface.co/rupeshs/laya-ov-int8",
   },
 
-  // Decision model (Laya), milliseconds per question.
+  // Decision model (placeholder: no measurements shipped)
   decision: {
-    NPU: { ms: 27.5, compile_s: 14.1 },
-    GPU: { ms: 30.8, compile_s: 2.9 },
-    CPU: { ms: 142.0, compile_s: 2.7 },
+    NPU: { ms: null as number | null, compile_s: null as number | null },
+    GPU: { ms: null as number | null, compile_s: null as number | null },
+    CPU: { ms: null as number | null, compile_s: null as number | null },
   },
 
-  // Whisper (speech), seconds for this specific saved audio workload.
-  asrAudioSeconds: 45.3,
+  // Whisper (speech, placeholder: no measurements shipped)
+  asrAudioSeconds: 0,
   asr: {
-    NPU: { s: 0.79, realtime: 57 },
-    CPU: { s: 1.74, realtime: 26 },
-    GPU: { s: 2.49, realtime: 18 },
+    NPU: { s: null as number | null, realtime: null as number | null },
+    CPU: { s: null as number | null, realtime: null as number | null },
+    GPU: { s: null as number | null, realtime: null as number | null },
   },
 
-  // Historical pipeline examples from README, separate from the single-question run.
+  // Historical pipeline examples (unverified placeholder)
   pipeline: {
-    date: "recording date unverified",
-    invoice: { audio_s: 45, asr_s: 0.78, decision_s: 0.14, total_s: 0.92, realtime: 49 },
-    outage: { audio_s: 6.8, asr_s: 0.24, decision_s: 0.07, total_s: 0.31, realtime: 22 },
-    first_request_s: 88,
+    date: "unverified",
+    invoice: { audio_s: 0, asr_s: 0, decision_s: 0, total_s: 0, realtime: 0 },
+    outage: { audio_s: 0, asr_s: 0, decision_s: 0, total_s: 0, realtime: 0 },
+    first_request_s: 0,
   },
 
-  // Headline figures used on the Overview and in the social card.
+  // Headline figures (placeholder: no measurements shipped)
   headline: {
-    perQuestionMs: 27.5,
-    asrRealtime: 57,
+    perQuestionMs: null as number | null,
+    asrRealtime: null as number | null,
     whisperSizeMb: 85,
     costPerRequest: "$0",
   },

@@ -29,7 +29,7 @@
 <View
   title="Costs"
   icon="tag"
-  subtitle="The app does not meter local inference or charge a subscription. Your hardware, electricity, storage and optional endpoint have their own costs."
+  subtitle="Informational overview. This template has no billing backend or live metering data source. The app does not meter local inference or charge a subscription."
 >
   <dl class="card overflow-hidden">
     {#each ROWS as [item, cost, detail], i}<div
@@ -49,6 +49,6 @@
       hosted service. A short classification and a generated chat reply perform different jobs.
       Check your provider’s current pricing and measure throughput on your own laptop.
     </p>
-    <a class="btn mt-3" href="#performance">See measured reference performance</a>
+    <a class="btn mt-3" href="#performance">See benchmarks</a>
   </div>
 </View>

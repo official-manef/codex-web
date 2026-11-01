@@ -43,6 +43,7 @@
       aria-label="Find a local tool"
     /></label
   >
+  <p class="launcher-note mb-4 text-[12px] text-ink-3">Workspace launcher navigation. Displays registered in-memory tools; no backend data source.</p>
   {#if query.trim()}<h2>Search results</h2>
     <div class="launcher-list">
       {#each matches as row}<button onclick={() => onOpen(row.id)}

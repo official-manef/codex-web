@@ -151,12 +151,6 @@ export type LocalJob = {
 	started_at: number;
 };
 
-const REPLIES = [
-	'Local workspace. No model is attached, so this reply is a stub — the shell, the session, the draft and the layout around it are real.',
-	'Your message is stored in this browser session. Nothing was sent anywhere and no compute ran.',
-	'This template ships without a backend. Wire `src/lib/http.ts` to a real transport and this composer becomes a real chat.'
-] as const;
-
 const SESSIONS_KEY = 'workspace-template:sessions';
 const JOB_MS = 700;
 
@@ -215,13 +209,14 @@ function backendList() {
 			label: 'This browser',
 			kind: 'local' as const,
 			present: true,
-			ready: true,
-			reason: null,
+			ready: false,
+			reason: 'Browser stub: no local model is loaded',
 			latency_ms: null,
 			compile_s: null,
 			description: 'Template stub. No model runs; replies are fixed text.',
 			url: null,
-			model: 'stub'
+			model: 'stub',
+			stub: true
 		}
 	];
 }
@@ -237,16 +232,23 @@ function catalogue() {
 		models: [
 			{
 				id: 'qwen3-npu',
-				label: 'Template stub',
+				label: 'No provider configured',
+				// `installed` keeps the composer usable; `stub` is what screens must believe.
 				installed: true,
 				ready: true,
 				present: true,
 				size: 0,
 				device: STUB_DEVICE,
-				devices: [STUB_DEVICE]
+				devices: [STUB_DEVICE],
+				stub: true
 			}
 		],
-		current_model: { label: 'Template stub', capabilities: {}, runtime_error: null },
+		current_model: {
+			label: 'No provider configured',
+			capabilities: {},
+			runtime_error: null,
+			stub: true
+		},
 		capabilities: {
 			attachments: {
 				max_files_per_turn: 4,
@@ -259,12 +261,14 @@ function catalogue() {
 	};
 }
 
-function reply(index: number): LocalReply {
+function reply(_index: number): LocalReply {
+	void _index;
+	void _index;
 	return {
-		text: REPLIES[index % REPLIES.length],
+		text: 'No provider configured',
 		model_id: 'stub',
-		model_label: 'Template stub',
-		device: STUB_DEVICE,
+		model_label: 'No provider configured',
+		device: 'Not configured',
 		ms: JOB_MS,
 		metrics: {},
 		error: null,
@@ -457,10 +461,10 @@ async function dispatch(rawPath: string, init: RequestInit): Promise<unknown> {
 
 		case '/api/driver':
 		case '/api/runtime':
-			return { ok: true, runtime: 'browser-stub', backends: backendList() };
+			return { ok: false, runtime: 'browser-stub', backends: backendList(), stub: true };
 
 		case '/api/health':
-			return { ok: true, runtime: 'browser-stub' };
+			return { ok: false, runtime: 'browser-stub', stub: true };
 
 		case '/api/capabilities':
 			return catalogue().capabilities;

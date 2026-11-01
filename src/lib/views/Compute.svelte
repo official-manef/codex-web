@@ -2,7 +2,6 @@
   import View from "#lib/View.svelte";
   import { Icon } from "../../../shared/icons/index.js";
   import { get, post, configureEndpoint } from "#lib/http.js";
-  import { MEASURED } from "#lib/measured.js";
 
   type Props = { backends?: any[]; backend?: string; onPick?: (id: string) => void };
   let { backends = [], backend = "", onPick = () => {} }: Props = $props();
@@ -300,12 +299,10 @@
   </div>
 
   <div class="card mt-4 p-4">
-    <span class="label">Measured on this machine · {MEASURED.date}</span>
+    <span class="label">Hardware measurements</span>
     <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-2">
-      {MEASURED.machine}, {MEASURED.runtime}, {MEASURED.window}. NPU {MEASURED.decision.NPU.ms} ms · GPU
-      {MEASURED.decision.GPU.ms} ms · CPU {MEASURED.decision.CPU.ms} ms. The NPU is slowest to compile
-      ({MEASURED.decision.NPU.compile_s}s) and fastest to run; the CPU needs no driver, which is why
-      it is the fallback.
+      This template ships no saved measurements for this machine. Configure and run local
+      benchmarks to measure actual NPU, GPU and CPU latency.
     </p>
   </div>
 </View>

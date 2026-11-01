@@ -1,44 +1,57 @@
 import type { ChatPanelRoute } from '$features/workspace-shell';
 import type { WorkspaceLabels } from '$features/workspace-shell';
+import { WORKSPACE_VIEW_IDS } from './registry.js';
 
 /**
- * Consumer-side configuration for the shell. This file is Laya's
- * `laya_workspace_routes.ts`, re-pointed at the template: same shape, its own identity.
+ * Consumer-side configuration for the shell: presentation only, and no ids of its own.
  *
- * Everything here is presentation. None of it grants authority; a product that adds a
- * backend enforces capability and approval there.
+ * Navigation ids live in `registry.ts` and nowhere else. This file used to retype them, which
+ * is how an entry could be "registered" and still do nothing — three string lists, one
+ * namespace (registry, `SECTION_IDS`, and here). Every id below resolves through the registry
+ * and throws at module load if the name is wrong, so drift fails the build instead of shipping
+ * a destination that opens nothing.
+ *
+ * None of it grants authority; a product that adds a backend enforces capability and approval
+ * there.
  */
 
+/** A registered workspace id, or a thrown error naming the mismatch. */
+function viewId(candidate: string): string {
+	if (!WORKSPACE_VIEW_IDS.has(candidate))
+		throw new Error(`workspace_routes: "${candidate}" is not a registered workspace view`);
+	return candidate;
+}
+
 export const chatPanels: readonly ChatPanelRoute[] = [
-	{ id: 'chat-tools', panel: 'tools', aliases: ['mcp', 'skills'] },
-	{ id: 'chat-settings', panel: 'models' },
-	{ id: 'chat-session', panel: 'utils' }
+	{ id: viewId('chat-tools'), panel: 'tools', aliases: ['mcp', 'skills'] },
+	{ id: viewId('chat-settings'), panel: 'models' },
+	{ id: viewId('chat-session'), panel: 'utils' }
 ];
 
 export const settingsMenu = {
-	primary: 'chat-settings',
-	integrations: 'chat-tools',
-	help: 'faq',
-	setup: 'setup'
+	primary: viewId('chat-settings'),
+	integrations: viewId('chat-tools'),
+	help: viewId('faq'),
+	setup: viewId('setup')
 };
 
-export const launcherId = 'workspace-home';
+export const launcherId = viewId('workspace-home');
 
 export const fileMenuViews = [
-	{ id: 'files', label: 'Open files…', command: 'openFiles' },
+	{ id: viewId('files'), label: 'Open files…', command: 'openFiles' },
 	{
-		id: 'files',
+		id: viewId('files'),
 		label: 'Open folder…',
 		command: 'openFolder',
 		shortcut: 'Ctrl+O',
 		binding: { key: 'o', ctrl: true, allowInEditable: true }
 	},
-	{ id: 'browser', label: 'Open browser' }
+	{ id: viewId('browser'), label: 'Open browser' }
 ];
 
 export const canvasPresentation = {
-	selfHeaderIds: ['files', 'browser'],
-	hideComputeIds: ['apps']
+	selfHeaderIds: [viewId('files'), viewId('browser')],
+	hideComputeIds: [viewId('apps')]
 };
 
 /** Connection copy. The template runs in the browser, so it says that. */

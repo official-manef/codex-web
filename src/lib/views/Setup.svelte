@@ -34,28 +34,35 @@
     }
   }
   onMount(check);
-  let ready = $derived(backends.filter((b) => b.kind === "local" && b.ready));
+  let isStub = $derived(Boolean(health?.runtime === "browser-stub" || health?.stub));
+  let ready = $derived(backends.filter((b) => b.kind === "local" && b.ready && !(b as any).stub));
   let npu = $derived(backends.find((b) => b.device === "NPU"));
   let checks = $derived([
     {
       title: "Local server",
-      ok: typeof health?.ok === "boolean",
-      detail:
-        typeof health?.ok === "boolean"
+      ok: health?.ok === true && !isStub,
+      status: isStub ? "Not configured" : health?.ok === true ? "Ready" : "Needs attention",
+      detail: isStub
+        ? "No local server is configured. The app is running with browser stubs."
+        : health?.ok === true
           ? "The app is connected to the server on this laptop."
-          : "Start laya-npu.cmd, then run this check again.",
+          : (health?.reason ?? "No server detected. Configure a local server, then run this check again."),
     },
     {
       title: "Decision model",
       ok: ready.length > 0,
+      status: ready.length > 0 ? "Ready" : isStub ? "Not configured" : "Needs attention",
       detail: ready.length
         ? `Ready on ${ready.map((b) => b.device).join(", ")}. Select one below to run a demo.`
-        : "No local model is ready. Run install.cmd to finish model and OpenVINO setup.",
+        : isStub
+          ? "No local model is configured in stub mode."
+          : "No local model is ready. Configure a local model to run decisions.",
     },
     {
       title: "Intel NPU",
       ok: !!npu?.ready,
       optional: true,
+      status: npu?.ready ? "Ready" : "Optional · not detected",
       detail: npu?.ready
         ? "OpenVINO can use your Intel NPU for local decisions."
         : (npu?.reason ?? "No usable Intel NPU detected. You can use a ready GPU or CPU."),
@@ -64,6 +71,7 @@
       title: "NPU driver",
       ok: driver?.present && driver?.action === "none",
       optional: true,
+      status: driver?.present && driver?.action === "none" ? "Ready" : "Optional · unavailable",
       detail:
         driver?.error ??
         driver?.message ??
@@ -94,11 +102,11 @@
           <div>
             <h2>
               {c.title}<span
-                >{c.ok
+                >{c.status ?? (c.ok
                   ? "Ready"
                   : c.optional
                     ? "Optional · needs attention"
-                    : "Needs attention"}</span
+                    : "Not configured")}</span
               >
             </h2>
             <p>{c.detail}</p>
@@ -122,11 +130,13 @@
             disabled={!b.ready}
             aria-pressed={backend === b.id}
             ><strong>{b.device}</strong><span
-              >{b.ready
-                ? backend === b.id
-                  ? "Selected"
-                  : "Ready to use"
-                : (b.reason ?? "Unavailable")}</span
+              >{(b as any).stub
+                ? "Template stub · no model runs here"
+                : b.ready
+                  ? backend === b.id
+                    ? "Selected"
+                    : "Ready to use"
+                  : (b.reason ?? "Unavailable")}</span
             ></button
           >{/each}
       </div>

@@ -21,6 +21,7 @@
     required_missing: string[];
     job: { state: string; packages?: string[]; error?: string | null; note?: string };
     note: string;
+    stub?: boolean;
   };
 
   let st = $state<Deps | null>(null);
@@ -87,10 +88,12 @@
 <div class="deps">
   <div class="deps-head">
     <button class="deps-toggle" onclick={() => (open = !open)} aria-expanded={open}>
-      <span class="deps-dot" class:ok={missing.length === 0} class:warn={missing.length > 0}></span>
+      <span class="deps-dot" class:ok={missing.length === 0 && !st?.stub} class:warn={!st?.stub && missing.length > 0}></span>
       <span>
         {#if !st}
           Checking dependencies…
+        {:else if st.stub}
+          No dependency report · this build runs in the browser
         {:else if missing.length === 0}
           All dependencies installed
         {:else}
@@ -99,7 +102,7 @@
       </span>
       <span class="deps-chev" class:rot={open}><Icon name="chevron" size={13} /></span>
     </button>
-    {#if small.length > 0 && !busy}
+    {#if small.length > 0 && !busy && !st?.stub}
       <button class="btn btn-solid h-7" onclick={() => install(small.map((p) => p.name))}>
         Install the small ones ({small.reduce((n, p) => n + p.size_mb, 0)} MB)
       </button>
@@ -114,45 +117,51 @@
   {#if msg}<p class="deps-msg">{msg}</p>{/if}
 
   {#if open && st}
-    <p class="deps-sub">
-      Python {st.python}. These are Python packages the app needs; models are separate and live
-      under your home folder. Packages install into this interpreter:
-      <code class="mono">{st.interpreter}</code>
-    </p>
-
-    <div class="deps-list">
-      {#each st.packages as p}
-        <div class="deps-row" class:absent={!p.present}>
-          <span class="deps-mark" class:ok={p.present} class:warn={!p.present}>
-            {p.present ? "ok" : "!"}
-          </span>
-          <div class="deps-body">
-            <div class="deps-name">
-              <code class="mono">{p.name}</code>
-              {#if p.version}<span class="deps-ver">{p.version}</span>{/if}
-              {#if p.bulk}<span class="deps-tag">large, opt-in</span>{/if}
-            </div>
-            <p class="deps-why">{p.why}</p>
-            <p class="deps-meta">
-              needs it: {p.needed_by.join(", ")} · {p.size_mb} MB
-            </p>
-          </div>
-          {#if !p.present && !p.bulk}
-            <button class="btn h-6 !text-[10.5px]" onclick={() => install([p.name])} disabled={busy}
-              >Install</button
-            >
-          {/if}
-        </div>
-      {/each}
-    </div>
-
-    {#if heavy.length > 0}
-      <p class="deps-note">
-        {heavy.length} larger package{heavy.length === 1 ? "" : "s"} not installed ({heavy
-          .map((p) => p.name)
-          .join(", ")}). Features listed above need these packages. Use their Install buttons to
-        download them.
+    {#if st.stub}
+      <p class="deps-sub">
+        No local server or Python runtime is configured. This template runs with in-browser stubs.
       </p>
+    {:else}
+      <p class="deps-sub">
+        Python {st.python}. These are Python packages the app needs; models are separate and live
+        under your home folder. Packages install into this interpreter:
+        <code class="mono">{st.interpreter}</code>
+      </p>
+
+      <div class="deps-list">
+        {#each st.packages as p}
+          <div class="deps-row" class:absent={!p.present}>
+            <span class="deps-mark" class:ok={p.present} class:warn={!p.present}>
+              {p.present ? "ok" : "!"}
+            </span>
+            <div class="deps-body">
+              <div class="deps-name">
+                <code class="mono">{p.name}</code>
+                {#if p.version}<span class="deps-ver">{p.version}</span>{/if}
+                {#if p.bulk}<span class="deps-tag">large, opt-in</span>{/if}
+              </div>
+              <p class="deps-why">{p.why}</p>
+              <p class="deps-meta">
+                needs it: {p.needed_by.join(", ")} · {p.size_mb} MB
+              </p>
+            </div>
+            {#if !p.present && !p.bulk}
+              <button class="btn h-6 !text-[10.5px]" onclick={() => install([p.name])} disabled={busy}
+                >Install</button
+              >
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      {#if heavy.length > 0}
+        <p class="deps-note">
+          {heavy.length} larger package{heavy.length === 1 ? "" : "s"} not installed ({heavy
+            .map((p) => p.name)
+            .join(", ")}). Features listed above need these packages. Use their Install buttons to
+          download them.
+        </p>
+      {/if}
     {/if}
   {/if}
 </div>

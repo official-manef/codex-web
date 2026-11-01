@@ -5,7 +5,6 @@
   import { readDraft, saveDraft } from "#lib/drafts.js";
   import View from "#lib/View.svelte";
   import { Icon } from "../../../shared/icons/index.js";
-  import { MEASURED } from "#lib/measured.js";
   import { get, postAudio } from "#lib/http.js";
   import Recorder from "#lib/Recorder.svelte";
 
@@ -234,11 +233,9 @@
   {/if}
 
   <div class="card mt-3 p-4">
-    <span class="label">Measured here</span>
+    <span class="label">Benchmark notes</span>
     <p class="mt-1.5 text-[11.5px] leading-relaxed text-ink-2">
-      Saved benchmark from {MEASURED.asrDate}, 45.3 s of speech with Whisper base INT8: NPU {MEASURED
-        .asr.NPU.s} s ({MEASURED.asr.NPU.realtime}x realtime), CPU {MEASURED.asr.CPU.s} s, GPU {MEASURED
-        .asr.GPU.s} s. Your transcript above shows the actual timing for this file and selected device.
+      This template ships no saved measurements for speech inference. The transcription display above shows actual timing for your audio file when processed on your selected device.
     </p>
   </div>
 </View>

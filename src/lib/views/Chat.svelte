@@ -21,6 +21,13 @@
   import ModelCapabilities from "#lib/ModelCapabilities.svelte";
   import ChatTools from "#lib/ChatTools.svelte";
   import { api, get, post, postAudio } from "#lib/http.js";
+  import {
+    resolveChatBackend,
+    streamServerChat,
+    cloudAvailable,
+    cloudTurn,
+  } from "#lib/chat_dispatch.js";
+  import type { AiProvider, ChatMessage } from "$lib/server/ai/contracts";
   import Recorder from "#lib/Recorder.svelte";
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
   import { Pencil, Trash2 } from "@lucide/svelte";
@@ -249,6 +256,15 @@
   let job = $state<any>(null);
   let pending = $state("");
   let polling = false;
+  let serverAiConfig = $state<{
+    enabled: boolean;
+    providers: { id: AiProvider; label: string; models: string[] }[];
+  } | null>(null);
+  let activeAbortController: AbortController | null = null;
+
+  function serverAiAvailable(): boolean {
+    return Boolean(serverAiConfig?.enabled && serverAiConfig.providers.length > 0);
+  }
   let sessionRequest = 0;
   let transcript = $state<HTMLElement>();
   let composerInput = $state<HTMLTextAreaElement | null>(null);
@@ -928,6 +944,14 @@
     }
   }
   onMount(() => {
+    fetch("/api/ai/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.ai?.enabled && Array.isArray(data.ai.providers) && data.ai.providers.length > 0) {
+          serverAiConfig = data.ai;
+        }
+      })
+      .catch(() => {});
     presentationMode = presentationConfig.modes.includes("chat")
       ? "chat"
       : (presentationConfig.defaultMode ?? "chat");
@@ -1054,6 +1078,222 @@
     voiceUrl = "";
     voiceWorking = false;
   }
+  async function sendCloudTurn(content: string) {
+    const turnId = `turn-${Date.now()}`;
+    jobId = `cloud-${Date.now()}`;
+    job = { job_id: jobId, state: "running", device: "Cloud", results: [] };
+    draft = "";
+    clearVoice();
+    pendingAttachments = attachments;
+    unsavedUploads.clear();
+    attachments = [];
+    await scrollEnd(true);
+
+    const history: ChatMessage[] = (session?.turns ?? []).flatMap((t: any) => [
+      { role: "user" as const, content: t.content },
+      ...(t.replies ?? [])
+        .filter((r: any) => r.text && !r.error)
+        .map((r: any) => ({
+          role: "assistant" as const,
+          content: r.text,
+        })),
+    ]);
+    const messages: ChatMessage[] = [...history, { role: "user" as const, content }];
+    const ref = modelId.includes("/") ? modelId : `openai/${modelId}`;
+
+    const startMs = Date.now();
+    try {
+      const result = await cloudTurn({ ref, messages });
+      const elapsed = Date.now() - startMs;
+      if (result.ok) {
+        const reply = {
+          text: result.text,
+          model_id: result.model,
+          model_label: `${result.provider}/${result.model}`,
+          device: "Cloud",
+          ms: elapsed,
+          error: null,
+        };
+        const newTurn = {
+          id: turnId,
+          content,
+          attachments: pendingAttachments,
+          status: "done",
+          created_at: Date.now(),
+          replies: [reply],
+        };
+        const turns = [...(session?.turns ?? []), newTurn];
+        const title =
+          session?.title === "New chat"
+            ? content.slice(0, 60) || "New chat"
+            : session?.title ?? "New chat";
+        session = { ...session, title, turns };
+        renameTitle = session.title;
+        await api.sessionUpdate(session.id, { title, turns, settings: settings() });
+        await refreshSessions();
+      } else {
+        error = result.message;
+        const reply = {
+          text: "",
+          model_id: modelId,
+          model_label: "Cloud assistant",
+          device: "Cloud",
+          ms: elapsed,
+          error: result.message,
+        };
+        const newTurn = {
+          id: turnId,
+          content,
+          attachments: pendingAttachments,
+          status: "error",
+          created_at: Date.now(),
+          replies: [reply],
+        };
+        const turns = [...(session?.turns ?? []), newTurn];
+        session = { ...session, turns };
+        await api.sessionUpdate(session.id, { turns, settings: settings() });
+      }
+    } finally {
+      jobId = "";
+      job = null;
+      pending = "";
+      pendingAttachments = [];
+      await scrollEnd();
+    }
+  }
+
+  async function sendServerTurn(content: string) {
+    const turnId = `turn-${Date.now()}`;
+    jobId = `server-${Date.now()}`;
+    job = { job_id: jobId, state: "running", device: "BYOK", partial: "", results: [] };
+    draft = "";
+    clearVoice();
+    pendingAttachments = attachments;
+    unsavedUploads.clear();
+    attachments = [];
+    await scrollEnd(true);
+
+    const history: ChatMessage[] = (session?.turns ?? []).flatMap((t: any) => [
+      { role: "user" as const, content: t.content },
+      ...(t.replies ?? [])
+        .filter((r: any) => r.text && !r.error)
+        .map((r: any) => ({
+          role: "assistant" as const,
+          content: r.text,
+        })),
+    ]);
+    const messages: ChatMessage[] = [...history, { role: "user" as const, content }];
+
+    const providerEntry = serverAiConfig?.providers?.[0];
+    const provider: AiProvider = (providerEntry?.id as AiProvider) ?? "openai";
+    const chosenModel = providerEntry?.models?.[0] ?? modelId;
+    const apiKey =
+      readDraft<string>("byok-key", "") ||
+      (typeof localStorage !== "undefined" ? localStorage.getItem("byok-key") ?? "" : "");
+
+    activeAbortController = new AbortController();
+    const startMs = Date.now();
+
+    try {
+      const result = await streamServerChat(
+        {
+          provider,
+          model: chosenModel,
+          apiKey,
+          messages,
+        },
+        (partial) => {
+          job = { ...job, partial };
+        },
+        activeAbortController.signal,
+      );
+
+      const elapsed = Date.now() - startMs;
+      if (result.error) {
+        error = result.error;
+        const reply = {
+          text: result.text,
+          model_id: chosenModel,
+          model_label: `${provider}/${chosenModel}`,
+          device: "BYOK",
+          ms: elapsed,
+          error: result.error,
+        };
+        const newTurn = {
+          id: turnId,
+          content,
+          attachments: pendingAttachments,
+          status: "error",
+          created_at: Date.now(),
+          replies: [reply],
+        };
+        const turns = [...(session?.turns ?? []), newTurn];
+        session = { ...session, turns };
+        await api.sessionUpdate(session.id, { turns, settings: settings() });
+      } else {
+        const reply = {
+          text: result.text,
+          model_id: chosenModel,
+          model_label: `${provider}/${chosenModel}`,
+          device: "BYOK",
+          ms: elapsed,
+          error: null,
+        };
+        const newTurn = {
+          id: turnId,
+          content,
+          attachments: pendingAttachments,
+          status: "done",
+          created_at: Date.now(),
+          replies: [reply],
+        };
+        const turns = [...(session?.turns ?? []), newTurn];
+        const title =
+          session?.title === "New chat"
+            ? content.slice(0, 60) || "New chat"
+            : session?.title ?? "New chat";
+        session = { ...session, title, turns };
+        renameTitle = session.title;
+        await api.sessionUpdate(session.id, { title, turns, settings: settings() });
+        await refreshSessions();
+      }
+    } finally {
+      activeAbortController = null;
+      jobId = "";
+      job = null;
+      pending = "";
+      pendingAttachments = [];
+      await scrollEnd();
+    }
+  }
+
+  async function sendStubTurn(content: string) {
+    notice = "No provider configured";
+    const d = checked(
+      await api.chatStart({
+        session_id: session.id,
+        content,
+        model_id: isCompare ? comparisonTargets[0].model_id : modelId,
+        device: isCompare ? comparisonTargets[0].device : device || selectedDevices[0],
+        max_new_tokens: maxTokens,
+        compare_devices: !isCompare && comparison ? selectedDevices : [],
+        compare_targets: isCompare ? comparisonTargets : [],
+        compare_kind: isCompare ? comparisonKind : "models",
+        tool_ids: toolIds,
+        attachment_ids: attachments.map((item) => item.id),
+      }),
+    );
+    pendingAttachments = attachments;
+    unsavedUploads.clear();
+    attachments = [];
+    jobId = d.job_id;
+    job = d;
+    draft = "";
+    clearVoice();
+    await scrollEnd(true);
+    await pollJob();
+  }
+
   async function send() {
     const content =
       draft.trim() || (attachments.length ? "Help me understand these attached files." : "");
@@ -1061,9 +1301,11 @@
       !content ||
       busy ||
       !session ||
-      (!isCompare && !model?.installed) ||
-      !modelCompatible ||
-      !selectedDevices.length ||
+      (!cloudAvailable() &&
+        !serverAiAvailable() &&
+        ((!isCompare && !model?.installed) ||
+          !modelCompatible ||
+          !selectedDevices.length)) ||
       operation ||
       attachmentWorking ||
       voiceWorking ||
@@ -1076,29 +1318,20 @@
     operation = "send";
     try {
       checked(await api.sessionUpdate(session.id, { settings: settings() }));
-      const d = checked(
-        await api.chatStart({
-          session_id: session.id,
-          content,
-          model_id: isCompare ? comparisonTargets[0].model_id : modelId,
-          device: isCompare ? comparisonTargets[0].device : device || selectedDevices[0],
-          max_new_tokens: maxTokens,
-          compare_devices: !isCompare && comparison ? selectedDevices : [],
-          compare_targets: isCompare ? comparisonTargets : [],
-          compare_kind: isCompare ? comparisonKind : "models",
-          tool_ids: toolIds,
-          attachment_ids: attachments.map((item) => item.id),
-        }),
-      );
-      pendingAttachments = attachments;
-      unsavedUploads.clear();
-      attachments = [];
-      jobId = d.job_id;
-      job = d;
-      draft = "";
-      clearVoice();
-      await scrollEnd(true);
-      await pollJob();
+
+      // Decision point: Convex cloud chat -> SvelteKit BYOK /api/ai/chat -> Fallback stub
+      const backendKind = resolveChatBackend({
+        cloudAvailable: cloudAvailable(),
+        serverAiAvailable: serverAiAvailable(),
+      });
+
+      if (backendKind === "convex") {
+        await sendCloudTurn(content);
+      } else if (backendKind === "server") {
+        await sendServerTurn(content);
+      } else {
+        await sendStubTurn(content);
+      }
     } catch (e: any) {
       error = e.message;
       pending = "";
@@ -1107,6 +1340,12 @@
     }
   }
   async function stop() {
+    if (activeAbortController) {
+      activeAbortController.abort();
+      activeAbortController = null;
+      notice = "Generation stopped.";
+      return;
+    }
     if (!jobId) return;
     try {
       checked(await api.chatCancel(jobId));
@@ -2639,9 +2878,11 @@
                 aria-label="Send message"
                 disabled={(!draft.trim() && !attachments.length) ||
                   !session ||
-                  (!isCompare && !model?.installed) ||
-                  !modelCompatible ||
-                  !selectedDevices.length ||
+                  (!cloudAvailable() &&
+                    !serverAiAvailable() &&
+                    ((!isCompare && !model?.installed) ||
+                      !modelCompatible ||
+                      !selectedDevices.length)) ||
                   !!operation ||
                   setupBusy ||
                   attachmentWorking ||
@@ -2733,7 +2974,13 @@
           {#if model}<dl class="model-facts">
               <div>
                 <dt>Installation</dt>
-                <dd>{model.installed ? "Installed" : "Download needed"}</dd>
+                <dd>
+                  {(model as any).stub
+                    ? "Template stub · no model is installed"
+                    : model.installed
+                      ? "Installed"
+                      : "Download needed"}
+                </dd>
               </div>
               <div>
                 <dt>Export device support</dt>
