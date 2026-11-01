@@ -105,22 +105,21 @@ strip_ansi() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
 
 CONVEX_STATE="unknown"
 CONVEX_DETAIL="probe did not run"
+CONVEX_URL=""
 CONVEX_FIX='npx convex dev'
 
 probe_convex() {
-	# Reuse the spec's own classifier instead of a second opinion implemented here. `CONVEX_URL`
-	# is filled in from this checkout's `.convex/local/default/config.json` for the same reason
-	# `vite.config.ts` does it: ports are per project, so there is no safe constant to fall back
-	# on, and a stale one can point at a different project's backend.
+	# Reuse the spec's own classifier instead of a second opinion implemented here.
+	# The local-config reader is injected here because the probe module itself cannot import
+	# `node:fs` (Convex bundle boundary). Without it the gate would keep probing the machine's
+	# default port, which on a shared box belongs to whichever project claimed it first.
 	local out
-	out="$(CONVEX_URL="${CONVEX_URL:-$(node -e "
-		import('./scripts/convex-local.mjs')
-			.then((m) => process.stdout.write(m.readLocalDeployment()?.url ?? ''))
-			.catch(() => process.stdout.write(''));
-	" 2>/dev/null)}" node -e "
+	out="$(node -e "
+		const { readFileSync } = require('node:fs');
 		import('./src/convex/deployment_probe.ts')
 			.then(async (m) => {
-				const p = await m.probeDeployment();
+				const url = m.deploymentUrl(process.env, (p) => readFileSync(p, 'utf8'));
+				const p = await m.probeDeployment(url);
 				process.stdout.write(JSON.stringify({ state: p.state, detail: p.detail, url: p.url }));
 			})
 			.catch((error) => {
@@ -146,6 +145,13 @@ probe_convex() {
 		process.stdin.on('data', (chunk) => (raw += chunk));
 		process.stdin.on('end', () => {
 			try { process.stdout.write(JSON.parse(raw).detail); } catch { process.stdout.write('unreadable probe'); }
+		});
+	")"
+	CONVEX_URL="$(printf '%s' "$out" | node -e "
+		let raw = '';
+		process.stdin.on('data', (chunk) => (raw += chunk));
+		process.stdin.on('end', () => {
+			try { process.stdout.write(JSON.parse(raw).url); } catch { process.stdout.write(''); }
 		});
 	")"
 }
@@ -235,7 +241,11 @@ if need_tool vitest vitest; then
 	# --reporter=verbose is load-bearing, not cosmetic: it is the only reporter that prints
 	# the skip reason next to the skipped test. The default and json reporters both drop it,
 	# which is exactly how a skip became indistinguishable from a pass.
-	run vitest "$BIN/vitest" run --reporter=verbose
+	#
+	# CONVEX_URL carries the probed URL into the spec. The spec and this script must agree on
+	# which deployment they mean; without this the script probes the checkout's own port while
+	# the spec defaults to 3210 and reports UNPROVEN against the wrong backend.
+	CONVEX_URL="$CONVEX_URL" run vitest "$BIN/vitest" run --reporter=verbose
 	vitest_rc=$?
 
 	VITEST_SUMMARY="$(strip_ansi "$LAST_LOG" | grep -E '^[[:space:]]*Tests[[:space:]]' | tail -n 1 | sed 's/^[[:space:]]*//')"

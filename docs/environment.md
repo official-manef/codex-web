@@ -55,22 +55,27 @@ as recipe-only). Every one is documented in its own section below.
 The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 `src/lib/server/mcp/config.ts`. [AI/MCP setup](ai-mcp.md) documents limits and Composio.
 
-| Setting                   | Default | Actual consumer                                                                                                                |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `AI_ENABLED`              | `false` | Enables bounded BYOK chat streaming.                                                                                           |
-| `AI_MODELS_JSON`          | Empty   | Approved model IDs grouped by `openai`, `anthropic`, `google`, `nine-router`; no automatically selected model.                 |
-| `CAPABILITY_ACCESS_TOKEN` | Empty   | Optional private operator bearer credential, at least 32 characters. Google sessions are the normal per-user alternative.      |
-| `MCP_CLIENT_ENABLED`      | `false` | Enables discovery and manually confirmed calls to configured remote servers.                                                   |
-| `MCP_SERVERS_JSON`        | Empty   | Private aliases, fixed public HTTPS URLs, `bearer`/`x-api-key`, exact tool allowlists. Never put credentials in endpoint URLs. |
-| `MCP_SERVER_ENABLED`      | `false` | Enables the read-only `/api/mcp/server` endpoint.                                                                              |
-| `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                 |
-| `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing. |
-| `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                        |
-| `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                            |
-| `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                    |
-| `GIT_POLICY_JSON`         | Empty   | Per-verb decision for `git_diff`/`git_stage`/`git_commit`/`git_worktree`. Empty or malformed denies every write.               |
-| `AI_TOOLS_ENABLED`        | `false` | Lets a BYOK turn use the tool loop at all. The request must also ask, and the policy must allow the verb.                      |
-| `AI_POLICY_JSON`          | Empty   | Per-verb decision for `read_file`/`write_file`/`apply_patch`/`exec`/`mcp_app`. Empty or malformed denies every verb.           |
+| Setting                   | Default | Actual consumer                                                                                                                 |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_ENABLED`              | `false` | Enables bounded BYOK chat streaming.                                                                                            |
+| `AI_MODELS_JSON`          | Empty   | Approved model IDs grouped by `openai`, `anthropic`, `google`, `nine-router`; no automatically selected model.                  |
+| `CAPABILITY_ACCESS_TOKEN` | Empty   | Optional private operator bearer credential, at least 32 characters. Google sessions are the normal per-user alternative.       |
+| `MCP_CLIENT_ENABLED`      | `false` | Enables discovery and manually confirmed calls to configured remote servers.                                                    |
+| `MCP_SERVERS_JSON`        | Empty   | Private aliases, fixed public HTTPS URLs, `bearer`/`x-api-key`, exact tool allowlists. Never put credentials in endpoint URLs.  |
+| `MCP_SERVER_ENABLED`      | `false` | Enables the read-only `/api/mcp/server` endpoint.                                                                               |
+| `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                  |
+| `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing.  |
+| `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                         |
+| `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                             |
+| `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                     |
+| `GIT_POLICY_JSON`         | Empty   | Per-verb decision for `git_diff`/`git_stage`/`git_commit`/`git_worktree`. Empty or malformed denies every write.                |
+| `AI_TOOLS_ENABLED`        | `false` | Lets a BYOK turn use the tool loop at all. The request must also ask, and the policy must allow the verb.                       |
+| `AI_POLICY_JSON`          | Empty   | Per-verb decision for `read_file`/`write_file`/`apply_patch`/`exec`/`mcp_app`. Empty or malformed denies every verb.            |
+| `BRIDGE_URL`              | Empty   | Loopback/LAN/HTTPS base URL of the user's bridge. With `BRIDGE_TOKEN`, tool calls reach that machine; without it, tools refuse. |
+| `BRIDGE_TOKEN`            | Empty   | Bearer for the bridge. Never logged, never in a URL. Unset disables tool execution entirely.                                    |
+| `AUTOMATIONS_ENABLED`     | `false` | Enables `POST /api/automations/run`, a **dry run** that previews `decideRun` and executes nothing.                              |
+| `MCP_APPS_ENABLED`        | `false` | Enables `GET /api/mcp/apps`, the operator's sandboxed app allowlist.                                                            |
+| `MCP_APPS_JSON`           | Empty   | Closed list of `{ id, name, origin, entry, surfaces }`. Invalid entries are dropped, invalid JSON is a 503.                     |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.

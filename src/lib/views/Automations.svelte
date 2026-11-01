@@ -28,6 +28,20 @@
 		enabled: boolean;
 	};
 
+	type DryRunDecision = {
+		id: string;
+		run: boolean;
+		reason: string;
+	};
+
+	type DryRunResult = {
+		decisions: DryRunDecision[];
+		considered: number;
+		wouldRun: number;
+		executor: string;
+		note: string;
+	};
+
 	const cloudUrl = env.PUBLIC_CONVEX_URL;
 	const list = cloudUrl ? useQuery(api.automations.list, () => ({})) : null;
 	const create = cloudUrl ? useMutation(api.automations.create) : null;
@@ -37,6 +51,9 @@
 	let interval = $state(60);
 	let busy = $state("");
 	let error = $state("");
+	let dryRunResult = $state<DryRunResult | null>(null);
+	let dryRunDisabled = $state(false);
+	let dryRunError = $state("");
 
 	const rows = $derived(((list?.data ?? []) as Row[]) || []);
 	const available = cloudUrl !== "" && cloudUrl !== undefined;
@@ -71,15 +88,51 @@
 			busy = "";
 		}
 	}
+
+	async function runDryRun() {
+		busy = "dryRun";
+		dryRunError = "";
+		dryRunDisabled = false;
+		try {
+			const res = await fetch("/api/automations/run", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json"
+				}
+			});
+			if (res.status === 404) {
+				dryRunDisabled = true;
+				dryRunResult = null;
+				return;
+			}
+			if (!res.ok) {
+				const body = (await res.json().catch(() => ({}))) as { message?: string };
+				throw new Error(body?.message ?? `Dry run failed with status ${res.status}`);
+			}
+			dryRunResult = (await res.json()) as DryRunResult;
+		} catch (e: any) {
+			dryRunError = e?.message ?? "The dry run could not be executed.";
+		} finally {
+			busy = "";
+		}
+	}
 </script>
 
 <View
 	title="Scheduled tasks"
 	icon="workflow"
-	subtitle="Records a prompt and a due time. This build does not run them yet: the runner and its failure path come first, so nothing here claims to be scheduling anything."
+	subtitle="Records a prompt and a due time. This build does not run them yet: the runner and its failure path come first, so nothing here claims to be scheduling anything. The dry run previews decisions and executes nothing."
 >
 	{#snippet actions()}
-		<span class="chip mono">{rows.length} of {MAX_AUTOMATIONS}</span>
+		<div class="flex items-center gap-2">
+			<button
+				type="button"
+				class="btn"
+				disabled={busy === "dryRun"}
+				onclick={runDryRun}>Dry run</button
+			>
+			<span class="chip mono">{rows.length} of {MAX_AUTOMATIONS}</span>
+		</div>
 	{/snippet}
 
 	{#if !available}
@@ -150,5 +203,58 @@
 				{/each}
 			</ul>
 		{/if}
+	{/if}
+
+	{#if dryRunDisabled}
+		<p class="mt-4 text-[13px] leading-relaxed text-ink-2" role="status">
+			The dry run is switched off on this server. Set <code>AUTOMATIONS_ENABLED=true</code> in the
+			server environment to enable it.
+		</p>
+	{/if}
+
+	{#if dryRunError}
+		<p class="mt-4 text-[12px] text-crimson" role="alert">{dryRunError}</p>
+	{/if}
+
+	{#if dryRunResult}
+		<section class="mt-6 space-y-3">
+			<div class="flex items-center justify-between">
+				<h3 class="text-[13px] font-medium">Dry run preview</h3>
+				<span class="text-[12px] text-ink-3">
+					{dryRunResult.wouldRun} of {dryRunResult.considered} would run
+				</span>
+			</div>
+			{#if dryRunResult.decisions.length === 0}
+				<p class="text-[12.5px] text-ink-2" role="status">No due automations evaluated.</p>
+			{:else}
+				<div class="card overflow-x-auto">
+					<table class="w-full text-left text-[12px]">
+						<caption class="sr-only">Dry run decisions</caption>
+						<thead class="bg-panel-2 text-ink-2">
+							<tr>
+								<th scope="col" class="w-16 px-4 py-2.5 font-medium">#</th>
+								<th scope="col" class="w-28 px-4 py-2.5 font-medium">Would run</th>
+								<th scope="col" class="px-4 py-2.5 font-medium">Reason</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-line">
+							{#each dryRunResult.decisions as decision, index}
+								<tr>
+									<td class="mono px-4 py-2 text-ink-3">{index + 1}</td>
+									<td class="px-4 py-2">
+										{#if decision.run}
+											<span class="font-medium text-ink">Yes</span>
+										{:else}
+											<span class="text-ink-3">No</span>
+										{/if}
+									</td>
+									<td class="mono px-4 py-2 text-ink-2">{decision.reason}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
 	{/if}
 </View>

@@ -39,7 +39,8 @@ export const FEATURE_ACCESS: Readonly<Record<string, FeatureRequirement>> = Obje
 	devices: 'any',
 	memories: 'any',
 	git: 'any',
-	automations: 'any'
+	automations: 'any',
+	'mcp-apps': 'any'
 });
 
 /** Navigation that must stay reachable, including the Tools screen that re-enables the rest. */

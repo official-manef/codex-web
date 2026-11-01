@@ -296,12 +296,14 @@ loaded screen.
 
 Ordered by the reasoning in `docs/chatgpt-desktop-parity-windows.md` §7, cheapest first.
 
-| #   | Item                                        | Blocker                                                               | Status       |
-| --- | ------------------------------------------- | --------------------------------------------------------------------- | ------------ |
-| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`  | done         |
-| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default          | done (gated) |
-| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol exist; no manifest loader, no approval gate           | partial      |
-| 4   | Memories                                    | local done; Convex tables exist but the UI still reads `localStorage` | partial      |
+| #   | Item                                        | Blocker                                                                  | Status       |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------ | ------------ |
+| 1   | Projects                                    | none; `move-project`/`remove-project` already carry `disabledReason`     | done         |
+| 2   | Git surface: status, recent commits         | allowlist + fixed argv; writes policy-gated, deny by default             | done (gated) |
+| 3   | Plugin-extension entrypoints (MCP App host) | host + protocol + manifest + screen; the `mcp_app` verb is not consulted | partial      |
+| 4   | Memories                                    | Convex when signed in, local otherwise, explicit import button           | done         |
+| 5   | Bridge-backed tool execution                | client + route wired; the bridge has not grown the HTTP verbs            | partial      |
+| 6   | Scheduled tasks                             | records + a dry-run decision route; still no runner                      | partial      |
 
 Done rows name the file that carries them: Projects `src/lib/projects.ts`, Memories
 `src/lib/memories.ts` + `src/convex/memories.ts`, Git `src/lib/server/git.ts` +
@@ -311,7 +313,19 @@ The git surface used to be read-only. As of 2026-11-02 it also stages, commits a
 worktrees — behind `GIT_POLICY_JSON`, which denies every verb when unset or malformed. Diff and
 status stay open because they cannot write. Push and PR review remain absent: no forge
 credential is in reach, so claiming them would repeat the AC mistake this document exists to
-correct. Full phase-by-phase status: `docs/parity-checklist-2026-11-02.md` §6.
+correct. Full phase-by-phase status: `docs/parity-checklist-2026-11-02.md` §6 and §7.
+
+Two validation findings worth keeping, both from the second batch:
+
+- `chat.ts` indexed the policy by tool name rather than policy verb. `read_file` and `exec` share
+  a name so it looked correct; `apply_patch` would have read `undefined` and denied for the wrong
+  reason. Fixed through `TOOL_MAP`.
+- Three auth assertions had no `expect` of their own, so with `requireAssertions` they failed the
+  moment a real deployment answered — they could only ever pass while the backend was empty. The
+  skip branch is what hid it. Resolved upstream in `30c6096`, which asserts
+  `classifyAuthFailure(...)` explicitly and also removes the hardcoded `3210` default in favour of
+  `scripts/convex-local.mjs`; the reader-injection variant this batch wrote was dropped in the
+  rebase because that version covers the same ground without a per-caller parameter.
 
 Out of scope unless a product decision changes it: parallel chat orchestration, Computer
 Use, mobile remote relay, MCP 2.0 events.

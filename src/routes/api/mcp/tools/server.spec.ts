@@ -6,7 +6,7 @@ const { privateEnv, publicEnv, logMock, clientMock, configMock } = vi.hoisted(()
 	publicEnv: { PUBLIC_SITE_URL: 'https://app.example.com' },
 	logMock: { logEvent: vi.fn() },
 	clientMock: { listRemoteTools: vi.fn(), executeRemoteTool: vi.fn() },
-	configMock: { connectionFor: vi.fn() }
+	configMock: { connectionFor: vi.fn(), mcpConnections: vi.fn() }
 }));
 
 type Ev = Parameters<typeof POST>[0];
@@ -58,6 +58,10 @@ beforeEach(() => {
 	});
 	logMock.logEvent.mockReset().mockResolvedValue(undefined);
 	configMock.connectionFor.mockReset().mockReturnValue(connection);
+	// The route validates the operator's catalog before the caller's body: an unparseable
+	// MCP_SERVERS_JSON is a 503, by design (test/api). Stub the parse so these gating cases
+	// still exercise their own 400 path.
+	configMock.mcpConnections.mockReset().mockReturnValue([connection]);
 	clientMock.listRemoteTools.mockReset().mockResolvedValue([{ name: 'echo' }]);
 	clientMock.executeRemoteTool.mockReset().mockResolvedValue({ content: [] });
 });

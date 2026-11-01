@@ -206,6 +206,14 @@ export const SECTIONS = [
 		// Records intent only. The runner that would call a model is not implemented, and the
 		// view says so rather than showing a scheduler that never fires.
 		loadScreen: () => import('#lib/views/Automations.svelte')
+	},
+	{
+		id: 'mcp-apps',
+		label: 'MCP apps',
+		icon: 'grid',
+		group: 'Settings & help',
+		navigationRole: 'settings',
+		loadScreen: () => import('#lib/views/McpApps.svelte')
 	}
 ] as const;
 
