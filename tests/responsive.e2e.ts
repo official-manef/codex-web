@@ -346,14 +346,31 @@ test.describe('landscape phone', () => {
 	test('every rail control is reachable in landscape', async ({ page }) => {
 		await openWorkspace(page);
 		// Server controls and the user menu sit at the bottom of the rail. At 360px tall the rail
-		// is taller than the viewport, so they used to fall below the fold with no way back up.
+		// is taller than the viewport, so before the fix they fell below the fold with no scroll
+		// container and no way back up — unreachable, not merely off-screen.
+		//
+		// The right assertion is "there is a scroll container that can bring it into view", not
+		// "it is already visible": requiring the latter would demand a rail short enough to fit
+		// 360px, which is a different (and unmet) design goal.
 		for (const label of ['Server controls', 'User menu']) {
 			const control = page.getByRole('button', { name: label }).first();
+			const scroller = await control.evaluate((element) => {
+				// Nearest ancestor that can actually scroll this element into view.
+				for (let node = element.parentElement; node; node = node.parentElement) {
+					const style = getComputedStyle(node);
+					const scrollable = /auto|scroll/.test(style.overflowY);
+					if (scrollable && node.scrollHeight > node.clientHeight) return true;
+				}
+				return false;
+			});
+			expect(scroller, `${label} has a scroll container`).toBe(true);
+
+			// And scrolling that container really does reach it.
 			await control.scrollIntoViewIfNeeded();
 			await expect(control, label).toBeInViewport();
-			const controlBox = await control.boundingBox();
-			expect(controlBox!.y, label).toBeGreaterThanOrEqual(0);
-			expect(controlBox!.y + controlBox!.height, label).toBeLessThanOrEqual(360);
+			const box = await control.boundingBox();
+			expect(box!.y, label).toBeGreaterThanOrEqual(0);
+			expect(box!.y + box!.height, label).toBeLessThanOrEqual(360);
 		}
 	});
 });
