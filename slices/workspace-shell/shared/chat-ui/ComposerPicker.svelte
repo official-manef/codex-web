@@ -65,21 +65,6 @@
       observer.disconnect();
     };
   });
-
-  function tabKey(event: KeyboardEvent, index: number) {
-    let next: number;
-    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-    else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = tabs.length - 1;
-    else return;
-    if (!tabs.length) return;
-    event.preventDefault();
-    onTabChange(tabs[next].id);
-    const group =
-      event.currentTarget instanceof HTMLElement ? event.currentTarget.parentElement : null;
-    group?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
-  }
 </script>
 
 <div
@@ -102,18 +87,11 @@
       onclick={onClose}><Icon name="x" size={16} /></button
     >
   </div>
-  {#if tabs.length}<div class="picker-tabs" role="tablist" aria-label={`${title} categories`}>
-      {#each tabs as tab, index (tab.id)}<button
+  {#if tabs.length}<div class="picker-tabs" role="group" aria-label={`${title} categories`}>
+      {#each tabs as tab (tab.id)}<button
           type="button"
-          role="tab"
-          aria-selected={activeTab === tab.id}
-          aria-controls="composer-resources"
-          tabindex={activeTab === tab.id ||
-          (!tabs.some((item) => item.id === activeTab) && index === 0)
-            ? 0
-            : -1}
+          aria-pressed={activeTab === tab.id}
           onpointerdown={(event) => event.preventDefault()}
-          onkeydown={(event) => tabKey(event, index)}
           onclick={() => onTabChange(tab.id)}>{tab.label}</button
         >{/each}
     </div>{/if}
@@ -210,7 +188,7 @@
     white-space: nowrap;
     color: var(--color-ink-2);
   }
-  .picker-tabs button[aria-selected="true"] {
+  .picker-tabs button[aria-pressed="true"] {
     background: var(--color-hover);
     color: var(--color-ink);
   }

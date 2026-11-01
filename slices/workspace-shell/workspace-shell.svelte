@@ -1170,6 +1170,9 @@
           <button
             aria-label={item.label}
             title={item.label}
+            aria-current={(item.id === "chat" ? !layout.output : layout.output === item.id)
+              ? "page"
+              : undefined}
             class:rail-active={item.id === "chat" ? !layout.output : layout.output === item.id}
             onclick={() => go(item.id as OutputRoute)}><Icon name={item.icon} size={18} /></button
           >
@@ -1753,6 +1756,14 @@
     background: var(--color-nav-active);
     color: var(--color-ink);
   }
+  /* Forced colours drop every author background, so `rail-active` became invisible: the
+     current app looked like the others. Marks of state have to survive the palette swap. */
+  @media (forced-colors: active) {
+    .desktop-rail > button[aria-current] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+  }
   .output-tabbar {
     display: flex;
     align-items: center;
@@ -1818,6 +1829,15 @@
     background: var(--color-tab-active);
     border-color: var(--color-tab-active-border);
     color: var(--color-ink);
+  }
+  /* Forced colours: the selected tab kept the idle colour, so the strip showed no position. */
+  @media (forced-colors: active) {
+    .output-tab.selected {
+      border-color: Highlight;
+    }
+    .output-tab.selected > [role="tab"] {
+      font-weight: 700;
+    }
   }
   .output-tab > [role="tab"] {
     display: flex;

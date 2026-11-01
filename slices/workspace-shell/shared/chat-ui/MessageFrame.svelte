@@ -46,6 +46,13 @@
     color: var(--color-ink);
     border: 1px solid var(--color-line);
   }
+  /* Forced colours: the user bubble's only distinction from the page was a background tint,
+     which the palette swap removes; keep the outline that separates the two tones. */
+  @media (forced-colors: active) {
+    .chat-message-body {
+      border: 1px solid CanvasText;
+    }
+  }
   .chat-message-meta {
     display: flex;
     flex-wrap: wrap;

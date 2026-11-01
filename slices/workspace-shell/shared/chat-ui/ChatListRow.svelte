@@ -29,6 +29,13 @@
   .session-selected {
     background: var(--color-nav-active);
   }
+  /* Forced colours remove the background tint that marked the active conversation. */
+  @media (forced-colors: active) {
+    .session-selected {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+  }
   .row-main {
     min-width: 0;
     display: flex;

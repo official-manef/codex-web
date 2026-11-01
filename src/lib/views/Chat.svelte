@@ -909,13 +909,16 @@
             .slice(0, capabilities?.attachments?.max_files_per_turn ?? 4)
         : [];
       navigationOpen = false;
-      sessionLoading = false;
       const position = readDraft<number | null>(`chat-scroll:${id}`, null);
       await tick();
       if (typeof position === "number" && Number.isFinite(position)) {
         transcript?.scrollTo({ top: Math.max(0, position), behavior: "auto" });
         observeScroll();
       } else await scrollEnd(true);
+      // Clear the loading state only after the transcript has committed: `sessionLoading`
+      // drives the log's aria-busy, and releasing it before the DOM swapped meant a screen
+      // reader was handed the whole conversation as a live-region insertion.
+      if (request === sessionRequest) sessionLoading = false;
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -1866,11 +1869,9 @@
   }
   function onKey(e: KeyboardEvent) {
     if (commandVisible && !e.isComposing) {
-      if (e.key === "Tab") {
-        resourcePickerOpen = false;
-        dismissedCommand = commandSignature;
-        return;
-      }
+      // Tab is left to the browser: the picker's close and category buttons sit after the
+      // textarea in DOM order, so tabbing walks into them. Dismissing here made those two
+      // controls unreachable by keyboard.
       if (e.key === "Escape") {
         e.preventDefault();
         resourcePickerOpen = false;
@@ -2006,7 +2007,10 @@
   {#each (session?.turns ?? []).filter((turn: any) => !jobId || turn.status !== "running") as turn}<section
       class="conversation-turn"
     >
-      <article class="conversation-user">
+      <article
+        class="conversation-user"
+        aria-label={`Your message, ${messageTime(turn.created_at).text}`}
+      >
         <MessageFrame
           tone="user"
           time={messageTime(turn.created_at).text}
@@ -2068,7 +2072,10 @@
       <div class="conversation-replies" class:comparison-replies={turn.replies?.length > 1}>
         {#each (turn.replies ?? []).filter( (reply: any) => matchesLane(reply, lane) ) as reply}{@const replyIndex =
             (turn.replies ?? []).indexOf(reply)}{@const m = metrics(reply)}
-          <article class="conversation-assistant">
+          <article
+            class="conversation-assistant"
+            aria-label={`Reply from ${reply.device ?? "the local assistant"}`}
+          >
             <MessageFrame tone="assistant">
               {#snippet children()}
                 <div class="reply-heading">
@@ -2191,7 +2198,7 @@
       ? (job?.lanes ?? []).find((row: any) => row.comparison_id === comparisonId(lane))
       : job}
     <section class="conversation-turn">
-      <article class="conversation-user">
+      <article class="conversation-user" aria-label="Your message">
         <MessageFrame tone="user">
           <h2 class="sr-only">You</h2>
           <p>{pending}</p>
@@ -2200,6 +2207,7 @@
       <div class="conversation-replies" class:comparison-replies={comparison}>
         {#each (job?.results ?? []).filter( (reply: any) => matchesLane(reply, lane) ) as completed}<article
             class="conversation-assistant"
+            aria-label={`Reply from ${completed.device ?? "the local assistant"}`}
           >
             <div class="reply-heading">
               <strong>{completed.device}</strong><span>Completed</span>
@@ -2221,6 +2229,7 @@
       </div>
       {#if !lane || !(job?.results ?? []).some((reply: any) => matchesLane(reply, lane))}<article
           class="conversation-assistant"
+          aria-label={`Reply from ${lane?.device ?? job?.device ?? (selectedDevices.join(" / ") || "the local assistant")}`}
         >
           <div class="reply-heading">
             <strong>{lane?.device ?? job?.device ?? selectedDevices.join(" / ")}</strong><span
@@ -2610,7 +2619,7 @@
     ariaLabel="Current chat"
     ariaLogLabel="Conversation"
     ariaLive="polite"
-    {busy}
+    busy={busy || sessionLoading}
     inert={navigationOpen}
     scrollClass={isCompare ? "comparison-scroll" : ""}
     scrollStyle={isCompare ? "display:flex;overflow:hidden;--chat-transcript-padding:0" : undefined}
@@ -2947,6 +2956,7 @@
           onkeyup={observeComposer}
           onclick={observeComposer}
           onselect={observeComposer}
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={commandVisible}
           aria-controls={commandVisible ? "composer-resources" : undefined}
