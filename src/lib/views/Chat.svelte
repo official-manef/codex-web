@@ -21,6 +21,7 @@
   import ModelCapabilities from "#lib/ModelCapabilities.svelte";
   import ChatTools from "#lib/ChatTools.svelte";
   import { api, get, post, postAudio } from "#lib/http.js";
+  import { projectStore } from "#lib/projects.js";
   import {
     resolveChatBackend,
     streamServerChat,
@@ -149,6 +150,40 @@
   function pinSession(id: string) {
     pinnedIds = togglePinnedSession(pinnedIds, id);
     saveDraft("pinned-sessions", pinnedIds);
+  }
+  // Project membership is local state (src/lib/projects.ts), never a permission and never a
+  // path. `projectVersion` exists only to re-render the sidebar after a write.
+  let projectVersion = $state(0);
+  function projectsNow() {
+    void projectVersion;
+    return projectStore.projects();
+  }
+  function projectMenuItems(): WorkspaceMenuItem[] {
+    const rows = projectsNow();
+    if (!rows.length)
+      return [
+        {
+          id: "no-projects",
+          label: "No projects yet",
+          description: "Create one in the sidebar first.",
+          disabled: true,
+        },
+      ];
+    return rows.map((project) => ({
+      id: project.id,
+      label: project.name,
+      icon: "folder",
+    }));
+  }
+  function moveToProject(sessionId: string, projectId: string) {
+    if (projectStore.assign(sessionId, projectId)) projectVersion += 1;
+  }
+  function createProjectPrompt() {
+    const name = window.prompt("Project name");
+    if (name === null) return;
+    const created = projectStore.create(name);
+    if (created) projectVersion += 1;
+    else if (name.trim()) error = "That project name is empty or too long.";
   }
   $effect(() => {
     if (navigationOpen)
@@ -1772,6 +1807,10 @@
       export: () => {
         void withRowSession(item, exportSession);
       },
+      "remove-project": () => {
+        projectStore.assign(item.id, null);
+        projectVersion += 1;
+      },
       delete: () => {
         void withRowSession(item, () => {
           confirmation = "delete";
@@ -1793,7 +1832,14 @@
           voiceWorking ||
           micActive ||
           (!action.children && !handlers[action.id]),
-        children: action.children?.length ? bind(action.children) : undefined,
+        children: action.children?.length
+          ? bind(action.children)
+          : action.id === "move-project"
+            ? projectMenuItems().map((row) => ({
+                ...row,
+                onSelect: () => moveToProject(item.id, row.id),
+              }))
+            : undefined,
         onSelect: handlers[action.id],
       }));
     return bind(uiConfig.sessionMenu);
@@ -2340,6 +2386,9 @@
       onclick={newSession}
       disabled={busy || !!operation || attachmentWorking || voiceWorking || micActive}
       ><Pencil size={15} />New chat</button
+    >
+    <button class="new-chat-button project-create" onclick={createProjectPrompt}
+      ><span aria-hidden="true">+</span>New project</button
     >
     {#if searchOpen || sessionSearch}<label class="sr-only" for="session-search"
         >Search saved chats</label
@@ -3438,6 +3487,10 @@
   }
   .reference-chat .sidebar-context-navigation {
     margin: 18px 0 8px;
+  }
+  .reference-chat .project-create {
+    color: var(--ink-3);
+    font-size: 12.5px;
   }
   .reference-chat .session-list {
     gap: 0;

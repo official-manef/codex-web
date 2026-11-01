@@ -163,14 +163,12 @@ export const chatUI = {
 			id: 'move-project',
 			label: 'Move to project',
 			icon: 'folder',
-			separator: true,
-			disabledReason: 'This runtime has no chat project membership.'
+			separator: true
 		},
 		{
 			id: 'remove-project',
 			label: 'Remove from project',
-			icon: 'folder',
-			disabledReason: 'This runtime has no chat project membership.'
+			icon: 'folder'
 		}
 	]
 } as const;

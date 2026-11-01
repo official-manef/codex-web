@@ -542,18 +542,6 @@ function stubResponse(path: string): Record<string, unknown> {
 				reason
 			};
 
-		// Corpus.svelte reads `d.roots`, `d.dir`, `d.files`, `d.results`.
-		case '/api/corpus/list':
-			return { dir: '', files: [], entries: [], stub: true, reason };
-		case '/api/corpus/roots':
-			return { roots: [], stub: true, reason };
-
-		// Schema.svelte reads `d.ok`, `d.errors`, `d.warnings`, `d.spec`, `d.script`.
-		case '/api/schema/compile':
-		case '/api/schema/starter':
-		case '/api/schema/validate':
-			return { ok: false, errors: [], warnings: [], spec: null, script: '', stub: true, reason };
-
 		// Workflow views read `workflows`, `runs`, `catalogue`.
 		case '/api/workflows':
 		case '/api/workflows/catalogue':
@@ -625,6 +613,5 @@ export const api = {
 	capabilities: () => get('/api/capabilities'),
 	attachmentUpload: async (file: File) =>
 		post('/api/attachments', { name: file.name, type: file.type, size: file.size }),
-	attachmentDelete: (id: string) => post('/api/attachments/delete', { id, confirm: true }),
-	corpusClassify: (body: Record<string, unknown>) => post('/api/corpus/classify', body)
+	attachmentDelete: (id: string) => post('/api/attachments/delete', { id, confirm: true })
 };

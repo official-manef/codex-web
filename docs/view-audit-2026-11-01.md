@@ -19,7 +19,12 @@ screenshots of Codex Desktop. Read this before building any screen.
 >
 > Still guessed: `pricing`, `parameters`, `faq`, `performance`, `workspace-home`. Their invented
 > numbers are removed, but none has a data source, so the classification stands. `Corpus`,
-> `Reference` and `Schema` remain unregistered.
+> `Reference` and `Schema` were deleted — they were registered by nothing and called by nothing.
+>
+> **Projects is no longer absent.** `src/lib/projects.ts` + `projects.spec.ts` (10 tests) give a
+> chat a local project membership; `move-project` / `remove-project` dropped their
+> `disabledReason` and the sidebar has a "New project" affordance. It is local state on the
+> `draft_storage` pattern — no schema table, no route, no new dependency, and no permission.
 
 | State     | Meaning                                                                      |
 | --------- | ---------------------------------------------------------------------------- |
