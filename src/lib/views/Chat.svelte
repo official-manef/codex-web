@@ -3858,7 +3858,7 @@
     height: 30px;
     min-height: 30px;
     background: var(--color-execution);
-    color: var(--color-ink);
+    color: var(--color-on-accent);
     border: 0;
   }
   .reference-chat .send-button:hover {

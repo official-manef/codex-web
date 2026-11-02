@@ -9,10 +9,18 @@
 	import { api } from '../convex/_generated/api';
 	import { configureCloudChat } from '$lib/cloud/chat';
 	import { configureCloudMcp } from '$lib/cloud/mcp';
+	import { currentTheme, syncTheme } from '$lib/theme.svelte';
+	import { browser } from '$app/environment';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 	const convexUrl = env.PUBLIC_CONVEX_URL;
+
+	// The root used to hardcode `class="dark"`, which made the light palette and the `.dark` gate
+	// unreachable. `theme.svelte.ts` owns the choice; this applies it and reads the stored
+	// preference once the client is live, so a returning visitor keeps their theme.
+	if (browser) syncTheme();
+	const theme = $derived(currentTheme());
 
 	if (convexUrl) {
 		setupConvex(convexUrl);
@@ -113,6 +121,9 @@
 	{#if seo.bingVerification}<meta name="msvalidate.01" content={seo.bingVerification} />{/if}
 </svelte:head>
 
-<div class="dark h-dvh w-full overflow-hidden bg-background text-foreground">
+<div
+	class="h-dvh w-full overflow-hidden bg-background text-foreground"
+	class:dark={theme === 'dark'}
+>
 	{@render children()}
 </div>

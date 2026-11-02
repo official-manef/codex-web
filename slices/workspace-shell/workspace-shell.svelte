@@ -28,6 +28,7 @@
     WorkspaceSettingsComponent,
     WorkspaceLauncherComponent,
   } from "./shared/runtime/index.js";
+  import { toggleTheme } from "$lib/theme.svelte";
   import { configuredNavigation } from "./shared/launcher/index.js";
   import { WorkspaceMenuItems, type WorkspaceMenuItem } from "./shared/menu/index.js";
   import type { ApprovalControlConfig } from "./shared/approval-mode/index.js";
@@ -387,6 +388,12 @@
               },
             ]
           : []),
+        {
+          id: "theme",
+          label: labels.toggleTheme,
+          separatorBefore: true,
+          onSelect: toggleTheme,
+        },
         {
           id: "find",
           label: labels.findChats,

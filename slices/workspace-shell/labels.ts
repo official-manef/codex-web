@@ -7,6 +7,7 @@ export type WorkspaceLabels = {
   close: string;
   settingsMenu: string;
   toggleSidebarMenu: string;
+  toggleTheme: string;
   toggleOutputPanel: string;
   switchChatTabs: string;
   tools: string;
@@ -103,6 +104,7 @@ export const defaultWorkspaceLabels: Readonly<WorkspaceLabels> = {
   close: "Close",
   settingsMenu: "Settings…",
   toggleSidebarMenu: "Toggle Sidebar",
+  toggleTheme: "Toggle Light/Dark Theme",
   toggleOutputPanel: "Toggle output panel",
   switchChatTabs: "Switch between Chat and tabs",
   tools: "Tools",
