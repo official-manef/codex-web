@@ -27,6 +27,16 @@ function decodedBase64Size(data: string): number {
 	return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
 }
 
+/**
+ * Both `atob` and the size formula above disagree with the payload on two shapes: padding
+ * requires a length that is a multiple of 4, and an unpadded length of 1 mod 4 decodes to
+ * nothing. Checking the shape first keeps the size claim honest.
+ */
+function isDecodableBase64(data: string): boolean {
+	const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
+	return padding ? data.length % 4 === 0 : data.length % 4 !== 1;
+}
+
 const textPartSchema = z
 	.object({
 		type: z.literal('text'),
@@ -41,6 +51,13 @@ const imagePartSchema = z
 		data: z
 			.string()
 			.regex(base64Regex)
+			// Same rule as `acceptImage`: padding makes the length a multiple of 4 mandatory,
+			// and an unpadded length of 1 mod 4 is undecodable. `decodedBase64Size` alone
+			// reported exactly 4 MB for `'A'.repeat(5592407) + '=='`, which really decodes to
+			// 4 MB + 1, and reported 9 bytes for `iVBORw0KGgoAA`, which decodes to nothing.
+			.refine((data) => isDecodableBase64(data), {
+				message: 'Image data is not decodable base64'
+			})
 			.refine((data) => decodedBase64Size(data) <= 4 * 1024 * 1024, {
 				message: 'Image decoded size exceeds 4 MB'
 			})

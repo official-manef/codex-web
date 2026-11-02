@@ -98,8 +98,12 @@ export function toggleAvailableTool(
 }
 
 export function nextComposerSelection(current: number, key: string, count: number) {
-  if (!count) return -1;
-  if (key === "ArrowDown") return (current + 1 + count) % count;
-  if (key === "ArrowUp") return (current - 1 + count) % count;
-  return Math.min(count - 1, Math.max(0, current));
+  // `count` comes from a derived array length, but a negative or fractional value used to
+  // index outside the list: `(-5 + 1 + -1) % -1` returned `-0`, and `Enter` returned `-2`.
+  // `-1` is the caller's "nothing selected", so anything else must be a real row.
+  if (!Number.isInteger(count) || count < 1) return -1;
+  const index = Number.isInteger(current) ? ((current % count) + count) % count : 0;
+  if (key === "ArrowDown") return (index + 1) % count;
+  if (key === "ArrowUp") return (index - 1 + count) % count;
+  return index;
 }

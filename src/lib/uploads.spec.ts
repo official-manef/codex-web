@@ -92,6 +92,17 @@ describe('acceptImage', () => {
 		expect(acceptImage('test.png', 'image/png', 'ab=c')).toEqual({
 			error: 'That is not base64 data.'
 		});
+		// Fuzz regression: both lengths pass BASE64_PATTERN, decode to nothing, and the byte
+		// formula still reported a size, so intake accepted an image no decoder could read.
+		// `/a` is a valid PNG prefix whose 13th character lands on an unpadded 1-mod-4 length.
+		expect(acceptImage('test.png', 'image/png', 'iVBORw0KGgoAA')).toEqual({
+			error: 'That is not base64 data.'
+		});
+		expect(acceptImage('test.png', 'image/png', 'AAAA=')).toEqual({
+			error: 'That is not base64 data.'
+		});
+		expect(() => atob('iVBORw0KGgoAA')).toThrow();
+		expect(() => atob('AAAA=')).toThrow();
 	});
 
 	test('refuses a payload one byte over the cap (rule 2)', () => {

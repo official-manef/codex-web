@@ -107,7 +107,14 @@ export function acceptImage(
 		return { error: 'That is not base64 data.' };
 	}
 
+	// Two shapes `atob` refuses and this byte formula mis-measures:
+	//  - unpadded length 1 mod 4 (`iVBORw0KGgoAA`) reports 9 bytes but decodes to nothing;
+	//  - padded length not a multiple of 4 (`AAAA=`) reports 3 bytes but also decodes to nothing.
+	// Both used to pass intake and then fail anywhere the data was really decoded.
 	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+	if (padding ? base64.length % 4 !== 0 : base64.length % 4 === 1) {
+		return { error: 'That is not base64 data.' };
+	}
 	const bytes = Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
 	if (bytes > MAX_IMAGE_BYTES) {
 		return { error: 'That image is larger than 4 MB.' };
