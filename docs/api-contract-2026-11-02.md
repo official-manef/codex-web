@@ -64,6 +64,7 @@ validation · **R** response shape · **U** upstream failure / timeout.
 ### `POST /api/ai/chat`
 
 <<<<<<< HEAD
+
 | Case                                                                                            | Kind | Status                                     |
 | ----------------------------------------------------------------------------------------------- | ---- | ------------------------------------------ |
 | Only `POST` exported                                                                            | M    | —                                          |
@@ -98,7 +99,8 @@ validation · **R** response shape · **U** upstream failure / timeout.
 | Provider error body carries no key and no upstream host                                         | U    | —                                          |
 | Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event                          |
 | Log records counts and outcome only, never message text or key                                  | R    | —                                          |
-=======
+| =======                                                                                         |
+
 > **Read the table below as the contract, not as a test inventory.** The suite was cut from 27
 > cases to 12 during the merge into `integration` (`751f590`), so several rows below are no
 > longer pinned by `contract.spec.ts`: method discipline, `415` non-JSON media type, `413`
@@ -139,7 +141,8 @@ validation · **R** response shape · **U** upstream failure / timeout.
 > | Provider error body carries no key and no upstream host                                         | U    | —                    |
 > | Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event    |
 > | Log records counts and outcome only, never message text or key                                  | R    | —                    |
->>>>>>> w3/docs2
+>
+> > > > > > > w3/docs2
 
 ### `POST /api/mcp/server`
 
@@ -311,6 +314,7 @@ request at the ceiling (+37 MB read, +12 MB parse in 13 ms). What bounds it is t
 check running before the read and the 20-per-minute burst limiter. Full numbers and the
 stream-parsing trade-off: `docs/parity-checklist-2026-11-02.md` §3.2.
 =======
+
 Not fixed here, because the fix is a product decision with a real cost: raising the cap to
 ~11 MB (2 × 4 MB after base64 overhead) means every chat request may buffer that much in
 memory, and the route currently has no streaming body parser.
@@ -328,7 +332,8 @@ owns it:
   the memory cost, or
 - correct the doc and the schema to the real budget (64 KiB total, so roughly 48 KiB of image),
   and re-add a case that asserts it.
->>>>>>> w3/docs2
+
+> > > > > > > w3/docs2
 
 Pinned by `src/routes/api/ai/chat/budget.spec.ts` (7 tests), including the "just over" case and a
 50 MB body that must be refused _during_ the read rather than after parsing.

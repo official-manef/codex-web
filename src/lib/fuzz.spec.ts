@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { parseMarkdown, parseInline, safeLink, type Inline, type MarkdownBlock } from './markdown';
-import { acceptImage, acceptImages, MAX_IMAGE_BYTES, MAX_IMAGES_PER_TURN, sniffMediaType } from './uploads';
+import {
+	acceptImage,
+	acceptImages,
+	MAX_IMAGE_BYTES,
+	MAX_IMAGES_PER_TURN,
+	sniffMediaType
+} from './uploads';
 import {
 	composerCommandQuery,
 	matchingComposerResources,
@@ -11,7 +17,12 @@ import {
 import { flowEdges, parseWorkflow, stepDependents, type WorkflowStep } from './workflow_graph';
 import { parsePolicy, POLICY_DECISIONS, POLICY_VERBS, type PolicyVerb } from './server/policy';
 import { mcpConnections } from './server/mcp/config';
-import { manifestRejection, MAX_APPS, parseAppList, parseManifest } from './server/mcp_app_manifest';
+import {
+	manifestRejection,
+	MAX_APPS,
+	parseAppList,
+	parseManifest
+} from './server/mcp_app_manifest';
 import { parseGuestMessage } from './mcp_app_host';
 import { parseChat } from './server/ai/config';
 import { resolveAuthConfig } from './server/auth/config';
@@ -106,7 +117,8 @@ describe('fuzz: src/lib/markdown.ts', () => {
 			if (inlineText(nodes).length > source.length)
 				problems.push(`${JSON.stringify(source)} grew to ${inlineText(nodes).length}`);
 			// The 1000-node ceiling keeps the tail as one text node rather than dropping it.
-			if (nodes.length > 1002) problems.push(`${JSON.stringify(source)} produced ${nodes.length} nodes`);
+			if (nodes.length > 1002)
+				problems.push(`${JSON.stringify(source)} produced ${nodes.length} nodes`);
 		}
 		fail(problems);
 	});
@@ -217,7 +229,8 @@ describe('fuzz: src/lib/markdown.ts', () => {
 			const spelling = [name, name.toUpperCase(), name.replace(/^./, (c) => `\\${c}`), ` ${name}`];
 			const raw = r.pick(spelling) + r.text('a()<>\u0000/', 12);
 			const href = safeLink(raw);
-			if (href !== null) problems.push(`${JSON.stringify(raw)} was accepted as ${JSON.stringify(href)}`);
+			if (href !== null)
+				problems.push(`${JSON.stringify(raw)} was accepted as ${JSON.stringify(href)}`);
 		}
 		fail(problems);
 	});
@@ -232,7 +245,8 @@ describe('fuzz: src/lib/uploads.ts', () => {
 			// Half the corpus is realistic base64 with a mangled tail, half is noise.
 			const payload =
 				r.next() < 0.5
-					? 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'.slice(0, r.int(50)) + r.text('AQgw+/=', 4)
+					? 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC'.slice(0, r.int(50)) +
+						r.text('AQgw+/=', 4)
 					: r.text(NOT_BASE64, 40);
 			const name = r.next() < 0.8 ? r.pick(names) : r.text('ab./\\\u0000', 8);
 			const mediaType = r.pick(types);
@@ -256,8 +270,7 @@ describe('fuzz: src/lib/uploads.ts', () => {
 		for (let i = 0; i < 4000; i++) {
 			const payload = r.text(NOT_BASE64, 30);
 			const sniffed = sniffMediaType(payload);
-			if (sniffed !== null)
-				expect(['image/png', 'image/jpeg', 'image/webp']).toContain(sniffed);
+			if (sniffed !== null) expect(['image/png', 'image/jpeg', 'image/webp']).toContain(sniffed);
 		}
 		for (const payload of ['', 'i', 'iVBORw', 'iVBORw0KGgoAA', '/9j', 'UklGRkAAAA=='])
 			expect(['image/png', 'image/jpeg', 'image/webp', null]).toContain(sniffMediaType(payload));
@@ -374,7 +387,11 @@ describe('fuzz: src/lib/server/mcp/config.ts', () => {
 			expect(parsed.password).toBe('');
 			expect(parsed.hash).toBe('');
 			expect(parsed.port).toBe('');
-			expect(/^(localhost|.*\.localhost|.*\.local|\[.*\]|\d+(?:\.\d+){3})$/i.test(parsed.hostname.replace(/\.$/, ''))).toBe(false);
+			expect(
+				/^(localhost|.*\.localhost|.*\.local|\[.*\]|\d+(?:\.\d+){3})$/i.test(
+					parsed.hostname.replace(/\.$/, '')
+				)
+			).toBe(false);
 			// The rewritten URL must survive its own validator, or the next request fails.
 			expect(mcpConnections(config(accepted.url))[0].url).toBe(accepted.url);
 		}
@@ -384,9 +401,9 @@ describe('fuzz: src/lib/server/mcp/config.ts', () => {
 		const r = rng(SEED ^ 0x99);
 		for (let i = 0; i < 600; i++) {
 			const source = r.text('[]{}",:ab01 \n\u0000eE+/=', 60);
-			expect(() => mcpConnections({ MCP_CLIENT_ENABLED: 'true', MCP_SERVERS_JSON: source })).toThrow(
-				Error
-			);
+			expect(() =>
+				mcpConnections({ MCP_CLIENT_ENABLED: 'true', MCP_SERVERS_JSON: source })
+			).toThrow(Error);
 		}
 	});
 });
@@ -428,7 +445,15 @@ describe('fuzz: src/lib/server/mcp_app_manifest.ts', () => {
 			'/a?b#c',
 			'/\\evil.example'
 		];
-		const surfaces = [['panel'], ['sidebar', 'panel'], ['panel', 'panel'], [], ['bogus'], ['panel', ''], 'panel'];
+		const surfaces = [
+			['panel'],
+			['sidebar', 'panel'],
+			['panel', 'panel'],
+			[],
+			['bogus'],
+			['panel', ''],
+			'panel'
+		];
 		for (let i = 0; i < 2000; i++) {
 			const input = manifest({
 				id: r.pick(ids),
@@ -573,7 +598,14 @@ describe('fuzz: src/lib/workflow_graph.ts', () => {
 		const r = rng(SEED ^ 0x222);
 		for (let i = 0; i < 1000; i++)
 			expect(() => parseWorkflow(r.text('{}[]"a:,-01 \n\u0000', 60))).not.toThrow();
-		for (const source of ['', 'null', '[]', '{"steps":{}}', '{"steps":[{"id":"a"}]}', '{"steps":[1]}'])
+		for (const source of [
+			'',
+			'null',
+			'[]',
+			'{"steps":{}}',
+			'{"steps":[{"id":"a"}]}',
+			'{"steps":[1]}'
+		])
 			expect(parseWorkflow(source)).toBeNull();
 	});
 
@@ -650,12 +682,16 @@ describe('fuzz: zod schemas at the route boundaries', () => {
 	});
 
 	test('a __proto__ key is refused by a strict schema and never pollutes Object.prototype', () => {
-		const body = JSON.parse('{"provider":"openai","model":"m","apiKey":"fake-key-12345","messages":[{"role":"user","content":"hi"}],"__proto__":{"polluted":true}}');
+		const body = JSON.parse(
+			'{"provider":"openai","model":"m","apiKey":"fake-key-12345","messages":[{"role":"user","content":"hi"}],"__proto__":{"polluted":true}}'
+		);
 		expect(Object.hasOwn(body, '__proto__')).toBe(true);
 		expect(() => parseChat(chatEnv, body)).toThrow();
 		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
 		// Nested: the same key inside an object the schema does accept as an open record.
-		const nested = JSON.parse('{"provider":"openai","model":"m","apiKey":"fake-key-12345","messages":[{"role":"user","content":"hi"}],"memory":"ok"}');
+		const nested = JSON.parse(
+			'{"provider":"openai","model":"m","apiKey":"fake-key-12345","messages":[{"role":"user","content":"hi"}],"memory":"ok"}'
+		);
 		expect(parseChat(chatEnv, nested)).toMatchObject({ model: 'm', memory: 'ok' });
 		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
 	});
@@ -736,7 +772,11 @@ describe('fuzz: auth configuration boundary', () => {
 			]);
 			let config: ReturnType<typeof resolveAuthConfig> | null = null;
 			try {
-				config = resolveAuthConfig({ ...base, AUTH_SESSION_SECRET: secret, PUBLIC_SITE_URL: origin });
+				config = resolveAuthConfig({
+					...base,
+					AUTH_SESSION_SECRET: secret,
+					PUBLIC_SITE_URL: origin
+				});
 			} catch {
 				config = null;
 			}
@@ -758,7 +798,10 @@ describe('fuzz: auth configuration boundary', () => {
 		for (let i = 0; i < 800; i++) {
 			// One in four candidates is prefixed with a real origin, so the accept path is
 			// exercised instead of the generator producing only refusals.
-			const raw = r.next() < 0.25 ? `https://good.example${r.text('/?q#@', 4)}` : r.text('htps:/@.a0?q#\n\u0000', 30);
+			const raw =
+				r.next() < 0.25
+					? `https://good.example${r.text('/?q#@', 4)}`
+					: r.text('htps:/@.a0?q#\n\u0000', 30);
 			let origin: string | undefined;
 			try {
 				origin = siteOrigin(raw);
@@ -773,7 +816,8 @@ describe('fuzz: auth configuration boundary', () => {
 			expect(url.search).toBe('');
 			expect(url.hash).toBe('');
 			expect(url.username).toBe('');
-			if (url.protocol === 'http:') expect(['localhost', '127.0.0.1', '[::1]']).toContain(url.hostname);
+			if (url.protocol === 'http:')
+				expect(['localhost', '127.0.0.1', '[::1]']).toContain(url.hostname);
 		}
 		expect(accepted).toBeGreaterThan(0);
 	});

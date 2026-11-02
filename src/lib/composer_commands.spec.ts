@@ -32,7 +32,12 @@ test('nextComposerSelection always answers with a real index or -1', () => {
 });
 
 test('a command query is the token immediately before the caret', () => {
-	expect(composerCommandQuery('hi /mod', 7)).toEqual({ marker: '/', start: 3, end: 7, query: 'mod' });
+	expect(composerCommandQuery('hi /mod', 7)).toEqual({
+		marker: '/',
+		start: 3,
+		end: 7,
+		query: 'mod'
+	});
 	// An email or a URL is text, not a command.
 	expect(composerCommandQuery('mail me@example.com', 18)).toBeNull();
 	expect(composerCommandQuery('see https://exa', 16)).toBeNull();

@@ -1,5 +1,11 @@
 import { expect, test } from 'vitest';
-import { flowEdges, newStep, parseWorkflow, stepDependents, type WorkflowStep } from './workflow_graph';
+import {
+	flowEdges,
+	newStep,
+	parseWorkflow,
+	stepDependents,
+	type WorkflowStep
+} from './workflow_graph';
 
 test('parseWorkflow accepts a minimal spec and refuses anything without unique ids', () => {
 	expect(parseWorkflow('{"name":"w","steps":[{"id":"a","type":"t"}]}')).toEqual({
@@ -27,7 +33,12 @@ test('flowEdges reports a self-edge rather than looping on it', () => {
 		{ from: 'a', to: 'a', label: 'No' }
 	]);
 	// A branch pointing at a missing step drops the edge; the linear chain ends at `end`.
-	expect(flowEdges([{ id: 'a', type: 'branch', then: 'gone', else: 'b' }, { id: 'b', type: 't' }])).toEqual([
+	expect(
+		flowEdges([
+			{ id: 'a', type: 'branch', then: 'gone', else: 'b' },
+			{ id: 'b', type: 't' }
+		])
+	).toEqual([
 		{ from: 'a', to: 'b', label: 'No' },
 		{ from: 'b', to: 'end', label: '' }
 	]);
