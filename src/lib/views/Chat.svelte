@@ -35,7 +35,7 @@
   import Recorder from "#lib/Recorder.svelte";
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
   import { Pencil, Trash2 } from "@lucide/svelte";
-  import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
+  import { clearSessionDrafts, pruneSessionDrafts, readDraft, saveDraft } from "#lib/drafts.js";
   import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
@@ -820,6 +820,10 @@
   async function refreshSessions() {
     const d = checked(await api.sessions());
     sessions = d.sessions ?? [];
+    // Every per-chat draft key is written once and used to survive its chat forever: 30
+    // create/delete cycles left 30 `chat-mode:` entries behind. The session list is the only
+    // point where the live ids are known, so the sweep runs here.
+    pruneSessionDrafts(sessions.map((item: any) => String(item.id)));
     // A full quota used to be entirely silent: the turn appeared saved, then vanished on the
     // next reload. The store reports the failed write and the view says it out loud.
     storageWarning =
@@ -1554,7 +1558,7 @@
       if (action === "clear") session = checked(await api.sessionClear(id)).session;
       else {
         checked(await api.sessionDelete(id));
-        clearDraft(`chat:${id}`);
+        clearSessionDrafts(id);
         clearVoice();
         draft = "";
         attachments = [];
