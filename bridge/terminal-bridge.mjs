@@ -24,6 +24,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
@@ -416,14 +417,36 @@ async function handleFsWrite(request, response) {
 
 const server = createServer((request, response) => {
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	// `/v1/health` is fetched by the app's own "Test connection" from a different origin, so the
+	// browser needs CORS. The preflight carries no token (it must not), and it grants nothing:
+	// the real request still has to present the bearer token. Origin is the same allowlist the
+	// WebSocket uses, so a foreign page learns nothing by asking.
+	const origin = request.headers.origin;
+	const cors =
+		origin && originAllowed(origin)
+			? { 'access-control-allow-origin': origin, vary: 'origin' }
+			: {};
+
+	if (request.method === 'OPTIONS' && url.pathname === HEALTH_PATH) {
+		response.writeHead(origin && originAllowed(origin) ? 204 : 403, {
+			...cors,
+			'access-control-allow-methods': 'GET',
+			'access-control-allow-headers': 'authorization',
+			// A preflight is cached for 10 minutes, so "Test connection" does not double its RTTs.
+			'access-control-max-age': '600',
+			'cache-control': 'no-store'
+		});
+		response.end();
+		return;
+	}
 
 	if (url.pathname === HEALTH_PATH && request.method === 'GET') {
 		if (!tokenMatches(bearerFrom(request.headers.authorization))) {
-			response.writeHead(401, { 'content-type': 'application/json' });
+			response.writeHead(401, { ...cors, 'content-type': 'application/json' });
 			response.end('{"error":"unauthorized"}');
 			return;
 		}
-		response.writeHead(200, { 'content-type': 'application/json' });
+		response.writeHead(200, { ...cors, 'content-type': 'application/json' });
 		response.end(JSON.stringify({ ok: true, shell: SHELL, connections: live.size }));
 		return;
 	}
@@ -490,25 +513,43 @@ wss.on('connection', (ws) => {
 	});
 
 	live.add(ws);
+	// `pty.killed` is set by any `kill()` call, including a signal that does not end the
+	// process. `resize` sends SIGWINCH through `kill()`, so after the first resize frame
+	// `pty.killed` stayed true and every keystroke was dropped while the socket still looked
+	// open. Track the exit ourselves and leave `killed` out of the liveness question.
+	let exited = false;
 
 	const closePty = () => {
 		live.delete(ws);
-		if (!pty.killed) pty.kill();
+		if (!exited) {
+			exited = true;
+			pty.kill();
+		}
 	};
 	ws.on('close', closePty);
 	ws.on('error', closePty);
 
-	const forward = (chunk) => {
+	// Two streams, two decoders: a sequence split across a chunk boundary is held back
+	// instead of becoming U+FFFD, and stdout/stderr never share a partial sequence.
+	const stdoutDecoder = new StringDecoder('utf8');
+	const stderrDecoder = new StringDecoder('utf8');
+	const forward = (decoder) => (chunk) => {
 		if (ws.readyState !== ws.OPEN) return;
-		// Text frames only: the client refuses binary, so decode and let bad bytes become U+FFFD.
-		ws.send(chunk.toString('utf8'));
+		// Text frames only: the client refuses binary.
+		const text = decoder.write(chunk);
+		if (text) ws.send(text);
 	};
-	pty.stdout.on('data', forward);
-	pty.stderr.on('data', forward);
-	pty.on('exit', (code) => {
+	pty.stdout.on('data', forward(stdoutDecoder));
+	pty.stderr.on('data', forward(stderrDecoder));
+	// `close` fires after the child's stdio has drained; `exit` fires before buffered output is
+	// delivered, so closing on `exit` threw away the last lines a dying shell wrote.
+	pty.on('close', (code, signal) => {
+		exited = true;
 		live.delete(ws);
+		// A signal death has `code === null`. Saying "code 0" for a `kill -9` reads as success.
+		const how = code === null ? `signal ${signal ?? 'unknown'}` : `code ${code}`;
 		try {
-			ws.close(1000, `shell exited with code ${code ?? 0}`);
+			ws.close(1000, `shell exited with ${how}`);
 		} catch {
 			// Already gone.
 		}
@@ -533,14 +574,15 @@ wss.on('connection', (ws) => {
 					const rows = clampInt(message.rows, 1, 300);
 					// node-pty is not a dependency here; resize is applied through the shell's
 					// own signal when the child supports SIGWINCH, otherwise it is a no-op.
-					if (cols && rows && !pty.killed) pty.kill('SIGWINCH');
+					// `kill()` sets `child.killed`, so liveness is tracked separately.
+					if (cols && rows && !exited) pty.kill('SIGWINCH');
 					return;
 				}
 			} catch {
 				// Fall through and treat it as input: never drop what the user typed.
 			}
 		}
-		if (!pty.killed) pty.stdin.write(text);
+		if (!exited) pty.stdin.write(text);
 	});
 
 	ws.on('error', () => closePty());

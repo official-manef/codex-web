@@ -63,6 +63,11 @@ export function createTerminal(options: TerminalOptions): Terminal {
 	const factory = options.socketFactory ?? defaultSocketFactory;
 	let socket: TerminalSocket | null = null;
 	let closed = false;
+	let everOpened = false;
+	// The reason the socket last failed, kept so the close message can name a cause. A browser
+	// reports every refused handshake as 1006 "abnormal closure" and drops the HTTP status, so
+	// the close text alone tells the user nothing about the token or the origin.
+	let lastFailure = '';
 	let consecutiveErrors = 0;
 
 	function report(status: TerminalStatus, detail?: string): void {
@@ -71,6 +76,7 @@ export function createTerminal(options: TerminalOptions): Terminal {
 	}
 
 	function fail(detail: string): void {
+		lastFailure = detail;
 		if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) return;
 		consecutiveErrors += 1;
 		options.onStatus('error', detail);
@@ -123,6 +129,8 @@ export function createTerminal(options: TerminalOptions): Terminal {
 
 	socket.onopen = () => {
 		consecutiveErrors = 0;
+		everOpened = true;
+		lastFailure = '';
 		report('open');
 	};
 	socket.onmessage = (event) => {
@@ -139,14 +147,23 @@ export function createTerminal(options: TerminalOptions): Terminal {
 		options.onData(data);
 	};
 	socket.onerror = () => {
-		fail('The terminal connection failed. Check the endpoint and token.');
+		// A refused handshake never reaches `onopen`. The status (401 wrong token, 403 origin,
+		// 503 full) is not visible to the browser's WebSocket API, so name the likely causes.
+		fail(
+			everOpened
+				? 'The terminal connection failed. Check the endpoint and token.'
+				: 'The bridge refused the connection: check the pairing token, and that this page’s origin is allowed by the bridge.'
+		);
 	};
 	socket.onclose = (event) => {
 		detach(socket as TerminalSocket);
 		closed = true;
 		const reason = event?.reason ? ` ${event.reason}` : '';
 		const code = typeof event?.code === 'number' ? ` (code ${event.code})` : '';
-		report('closed', `The bridge closed the connection.${code}${reason}`);
+		// A refused handshake closes with 1006 and no reason, which names nothing at all. Append
+		// the cause `onerror` recorded, so the panel states why instead of echoing a number.
+		const cause = !everOpened && lastFailure ? ` ${lastFailure}` : '';
+		report('closed', `The bridge closed the connection.${code}${reason}${cause}`);
 	};
 
 	function send(input: string): void {
