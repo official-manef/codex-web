@@ -128,6 +128,15 @@ export function chatResponse(
 
 				const toolsEnabled = Boolean(input.toolUse && deps);
 
+				const providerOptions = {
+					openai: {
+						store: false,
+						...(input.reasoningEffort && input.reasoningEffort !== 'none'
+							? { reasoningEffort: input.reasoningEffort }
+							: {})
+					}
+				};
+
 				let totalLength = 0;
 				let pending = '';
 
@@ -139,7 +148,7 @@ export function chatResponse(
 						maxRetries: 0,
 						abortSignal: signal,
 						telemetry: { isEnabled: false },
-						providerOptions: { openai: { store: false } },
+						providerOptions,
 						// Errors are represented by the safe stream event below, never logged with request data.
 						onError: () => {}
 					});
@@ -172,7 +181,7 @@ export function chatResponse(
 							maxRetries: 0,
 							abortSignal: signal,
 							telemetry: { isEnabled: false },
-							providerOptions: { openai: { store: false } },
+							providerOptions,
 							onError: () => {}
 						};
 						const result = streamText(stepOptions);

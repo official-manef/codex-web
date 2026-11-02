@@ -874,3 +874,23 @@ test('parallel tool calls: concurrency is bounded by MAX_TOOL_CONCURRENCY', asyn
 	expect(maxInFlight).toBe(MAX_TOOL_CONCURRENCY);
 	expect(maxInFlight).toBeLessThanOrEqual(MAX_TOOL_CONCURRENCY);
 });
+
+test('reasoningEffort: "high" is passed in OpenAI providerOptions.openai.reasoningEffort', async () => {
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockImplementation(() =>
+		parts([{ type: 'text-delta', text: 'A response' }])
+	);
+	await chatResponse({ ...input, reasoningEffort: 'high' }, new AbortController().signal).text();
+	const options = vi.mocked(streamText).mock.calls[0][0];
+	expect(options.providerOptions?.openai?.reasoningEffort).toBe('high');
+});
+
+test('reasoningEffort: "high" throws in parseChat when provider is anthropic', () => {
+	expect(() =>
+		parseChat(env, {
+			...input,
+			provider: 'anthropic',
+			reasoningEffort: 'high'
+		})
+	).toThrow('Anthropic does not take a reasoning effort field from this client.');
+});
