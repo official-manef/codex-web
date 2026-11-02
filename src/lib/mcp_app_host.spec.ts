@@ -276,4 +276,37 @@ describe('mcp_app_host protocol and security boundary', () => {
 		expect(() => framePolicy('not-a-url')).toThrow(/Invalid app origin/);
 		expect(() => framePolicy('')).toThrow(/non-empty string/);
 	});
+
+	it('framePolicy refuses a query, a fragment, a port-only origin and a non-string', () => {
+		// `#` and `?` would survive `new URL` but make the origin string ambiguous to compare.
+		expect(() => framePolicy('https://app.example.com?x=1')).toThrow(
+			/must not contain search or hash/
+		);
+		expect(() => framePolicy('https://app.example.com#top')).toThrow(
+			/must not contain search or hash/
+		);
+		// A different spelling of the same origin is refused, so the frame src and the
+		// `event.origin` the host compares against are the same bytes.
+		expect(() => framePolicy('HTTPS://App.Example.com')).toThrow(/must be an exact origin/);
+		expect(() => framePolicy('https://app.example.com:443')).toThrow(/must be an exact origin/);
+		expect(() => framePolicy(42 as unknown as string)).toThrow(/non-empty string/);
+	});
+
+	it('an outbound message that cannot be serialised is refused, not thrown', () => {
+		const circular: Record<string, unknown> = { type: 'host:result', requestId: 'r', ok: true };
+		circular.data = circular;
+		expect(hostMessage(circular as unknown as HostToGuest)).toBeNull();
+		// `undefined` serialises to nothing, so there is no message to post.
+		expect(hostMessage(undefined as unknown as HostToGuest)).toBeNull();
+	});
+
+	it('an empty appId or one longer than 256 is refused', () => {
+		expect(parseGuestMessage({ type: 'guest:ready', appId: '' })).toBeNull();
+		expect(parseGuestMessage({ type: 'guest:ready', appId: 'a'.repeat(256) })).toEqual({
+			type: 'guest:ready',
+			appId: 'a'.repeat(256)
+		});
+		expect(parseGuestMessage({ type: 'guest:ready', appId: 'a'.repeat(257) })).toBeNull();
+		expect(parseGuestMessage({ type: 'guest:ready', appId: 7 })).toBeNull();
+	});
 });

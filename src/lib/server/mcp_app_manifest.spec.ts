@@ -270,4 +270,99 @@ describe('mcp_app_manifest allowlist and parser', () => {
 			expect(SURFACES).toEqual(['sidebar', 'panel', 'file-editor', 'form']);
 		});
 	});
+
+	describe('the branches a real catalogue entry can reach', () => {
+		it('requires a name, an origin and an entry to be strings at all', () => {
+			// `{}` reaches the name check first, so each field is removed with the others valid.
+			expect(parseManifest({ ...validManifest, name: 42 })).toBeNull();
+			expect(parseManifest({ ...validManifest, name: null })).toBeNull();
+			expect(parseManifest({ ...validManifest, origin: '' })).toBeNull();
+			expect(parseManifest({ ...validManifest, origin: undefined })).toBeNull();
+			expect(parseManifest({ ...validManifest, entry: 42 })).toBeNull();
+			expect(parseManifest({ ...validManifest, entry: '' })).toBeNull();
+			expect(parseManifest({ ...validManifest, entry: '/' + 'a'.repeat(200) })).toBeNull();
+			expect(parseManifest({ ...validManifest, surfaces: 'sidebar' })).toBeNull();
+			expect(parseManifest({ ...validManifest, surfaces: [] })).toBeNull();
+		});
+
+		it('refuses an entry that is not a path of this origin', () => {
+			// A relative entry resolves against the origin, which is why it is refused by prefix.
+			expect(parseManifest({ ...validManifest, entry: 'index.html' })).toBeNull();
+			// A protocol-relative entry resolves to another host entirely.
+			expect(parseManifest({ ...validManifest, entry: '//evil.example/app' })).toBeNull();
+			expect(parseManifest({ ...validManifest, entry: '/app/\0name' })).toBeNull();
+			// A non-string surface inside a valid array is not coerced.
+			expect(parseManifest({ ...validManifest, surfaces: ['sidebar', 7] })).toBeNull();
+		});
+
+		it('manifestRejection names the field it refused, so the operator can fix it', () => {
+			expect(manifestRejection(null as unknown as AppManifest)).toBe('Manifest must be an object');
+			expect(manifestRejection('text' as unknown as AppManifest)).toBe(
+				'Manifest must be an object'
+			);
+			expect(manifestRejection({ ...validManifest, name: 42 } as unknown as AppManifest)).toBe(
+				'Invalid app name'
+			);
+			expect(manifestRejection({ ...validManifest, origin: '' })).toBe(
+				'App origin must be a non-empty string'
+			);
+			// A bad origin surfaces `framePolicy`'s own reason rather than a generic one.
+			expect(manifestRejection({ ...validManifest, origin: 'https://app.example.com/x' })).toMatch(
+				/must not contain a path/
+			);
+		});
+
+		it('manifestRejection walks the entry rules in order and says which one failed', () => {
+			expect(manifestRejection({ ...validManifest, entry: 42 } as unknown as AppManifest)).toBe(
+				'App entry must be a string'
+			);
+			expect(manifestRejection({ ...validManifest, entry: '' })).toBe(
+				'App entry must be between 1 and 200 characters'
+			);
+			expect(manifestRejection({ ...validManifest, entry: '/' + 'a'.repeat(200) })).toBe(
+				'App entry must be between 1 and 200 characters'
+			);
+			// `https://evil.example/app` parses, so it fails the origin match, not the URL parse.
+			expect(manifestRejection({ ...validManifest, entry: 'https://evil.example/app' })).toBe(
+				'App entry origin does not match app origin'
+			);
+			expect(manifestRejection({ ...validManifest, entry: 'index.html' })).toBe(
+				'App entry must be a path beginning with /'
+			);
+			expect(manifestRejection({ ...validManifest, entry: '/app//index.html' })).toBe(
+				'App entry must not contain //'
+			);
+			expect(manifestRejection({ ...validManifest, entry: '/app/../secret' })).toBe(
+				'App entry must not contain ..'
+			);
+			expect(manifestRejection({ ...validManifest, entry: '/app/\0name' })).toBe(
+				'App entry must not contain NUL'
+			);
+		});
+
+		it('manifestRejection checks the surface list before its members', () => {
+			expect(
+				manifestRejection({ ...validManifest, surfaces: 'sidebar' } as unknown as AppManifest)
+			).toBe('App surfaces must be an array');
+			expect(manifestRejection({ ...validManifest, surfaces: [] })).toBe(
+				'App surfaces must contain between 1 and 4 surfaces'
+			);
+			// Four surfaces is inside the bound, so the duplicate is what gets reported.
+			expect(
+				manifestRejection({ ...validManifest, surfaces: ['sidebar', 'panel', 'form', 'panel'] })
+			).toBe('Duplicate surface: panel');
+			expect(
+				manifestRejection({
+					...validManifest,
+					surfaces: ['sidebar', 'panel', 'form', 'file-editor', 'panel']
+				})
+			).toBe('App surfaces must contain between 1 and 4 surfaces');
+			expect(manifestRejection({ ...validManifest, surfaces: ['sidebar', 'nowhere'] })).toMatch(
+				/^Unknown surface: nowhere$/
+			);
+			expect(manifestRejection({ ...validManifest, surfaces: ['sidebar', 'sidebar'] })).toBe(
+				'Duplicate surface: sidebar'
+			);
+		});
+	});
 });
