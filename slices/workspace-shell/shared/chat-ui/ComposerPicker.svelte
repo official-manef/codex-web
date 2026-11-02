@@ -137,7 +137,7 @@
     min-width: 0;
     max-height: min(360px, 40vh);
     overflow: hidden;
-    border: 1px solid var(--color-line-strong, var(--color-line));
+    border: 1px solid var(--color-line);
     border-radius: var(--chat-picker-radius, 12px);
     background: var(--color-panel);
     color: var(--color-ink);

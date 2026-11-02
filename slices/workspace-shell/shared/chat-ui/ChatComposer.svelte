@@ -49,8 +49,12 @@
     padding: var(--chat-composer-padding, 12px 12px 9px);
     color: var(--color-ink);
   }
+  /* This was `var(--color-line-strong, ...)`, a token that never existed. An undefined `var()`
+     inside `outline` is invalid at computed-value time, so the ring silently fell back to
+     `currentColor`. `--color-ink-2` is the explicit version of what it happened to render, at
+     5.78:1 on the composer surface. */
   .chat-composer:focus-within {
-    outline: 1px solid var(--chat-composer-focus, var(--color-line-strong, var(--color-ink-2)));
+    outline: 1px solid var(--chat-composer-focus, var(--color-ink-2));
     outline-offset: 0;
   }
   /* Forced colours strip the custom property that made the focus ring visible; the base
