@@ -63,8 +63,6 @@ validation · **R** response shape · **U** upstream failure / timeout.
 
 ### `POST /api/ai/chat`
 
-<<<<<<< HEAD
-
 | Case                                                                                            | Kind | Status                                     |
 | ----------------------------------------------------------------------------------------------- | ---- | ------------------------------------------ |
 | Only `POST` exported                                                                            | M    | —                                          |
@@ -99,7 +97,6 @@ validation · **R** response shape · **U** upstream failure / timeout.
 | Provider error body carries no key and no upstream host                                         | U    | —                                          |
 | Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event                          |
 | Log records counts and outcome only, never message text or key                                  | R    | —                                          |
-| =======                                                                                         |
 
 > **Read the table below as the contract, not as a test inventory.** The suite was cut from 27
 > cases to 12 during the merge into `integration` (`751f590`), so several rows below are no
@@ -141,8 +138,6 @@ validation · **R** response shape · **U** upstream failure / timeout.
 > | Provider error body carries no key and no upstream host                                         | U    | —                    |
 > | Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event    |
 > | Log records counts and outcome only, never message text or key                                  | R    | —                    |
->
-> > > > > > > w3/docs2
 
 ### `POST /api/mcp/server`
 
@@ -299,7 +294,6 @@ raise it, so the schema that permits 2 × 4 MB could never be reached: a single 
 screenshot was `413 The request is too large.` Verified both ways — 8 KiB of base64 passed and
 reached `streamText`; 100 KiB was `413`.
 
-<<<<<<< HEAD
 **Fixed by raising the chat route's cap to the documented budget, not by lowering the promise.**
 `src/lib/uploads.ts` now derives `MAX_CHAT_BODY_BYTES` from `MAX_IMAGE_BYTES` and
 `MAX_IMAGES_PER_TURN`: `2 × ceil(4 194 304 / 3) × 4 + 262 144 = 11 446 960 bytes`. The 256 KiB
@@ -314,27 +308,6 @@ The memory cost was accepted knowingly rather than hidden: measured **~48 MB RSS
 request at the ceiling (+37 MB read, +12 MB parse in 13 ms). What bounds it is the credential
 check running before the read and the 20-per-minute burst limiter. Full numbers and the
 stream-parsing trade-off: `docs/parity-checklist-2026-11-02.md` §3.2.
-=======
-
-Not fixed here, because the fix is a product decision with a real cost: raising the cap to
-~11 MB (2 × 4 MB after base64 overhead) means every chat request may buffer that much in
-memory, and the route currently has no streaming body parser.
-
-**The pinning test is gone.** It was
-`an image larger than 64 KiB is refused by the shared body cap before the schema runs`, and it
-lived in `contract.spec.ts` at `edf5c32`. That file was cut from 27 cases to 12 in `751f590`, and
-the row went with it. What still covers the cap is `src/lib/server/access.spec.ts`
-(`readJsonBody` answers `413` at `65_536` and at an explicit smaller cap) — i.e. the _reader's_
-limit is pinned, but nothing now asserts that the chat route's image budget cannot reach it. The
-finding stands unverified by a test until someone re-adds that case. Two options for whoever
-owns it:
-
-- raise the chat route's cap explicitly (`readJsonBody(event.request, 12_000_000)`) and accept
-  the memory cost, or
-- correct the doc and the schema to the real budget (64 KiB total, so roughly 48 KiB of image),
-  and re-add a case that asserts it.
-
-> > > > > > > w3/docs2
 
 Pinned by `src/routes/api/ai/chat/budget.spec.ts` (7 tests), including the "just over" case and a
 50 MB body that must be refused _during_ the read rather than after parsing.

@@ -7,10 +7,11 @@ commit named at the top. If a line here disagrees with the code, the code wins �
 
 - **Baseline `d839f75`** (2026-10-31): where measurement of this tracker _started_. The state
   table below and the "where we are" rows were first written against it.
-- **Gate commit `98549c9`** (2026-11-02, 39 commits above the last recorded gate run `597fdaf`):
-  where the commands in §Gates were **actually run for this revision**.
+- **Gate commit `6c2b1a9`** (2026-11-03): where the commands in §Gates were **actually run**.
+  The previous gate commit was `98549c9` (2026-11-02), 39 commits above the gate run before it,
+  `597fdaf`.
 
-A number without its commit is meaningless here, so §Gates names `98549c9` explicitly. Do not
+A number without its commit is meaningless here, so §Gates names `6c2b1a9` explicitly. Do not
 read the baseline line as the commit the gate block measured.
 
 ## Terminal bridge
@@ -103,21 +104,27 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
-Run 2026-11-02 in a clean worktree at **`98549c9`** (detached HEAD, `node_modules` symlinked;
-the working tree at the time carried unrelated in-progress edits, so it was not the tree gated):
+Run 2026-11-03 on **`6c2b1a9`**, the commit this block was written for:
 
 ```
 check (svelte-check + convex types + version + assets)   0 errors, 0 warnings
 lint (prettier --check + eslint + svelte5 guard)         clean
-test:unit                                                107 files / 1294 passed / 3 skipped (1297)
+test:unit                                                106 files / 1337 passed / 3 skipped (1340)
 build (vite / sveltekit)                                 ok
-playwright --list                                        178 cases × 3 projects = 534 registered
+playwright                                               534 cases / 98 skipped / 0 failed
+test:dev                                                 4 passed
+bridge (node --test)                                     9 passed
 ```
 
 The three unit skips are the anonymous-refusal assertions in
 `src/convex/deployment.spec.ts` — no Convex deployment is recorded for this checkout, so they
-skip with the reason the spec attaches. The Playwright figure is **registration, not a run**:
-the suite was listed, not executed, on this commit. So is the Convex probe — unverified here.
+skip with the reason the spec attaches. The 98 Playwright skips are by design, not silent: the
+30-id surface walk and the bridge suite run on the `desktop` project only, because the registry
+controls are the same DOM at every width and the bridge suite spawns real processes. The Convex
+probe remains unverified here.
+
+Previous measurement, kept so a reader can see the direction: `98549c9` reported
+107 files / 1294 passed / 3 skipped with Playwright **listed, not run**.
 
 A gate block from an earlier revision, kept because it is the last full `bin/gate` run:
 
@@ -280,8 +287,9 @@ run for real.
 A sibling gate (`bin/codex-clone-quicktest` in the other repo) pinned
 `CONVEX_URL="${CONVEX_URL:-http://127.0.0.1:9999}"`. Port 9999 is dead, so that gate forced the
 skip forever while a live deployment was ignored — a green run that had silently dropped four
-tests. `bin/` in this worktree holds only `codex-cli.mjs`, so there is nothing to fix here; if
-that gate is ever used against this repo it must resolve the port from
+tests. `bin/` here holds `caps`, `codex-cli.mjs`, `enable-auth` and `gate` — all four documented
+in [gate.md](gate.md) and the parity checklist — so the sibling repo's pinned-port trap is not
+reproducible in this one. If that gate is ever pointed at this repo it must resolve the port from
 `.convex/local/default/config.json`, not pin one.
 
 ## Correction — the AC test suites do not exist (historical, superseded)

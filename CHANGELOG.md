@@ -30,9 +30,11 @@ its own history. Notable changes follow [Semantic Versioning](https://semver.org
   retention decision.
 - **Read-only git surface** — `src/lib/server/git.ts`, `GET /api/git`, and the `Repository` view.
   `GIT_SURFACE_ENABLED` + a `GIT_SURFACE_ROOTS` allowlist (absolute paths, `..` refused, cap 8)
-  buys `status --porcelain` and `log -n 20` through `execFile` with a fixed argument array. Stage,
-  diff, commit and push are deliberately absent: they need a process boundary and an approval
-  model this build does not have.
+  buys `status --porcelain` and `log -n 20` through `execFile` with a fixed argument array.
+  Writes exist behind `GIT_POLICY_JSON` as of 2026-11-03 (`gitStage`, `gitCommit`, and the
+  `gitWorktree*` family) and are denied by default; `push` remains absent because it needs a forge
+  credential this build does not have. As first written this bullet said every write was absent,
+  which stopped being true when the policy layer landed.
 
 ### Fixed
 
