@@ -178,9 +178,9 @@
     max-height: min(80vh, var(--bits-menubar-content-available-height, 80vh));
     overflow-y: auto;
     padding: 4px;
-    border: 1px solid var(--color-line-strong, #343434);
+    border: 1px solid var(--color-line);
     border-radius: 4px;
-    background: var(--color-frame, #202020);
+    background: var(--color-frame);
     color: var(--color-ink);
     box-shadow: 0 8px 22px rgb(0 0 0 / 0.28);
   }

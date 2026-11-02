@@ -68,7 +68,7 @@
     align-items: center;
     opacity: var(--chat-row-idle-opacity, 0);
     pointer-events: var(--chat-row-idle-pointer-events, none);
-    --row-surface: var(--color-nav, var(--color-panel));
+    --row-surface: var(--color-panel);
     background: linear-gradient(
       to right,
       transparent,

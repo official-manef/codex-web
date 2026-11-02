@@ -72,7 +72,7 @@
     gap: 9px;
     min-height: 32px;
     padding: 6px 9px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     color: var(--color-ink);
     font-size: 12px;
     outline: none;

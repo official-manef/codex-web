@@ -652,7 +652,7 @@
     padding: 10px;
     margin-right: 8px;
     border: 1px solid var(--color-line);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     background: var(--color-panel-2);
     color: var(--color-ink);
     cursor: pointer;

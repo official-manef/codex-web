@@ -137,7 +137,7 @@
     min-width: 0;
     max-height: min(360px, 40vh);
     overflow: hidden;
-    border: 1px solid var(--color-line-strong, var(--color-line));
+    border: 1px solid var(--color-line);
     border-radius: var(--chat-picker-radius, 12px);
     background: var(--color-panel);
     color: var(--color-ink);
@@ -170,7 +170,7 @@
     flex: none;
     width: 28px;
     height: 28px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     color: var(--color-ink-2);
   }
   .picker-tabs {
@@ -183,7 +183,7 @@
   }
   .picker-tabs button {
     padding: 6px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     font-size: 12px;
     white-space: nowrap;
     color: var(--color-ink-2);
@@ -245,7 +245,7 @@
     flex: none;
     padding: 5px 8px;
     border: 1px solid var(--color-line);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     color: var(--color-ink);
   }
 </style>

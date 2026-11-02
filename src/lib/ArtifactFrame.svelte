@@ -48,7 +48,7 @@
 		font-size: 0.8125rem;
 		line-height: 1.5;
 		color: var(--color-ink-2, #6b7280);
-		background-color: var(--color-surface-2, rgba(0, 0, 0, 0.03));
+		background-color: var(--color-panel-2, rgba(0, 0, 0, 0.03));
 		border-radius: 0.375rem;
 	}
 </style>

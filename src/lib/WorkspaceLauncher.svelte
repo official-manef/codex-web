@@ -108,6 +108,12 @@
     outline: none;
     font-size: 12px;
   }
+  /* `outline: none` above is a reset, so the ring moves to the wrapper. Without this a
+     keyboard user had no indicator on the launcher search. */
+  .launcher-search:focus-within {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
   h2 {
     font-size: 12px;
     font-weight: 600;
