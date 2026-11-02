@@ -58,6 +58,32 @@ async function failure(created: RequestEvent<Record<string, never>, never>) {
 	}
 }
 
+/**
+ * Issue a real one-shot approval the way the browser does, so an execute test exercises the
+ * stateful confirmation instead of asserting `confirmed: true`.
+ */
+async function prepare(
+	headers: Record<string, string>,
+	overrides: Record<string, unknown> = {}
+): Promise<{ approval: string; arguments: Record<string, unknown> }> {
+	const args = (overrides.arguments as Record<string, unknown> | undefined) ?? {};
+	const response = await route.POST(
+		event(
+			{
+				action: 'prepare',
+				alias: 'alpha',
+				token: BYOK,
+				tool: 'echo',
+				...overrides,
+				arguments: args
+			},
+			headers
+		)
+	);
+	if (response.status !== 200) throw new Error(`prepare failed with ${response.status}`);
+	return (await response.json()) as { approval: string; arguments: Record<string, unknown> };
+}
+
 function expectNoInternals(text: string, secrets: string[] = []) {
 	expect(text).not.toMatch(/\n\s+at .+:\d+:\d+/);
 	expect(text).not.toContain('/home/');
@@ -201,20 +227,30 @@ describe('input validation', () => {
 	});
 
 	test('missing and wrongly typed fields are 400', async () => {
+		const { approval } = await prepare(headers);
 		for (const body of [
 			{},
 			{ action: 'list', alias: 'alpha' },
 			{ action: 'list', alias: 'alpha', token: BYOK, extra: true },
 			{ action: 'list', alias: 42, token: BYOK },
 			{ action: 'list', alias: 'x'.repeat(41), token: BYOK },
+			// An execute with no approval field at all is a 400, not an unconfirmed execution.
 			{ action: 'execute', alias: 'alpha', token: BYOK, tool: 'echo', arguments: {} },
+			{
+				action: 'prepare',
+				alias: 'alpha',
+				token: BYOK,
+				tool: 'echo',
+				arguments: {},
+				confirmed: true
+			},
 			{
 				action: 'execute',
 				alias: 'alpha',
 				token: BYOK,
 				tool: 'echo',
 				arguments: {},
-				confirmed: 'yes'
+				approval: 42
 			},
 			{
 				action: 'execute',
@@ -222,7 +258,7 @@ describe('input validation', () => {
 				token: BYOK,
 				tool: 'echo',
 				arguments: 'not-an-object',
-				confirmed: true
+				approval
 			}
 		])
 			await reject(body);
@@ -248,7 +284,7 @@ describe('input validation', () => {
 			token: BYOK,
 			tool: 'shell',
 			arguments: {},
-			confirmed: true
+			approval: 'a'.repeat(64)
 		});
 		expect(clientMock.executeRemoteTool).not.toHaveBeenCalled();
 	});
@@ -334,6 +370,7 @@ describe('upstream failure', () => {
 
 	test('an execute failure never claims success', async () => {
 		clientMock.executeRemoteTool.mockRejectedValue(new Error('Remote tool failed'));
+		const { approval } = await prepare(headers, { arguments: { text: 'hi' } });
 		const result = await failure(
 			event(
 				{
@@ -342,7 +379,7 @@ describe('upstream failure', () => {
 					token: BYOK,
 					tool: 'echo',
 					arguments: { text: 'hi' },
-					confirmed: true
+					approval
 				},
 				headers
 			)
@@ -382,7 +419,28 @@ describe('response shape', () => {
 		);
 	});
 
-	test('execute requires an explicit confirmed:true and forwards the parsed arguments', async () => {
+	test('prepare returns a one-shot approval and executes nothing', async () => {
+		const response = await route.POST(
+			event(
+				{ action: 'prepare', alias: 'alpha', token: BYOK, tool: 'echo', arguments: { text: 'hi' } },
+				headers
+			)
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		const preview = (await response.json()) as Record<string, unknown>;
+		expect(preview.approval).toMatch(/^[0-9a-f]{64}$/);
+		expect(preview).toMatchObject({
+			alias: 'alpha',
+			tool: 'echo',
+			arguments: { text: 'hi' }
+		});
+		expect(clientMock.executeRemoteTool).not.toHaveBeenCalled();
+		expect(clientMock.listRemoteTools).not.toHaveBeenCalled();
+	});
+
+	test('execute redeems the approval and forwards the parsed arguments', async () => {
+		const { approval } = await prepare(headers, { arguments: { text: 'hi' } });
 		const response = await route.POST(
 			event(
 				{
@@ -391,7 +449,7 @@ describe('response shape', () => {
 					token: BYOK,
 					tool: 'echo',
 					arguments: { text: 'hi' },
-					confirmed: true
+					approval
 				},
 				headers
 			)
@@ -403,12 +461,12 @@ describe('response shape', () => {
 			BYOK,
 			'echo',
 			{ text: 'hi' },
-			true,
 			expect.any(AbortSignal)
 		);
 	});
 
 	test('logging names the action and alias only, never the token or arguments', async () => {
+		const { approval } = await prepare(headers, { arguments: { secret: 'do-not-log' } });
 		await route.POST(
 			event(
 				{
@@ -417,7 +475,7 @@ describe('response shape', () => {
 					token: BYOK,
 					tool: 'echo',
 					arguments: { secret: 'do-not-log' },
-					confirmed: true
+					approval
 				},
 				headers
 			)

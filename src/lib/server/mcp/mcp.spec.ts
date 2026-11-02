@@ -1,7 +1,13 @@
-import { afterEach, expect, test, vi } from 'vitest';
-import { connectionFor, mcpConnections } from './config';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { assertPublicHost, connectionFor, isPublicAddress, mcpConnections } from './config';
 import { executeRemoteTool, listRemoteTools } from './client';
 import { statusMcpResponse } from './server';
+
+// No test may touch a real resolver: `assertPublicHost` runs before every connection.
+const { lookupMock } = vi.hoisted(() => ({
+	lookupMock: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }])
+}));
+vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
 
 const connection = {
 	alias: 'test',
@@ -11,6 +17,9 @@ const connection = {
 };
 const token = 'secret-test-token';
 const schema = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] };
+beforeEach(() =>
+	lookupMock.mockReset().mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+);
 afterEach(() => vi.unstubAllGlobals());
 
 test('MCP config is off by default and permits only configured HTTPS aliases and direct tools', () => {
@@ -88,13 +97,10 @@ test('official SDK discovers only allowed tools, redacts secrets and terminates 
 	expect(requests.every(({ headers }) => headers.get('x-api-key') === token)).toBe(true);
 });
 
-test('each execution needs confirmation and allowlisting before network, then rechecks discovery', async () => {
+test('each execution needs an allowlisted tool before network, then rechecks discovery', async () => {
 	const requests = protocol();
 	await expect(
-		executeRemoteTool(connection, token, 'echo', {}, false, new AbortController().signal)
-	).rejects.toThrow('not approved');
-	await expect(
-		executeRemoteTool(connection, token, 'not-allowed', {}, true, new AbortController().signal)
+		executeRemoteTool(connection, token, 'not-allowed', {}, new AbortController().signal)
 	).rejects.toThrow('not approved');
 	expect(requests).toHaveLength(0);
 	const output = await executeRemoteTool(
@@ -102,7 +108,6 @@ test('each execution needs confirmation and allowlisting before network, then re
 		token,
 		'echo',
 		{ text: 'Approved' },
-		true,
 		new AbortController().signal
 	);
 	expect(JSON.stringify(output)).toContain('[redacted]');
@@ -119,14 +124,7 @@ test('incomplete discovery and remote tool errors fail without returning provide
 	expect(requests.some(({ method }) => method === 'DELETE')).toBe(true);
 	requests = protocol({ failTool: true });
 	await expect(
-		executeRemoteTool(
-			connection,
-			token,
-			'echo',
-			{ text: 'Approved' },
-			true,
-			new AbortController().signal
-		)
+		executeRemoteTool(connection, token, 'echo', { text: 'Approved' }, new AbortController().signal)
 	).rejects.toThrow('Remote tool failed');
 	expect(requests.some(({ method }) => method === 'DELETE')).toBe(true);
 });
@@ -212,6 +210,85 @@ test('an approved URL is normalised once, so the stored endpoint matches what is
 		allowlistEnv([{ ...connection, url: 'https://MCP.example.com:443/mcp' }])
 	);
 	expect(parsed.url).toBe('https://mcp.example.com/mcp');
+});
+
+test('wildcard-resolver names are refused by shape, before any DNS lookup happens', () => {
+	// These resolve to the address encoded in the name, so no lookup can make them safe.
+	for (const url of [
+		'https://127.0.0.1.nip.io/mcp',
+		'https://10.0.0.1.nip.io/mcp',
+		'https://169.254.169.254.nip.io/mcp',
+		'https://127-0-0-1.sslip.io/mcp',
+		'https://10.0.0.1.sslip.io/mcp',
+		'https://127.0.0.1.xip.io/mcp',
+		'https://localtest.me/mcp'
+	])
+		expect(() => mcpConnections(allowlistEnv([{ ...connection, url }])), url).toThrow();
+});
+
+test('address classification covers loopback, RFC1918, link-local, CGNAT and IPv6', () => {
+	for (const address of [
+		'127.0.0.1',
+		'10.1.2.3',
+		'172.16.0.1',
+		'192.168.0.1',
+		'169.254.169.254',
+		'100.64.0.1',
+		'0.0.0.0',
+		'255.255.255.255',
+		'::1',
+		'::',
+		'fd00::1',
+		'fe80::1',
+		'::ffff:127.0.0.1',
+		'::ffff:7f00:1'
+	])
+		expect(isPublicAddress(address), address).toBe(false);
+	for (const address of ['93.184.216.34', '1.1.1.1', '2606:2800:220:1:248:1893:25c8:1946'])
+		expect(isPublicAddress(address), address).toBe(true);
+});
+
+async function refusal(host = 'mcp.attacker.example'): Promise<string> {
+	try {
+		await assertPublicHost(host);
+		return 'accepted';
+	} catch (error) {
+		return (error as Error).message;
+	}
+}
+
+test('a name that resolves to a private address is refused, not just a private literal', async () => {
+	lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+	expect(await refusal()).toContain('private address');
+	lookupMock.mockResolvedValue([
+		{ address: '93.184.216.34', family: 4 },
+		{ address: '169.254.169.254', family: 4 }
+	]);
+	// One private answer is enough: a mixed reply must not hide behind the public record.
+	expect(await refusal()).toContain('private address');
+	lookupMock.mockResolvedValue([]);
+	expect(await refusal()).toContain('private address');
+	lookupMock.mockRejectedValueOnce(new Error('ENOTFOUND'));
+	expect(await refusal()).toContain('does not resolve');
+});
+
+test('an IPv4 or IPv6 literal endpoint is classified without a lookup', async () => {
+	lookupMock.mockClear();
+	expect(await refusal('93.184.216.34')).toBe('accepted');
+	expect(await refusal('127.0.0.1')).toContain('private address');
+	expect(await refusal('169.254.169.254')).toContain('private address');
+	expect(await refusal('2606:2800:220:1:248:1893:25c8:1946')).toBe('accepted');
+	expect(await refusal('::1')).toContain('private address');
+	expect(lookupMock).not.toHaveBeenCalled();
+});
+
+test('a resolved private host never reaches the network, even when the URL shape is fine', async () => {
+	const requests = protocol();
+	lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+	await expect(listRemoteTools(connection, token, new AbortController().signal)).rejects.toThrow(
+		'private address'
+	);
+	expect(requests).toHaveLength(0);
 });
 
 test('connectionFor resolves only an exact alias and refuses a disabled client', () => {

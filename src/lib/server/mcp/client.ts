@@ -1,7 +1,30 @@
+/**
+ * Outbound MCP client for the operator allowlist path.
+ *
+ * Bounds that actually exist here, verified against the code, so a refactor cannot quietly
+ * drop one:
+ * - One connection per request, closed in `finally`; the remote session is terminated with a
+ *   separate 2-second cleanup deadline.
+ * - A 15-second deadline per request, combined with the caller's abort signal.
+ * - Redirects are refused (`redirect: 'error'`) and the SDK may not send a request to any URL
+ *   other than the configured endpoint ("MCP request escaped its configured endpoint").
+ * - Each response body is capped at 2 MiB while streaming.
+ * - Discovery: at most 8 pages and 128 advertised tools; a repeated cursor or an incomplete
+ *   page count fails rather than looping.
+ * - Arguments are capped at 16 000 serialized characters, results at 64 000.
+ * - The tool allowlist is re-checked and the tool is rediscovered before every execution, so a
+ *   tool removed by the operator or by the server is not called.
+ * - The credential and the endpoint are redacted from every description and result.
+ *
+ * The host is also resolved before the first byte is sent (`assertPublicHost`), because
+ * `config.ts` only inspects the URL shape. See the `ponytail` note in `withClient` for the
+ * remaining window.
+ */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import packageJson from '../../../../package.json';
+import { assertPublicHost } from './config';
 import type { McpConnection } from './config';
 
 export function redact(value: unknown, secrets: string[]): unknown {
@@ -23,6 +46,12 @@ async function withClient<T>(
 	signal: AbortSignal,
 	run: (client: Client, signal: AbortSignal) => Promise<T>
 ): Promise<T> {
+	// Resolve before the socket exists: the URL check is shape-only, so `127.0.0.1.nip.io` and
+	// any public name that answers with loopback/link-local/metadata would otherwise connect.
+	// ponytail: this verifies the answer, it does not pin it — a resolver that changes its reply
+	// between this lookup and the connection still wins. Pin the address (custom dispatcher or
+	// `lookup` hook) when the deployment cannot rely on outbound network policy.
+	await assertPublicHost(new URL(connection.url).hostname);
 	const deadline = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
 	let cleanup = false;
 	const client = new Client({ name: packageJson.name, version: packageJson.version });
@@ -111,11 +140,11 @@ export async function executeRemoteTool(
 	token: string,
 	tool: string,
 	args: Record<string, unknown>,
-	confirmed: boolean,
 	signal: AbortSignal
 ) {
-	if (!confirmed || !connection.tools.includes(tool))
-		throw new Error('Tool is not approved for this call');
+	// The one-shot approval is redeemed by the route before this runs; the allowlist is re-checked
+	// here so no caller path can reach a tool the operator did not approve.
+	if (!connection.tools.includes(tool)) throw new Error('Tool is not approved for this call');
 	if (JSON.stringify(args).length > 16000) throw new Error('Tool arguments exceed the limit');
 	return withClient(connection, token, signal, async (client, deadline) => {
 		const tools = await discover(client, connection, deadline);

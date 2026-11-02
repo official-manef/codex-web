@@ -16,8 +16,8 @@
  * Usage:
  *   codex-cli config                     what providers, models and MCP servers are enabled
  *   codex-cli ask "summarise this repo"  one turn, streamed to stdout
- *   codex-cli tools                     list remote MCP tools
- *   codex-cli run <alias> <tool> [json] call one allowlisted tool
+ *   codex-cli tools <alias>            list remote MCP tools
+ *   codex-cli run <alias> <tool> [json] prepare, then call one allowlisted tool
  *   codex-cli shell                     interactive shell on your bridge
  *   codex-cli doctor                    check every endpoint before you rely on it
  */
@@ -143,11 +143,12 @@ async function cmdAsk(prompt) {
 	if (wrote) stdout.write('\n');
 }
 
-async function cmdTools() {
+async function cmdTools(alias) {
 	needToken();
+	if (!alias) die('usage: codex-cli tools <alias>');
 	const body = await json('/api/mcp/tools', {
 		method: 'POST',
-		body: JSON.stringify({ action: 'list' })
+		body: JSON.stringify({ action: 'list', alias, token: TOKEN })
 	});
 	const tools = body.tools ?? body;
 	console.log(JSON.stringify(tools, null, 2));
@@ -164,9 +165,22 @@ async function cmdRun(alias, tool, argsJson) {
 			die('arguments must be valid JSON');
 		}
 	}
+	// Two steps, because the route refuses a caller-asserted "confirmed: true": prepare freezes the
+	// exact arguments and returns a 120-second one-shot approval, execute spends it.
+	const prepared = await json('/api/mcp/tools', {
+		method: 'POST',
+		body: JSON.stringify({ action: 'prepare', alias, tool, arguments: args, token: TOKEN })
+	});
 	const body = await json('/api/mcp/tools', {
 		method: 'POST',
-		body: JSON.stringify({ action: 'execute', alias, tool, args, confirmed: true })
+		body: JSON.stringify({
+			action: 'execute',
+			alias,
+			tool,
+			arguments: args,
+			approval: prepared.approval,
+			token: TOKEN
+		})
 	});
 	console.log(JSON.stringify(body, null, 2));
 }
@@ -249,7 +263,7 @@ async function cmdDoctor() {
 const COMMANDS = {
 	config: () => cmdConfig(),
 	ask: () => cmdAsk(rest.join(' ').trim()),
-	tools: () => cmdTools(),
+	tools: () => cmdTools(rest[0]),
 	run: () => cmdRun(rest[0], rest[1], rest[2]),
 	shell: () => cmdShell(),
 	doctor: () => cmdDoctor()

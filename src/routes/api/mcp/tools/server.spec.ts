@@ -25,7 +25,7 @@ async function failureOf(result: ReturnType<typeof POST>) {
 }
 const secret = 'remote-token-abcdef123456';
 
-function makeEvent(body: unknown, authorization = token): Ev {
+function makeEvent(body: unknown, authorization = operatorToken): Ev {
 	const url = new URL('https://app.example.com/api/mcp/tools');
 	const headers = new Headers({
 		'content-type': 'application/json',
@@ -50,11 +50,31 @@ const connection = {
 	tools: ['echo', 'status']
 };
 
+/** Ask the route for a real approval, exactly like the browser's Review step. */
+async function prepare(args: Record<string, unknown> = {}) {
+	const res = await POST(
+		makeEvent({
+			action: 'prepare',
+			alias: 'hub',
+			token: secret,
+			tool: 'echo',
+			arguments: args
+		})
+	);
+	if (res.status !== 200) throw new Error(`prepare failed with ${res.status}`);
+	return (await res.json()) as { approval: string };
+}
+
+// `consumeBurst` is keyed by the operator token and lives for a minute, and this file now makes
+// more requests per test (prepare + execute), so each test gets its own bucket.
+let operatorToken = token;
+
 beforeEach(() => {
 	for (const key of Object.keys(privateEnv)) delete privateEnv[key];
+	operatorToken = `op-${Math.random().toString(36).slice(2)}`.padEnd(40, '0').slice(0, 40);
 	Object.assign(privateEnv, {
 		MCP_CLIENT_ENABLED: 'true',
-		CAPABILITY_ACCESS_TOKEN: token
+		CAPABILITY_ACCESS_TOKEN: operatorToken
 	});
 	logMock.logEvent.mockReset().mockResolvedValue(undefined);
 	configMock.connectionFor.mockReset().mockReturnValue(connection);
@@ -84,6 +104,19 @@ describe('/api/mcp/tools POST gating', () => {
 	});
 
 	test('400 for an unapproved tool name, and the remote call never happens', async () => {
+		// `prepare` is the step that would mint a token, so it must refuse first: an unapproved
+		// tool never gets an approval at all.
+		await expect(
+			POST(
+				makeEvent({
+					action: 'prepare',
+					alias: 'hub',
+					token: secret,
+					tool: 'rm_rf',
+					arguments: {}
+				})
+			)
+		).rejects.toMatchObject({ status: 400 });
 		await expect(
 			POST(
 				makeEvent({
@@ -92,15 +125,16 @@ describe('/api/mcp/tools POST gating', () => {
 					token: secret,
 					tool: 'rm_rf',
 					arguments: {},
-					confirmed: true
+					approval: 'a'.repeat(64)
 				})
 			)
 		).rejects.toMatchObject({ status: 400 });
 		expect(clientMock.executeRemoteTool).not.toHaveBeenCalled();
 	});
 
-	test('400 when confirmed is not literally true — the allowlist cannot be bypassed by omission', async () => {
-		for (const confirmed of [undefined, false, 'true', 1]) {
+	test('400 when the caller asserts confirmation instead of holding a token', async () => {
+		// The old shape: `confirmed: true` is an assertion by the caller, not proof of a review.
+		for (const confirmed of [undefined, false, 'true', 1, true]) {
 			const body: Record<string, unknown> = {
 				action: 'execute',
 				alias: 'hub',
@@ -109,9 +143,95 @@ describe('/api/mcp/tools POST gating', () => {
 				arguments: {}
 			};
 			if (confirmed !== undefined) body.confirmed = confirmed;
-			await expect(POST(makeEvent(body))).rejects.toMatchObject({ status: 400 });
+			await expect(POST(makeEvent(body)), String(confirmed)).rejects.toMatchObject({
+				status: 400
+			});
 		}
 		expect(clientMock.executeRemoteTool).not.toHaveBeenCalled();
+	});
+
+	test('409 for a token that was never issued, or was spent on other arguments', async () => {
+		const body = (approval: string, overrides: Record<string, unknown> = {}) => ({
+			action: 'execute',
+			alias: 'hub',
+			token: secret,
+			tool: 'echo',
+			arguments: {},
+			approval,
+			...overrides
+		});
+		// Never issued by this process.
+		await expect(POST(makeEvent(body('f'.repeat(64))))).rejects.toMatchObject({ status: 409 });
+		// A real token bound to different arguments is refused, and spending it burns it.
+		const first = await prepare({ text: 'one' });
+		await expect(
+			POST(makeEvent(body(first.approval, { arguments: { text: 'other' } })))
+		).rejects.toMatchObject({ status: 409 });
+		await expect(
+			POST(makeEvent(body(first.approval, { arguments: { text: 'one' } })))
+		).rejects.toMatchObject({ status: 409 });
+		expect(clientMock.executeRemoteTool).not.toHaveBeenCalled();
+	});
+
+	test('one approval runs exactly one call, and the replay is refused', async () => {
+		const { approval } = await prepare();
+		const body = {
+			action: 'execute',
+			alias: 'hub',
+			token: secret,
+			tool: 'echo',
+			arguments: {},
+			approval
+		};
+		expect((await POST(makeEvent(body))).status).toBe(200);
+		await expect(POST(makeEvent(body))).rejects.toMatchObject({ status: 409 });
+		// A token issued for one tool cannot be redeemed against another.
+		const other = await prepare();
+		await expect(
+			POST(makeEvent({ ...body, tool: 'status', approval: other.approval }))
+		).rejects.toMatchObject({ status: 409 });
+		expect(clientMock.executeRemoteTool).toHaveBeenCalledTimes(1);
+	});
+
+	test('a spent approval cannot be extended by retrying', async () => {
+		const { approval } = await prepare();
+		// A token from a previous process, or one whose ticket was evicted, is simply unknown.
+		await expect(
+			POST(
+				makeEvent({
+					action: 'execute',
+					alias: 'hub',
+					token: secret,
+					tool: 'echo',
+					arguments: {},
+					approval
+				})
+			)
+		).resolves.toMatchObject({ status: 200 });
+		await expect(
+			POST(
+				makeEvent({
+					action: 'execute',
+					alias: 'hub',
+					token: secret,
+					tool: 'echo',
+					arguments: {},
+					approval
+				})
+			)
+		).rejects.toMatchObject({ status: 409 });
+	});
+
+	test('preparing many tickets never fails the request outright', async () => {
+		// The store evicts its oldest ticket past the cap instead of throwing, so a prepare burst
+		// cannot surface as the generic "the remote call may have completed" 502.
+		for (let i = 0; i < 5; i++) expect((await prepare()).approval).toMatch(/^[0-9a-f]{64}$/);
+	});
+
+	test('list needs no approval, so a read-only call cannot be blocked by the token store', async () => {
+		const res = await POST(makeEvent({ action: 'list', alias: 'hub', token: secret }));
+		expect(res.status).toBe(200);
+		expect(clientMock.listRemoteTools).toHaveBeenCalledTimes(1);
 	});
 
 	test('400 for unknown actions, extra fields and a short bearer token', async () => {
@@ -119,7 +239,7 @@ describe('/api/mcp/tools POST gating', () => {
 			POST(makeEvent({ action: 'delete', alias: 'hub', token: secret }))
 		).rejects.toMatchObject({ status: 400 });
 		await expect(
-			POST(makeEvent({ action: 'list', alias: 'hub', token: secret, confirmed: true }))
+			POST(makeEvent({ action: 'list', alias: 'hub', token: secret, approval: 'a'.repeat(64) }))
 		).rejects.toMatchObject({ status: 400 });
 		await expect(
 			POST(makeEvent({ action: 'list', alias: 'hub', token: 'short' }))
@@ -152,7 +272,9 @@ describe('/api/mcp/tools POST gating', () => {
 		expect(JSON.stringify(logMock.logEvent.mock.calls)).not.toContain(secret);
 	});
 
-	test('execute forwards the allowlisted tool, arguments and confirmation', async () => {
+	test('execute forwards the allowlisted tool and arguments once the approval is redeemed', async () => {
+		const { approval } = await prepare({ text: 'hi' });
+		clientMock.executeRemoteTool.mockClear();
 		const res = await POST(
 			makeEvent({
 				action: 'execute',
@@ -160,7 +282,7 @@ describe('/api/mcp/tools POST gating', () => {
 				token: secret,
 				tool: 'echo',
 				arguments: { text: 'hi' },
-				confirmed: true
+				approval
 			})
 		);
 		expect(res.status).toBe(200);
@@ -169,15 +291,15 @@ describe('/api/mcp/tools POST gating', () => {
 			secret,
 			'echo',
 			{ text: 'hi' },
-			true,
 			expect.any(AbortSignal)
 		);
-		const fields = logMock.logEvent.mock.calls[0][2];
+		const fields = logMock.logEvent.mock.calls.at(-1)?.[2];
 		expect(fields).toEqual({ action: 'execute', alias: 'hub', tool: 'echo', outcome: 'ok' });
 	});
 
 	test('a remote failure becomes 502 with an explicit warning that the action may have run', async () => {
 		clientMock.executeRemoteTool.mockRejectedValue(new Error(`upstream 500 ${secret}`));
+		const { approval } = await prepare();
 		const failure = await failureOf(
 			POST(
 				makeEvent({
@@ -186,7 +308,7 @@ describe('/api/mcp/tools POST gating', () => {
 					token: secret,
 					tool: 'echo',
 					arguments: {},
-					confirmed: true
+					approval
 				})
 			)
 		);

@@ -99,6 +99,11 @@ describe('connect', () => {
 			[{ alias: '' }, 'alias'],
 			[{ url: 'http://mcp.example.com/mcp' }, 'HTTPS'],
 			[{ url: 'https://127.0.0.1/mcp' }, 'HTTPS'],
+			// A wildcard resolver returns the address encoded in the name, so the shape check can
+			// refuse it without a DNS lookup. This is the whole `nip.io` class.
+			[{ url: 'https://127.0.0.1.nip.io/mcp' }, 'HTTPS'],
+			[{ url: 'https://169.254.169.254.nip.io/mcp' }, 'HTTPS'],
+			[{ url: 'https://10.0.0.1.sslip.io/mcp' }, 'HTTPS'],
 			[{ url: 'https://user:pass@mcp.example.com/mcp' }, 'HTTPS'],
 			[{ tools: [] }, 'tool names'],
 			[{ tools: ['COMPOSIO_MULTI_EXECUTE_TOOL'] }, 'tool names'],
@@ -288,6 +293,41 @@ describe('prepare and call', () => {
 		expect(rows[0].tokenHash).not.toBe(approval.token);
 		expect(JSON.stringify(rows)).not.toContain(connection.secret);
 		expect(JSON.stringify(rows)).not.toContain(approval.token);
+	});
+
+	test('the pending argument snapshot is stored encrypted, not as pasted cleartext', async () => {
+		const { t, asAlice } = await connected();
+		// A pasted secret in a tool argument must not sit in the database for two minutes.
+		const approval = await asAlice.action(api.mcp.prepare, {
+			alias: 'hub',
+			tool: 'echo',
+			arguments: { apiKey: 'sk-live-do-not-store-me' }
+		});
+		// The preview is plaintext on purpose: it is what the user reads and confirms.
+		expect(approval.arguments).toContain('sk-live-do-not-store-me');
+		const rows = await t.run(async (ctx) => await ctx.db.query('mcpApprovals').collect());
+		expect(rows).toHaveLength(1);
+		expect(rows[0].arguments).not.toContain('sk-live-do-not-store-me');
+		expect(JSON.stringify(rows)).not.toContain('sk-live-do-not-store-me');
+		// Still redeemable: the ciphertext decrypts back to the exact snapshot that was previewed.
+		const result = await asAlice.action(api.mcp.call, { token: approval.token });
+		expect(result.isError).toBe(false);
+	});
+
+	test('an unreadable pending snapshot is refused instead of crashing the call', async () => {
+		const { t, asAlice } = await connected();
+		const { token } = await asAlice.action(api.mcp.prepare, {
+			alias: 'hub',
+			tool: 'echo',
+			arguments: {}
+		});
+		// Simulates a rotated MODELS_ENC_KEY or a tampered row: the blob no longer decrypts.
+		await t.run(async (ctx) => {
+			const rows = await ctx.db.query('mcpApprovals').collect();
+			for (const row of rows)
+				await ctx.db.patch('mcpApprovals', row._id, { arguments: btoa('not-a-real-blob') });
+		});
+		await expect(asAlice.action(api.mcp.call, { token })).rejects.toThrow('can no longer be read');
 	});
 
 	test('a token can be redeemed exactly once, and the row is gone before the call', async () => {

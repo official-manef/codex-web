@@ -28,8 +28,9 @@ function makeEvent(
 	body: unknown,
 	{
 		authorization = `Bearer ${token}`,
-		origin = 'https://app.example.com'
-	}: { authorization?: string | null; origin?: string | null } = {}
+		origin = 'https://app.example.com',
+		address = `10.0.0.${Math.floor(Math.random() * 250) + 1}`
+	}: { authorization?: string | null; origin?: string | null; address?: string | null } = {}
 ): Ev {
 	const url = new URL('https://app.example.com/api/mcp/server');
 	const headers = new Headers({ 'content-type': 'application/json' });
@@ -41,7 +42,10 @@ function makeEvent(
 			method: 'POST',
 			headers,
 			body: typeof body === 'string' ? body : JSON.stringify(body)
-		})
+		}),
+		// A random address by default: the burst bucket is per caller, so sharing one address
+		// across tests would make the 20-request ceiling leak between them.
+		getClientAddress: address === null ? undefined : () => address
 	} as unknown as Ev;
 }
 
@@ -187,10 +191,47 @@ describe('/api/mcp/server POST', () => {
 		expect(serverMock.statusMcpResponse).not.toHaveBeenCalled();
 	});
 
-	test('the 21st request in a minute from one token is throttled', async () => {
-		for (let i = 0; i < 20; i++) await POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }));
-		await expect(POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }))).rejects.toMatchObject({
-			status: 429
-		});
+	test('the 21st request in a minute from one address is throttled', async () => {
+		const address = '203.0.113.7';
+		for (let i = 0; i < 20; i++)
+			await POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address }));
+		await expect(
+			POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address }))
+		).rejects.toMatchObject({ status: 429 });
+	});
+
+	test('a noisy caller cannot exhaust the shared token bucket for everyone else', async () => {
+		// One token, two addresses. The old key was the token, so 20 requests from anyone locked
+		// out every legitimate MCP client of this deployment.
+		for (let i = 0; i < 20; i++)
+			await POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address: '198.51.100.9' }));
+		await expect(
+			POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address: '198.51.100.9' }))
+		).rejects.toMatchObject({ status: 429 });
+		const other = await POST(
+			makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address: '198.51.100.10' })
+		);
+		expect(other.status).toBe(200);
+	});
+
+	test('a missing client address falls back to one shared bucket instead of crashing', async () => {
+		const res = await POST(makeEvent({ jsonrpc: '2.0', method: 'ping' }, { address: null }));
+		expect(res.status).toBe(200);
+	});
+
+	test('a runtime that refuses to report an address still serves the request', async () => {
+		const url = new URL('https://app.example.com/api/mcp/server');
+		const created = {
+			url,
+			request: new Request(url, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+				body: JSON.stringify({ jsonrpc: '2.0', method: 'ping' })
+			}),
+			getClientAddress: () => {
+				throw new Error('no socket peer');
+			}
+		} as unknown as Ev;
+		expect((await POST(created)).status).toBe(200);
 	});
 });

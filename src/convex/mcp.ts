@@ -31,6 +31,12 @@ import type { McpEndpoint } from './_shared/mcp_transport';
  *
  * Nothing here executes a tool automatically. `prepare` returns a preview plus a one-shot
  * token; only `call` with that token reaches the network, and it re-checks the allowlist.
+ *
+ * The pending snapshot is encrypted at rest with the same `MODELS_ENC_KEY` blob as the
+ * credential: `mcpApprovals.arguments` holds AES-256-GCM ciphertext, not the JSON the caller
+ * submitted. A user who pastes a secret into a tool argument therefore does not leave it in the
+ * database for the up-to-120-second approval window; the plaintext exists only in the action's
+ * memory and in the response returned to the browser that asked for the preview.
  */
 
 const MAX_CONNECTIONS = 16;
@@ -345,12 +351,15 @@ export const prepare = action({
 		const bytes = new Uint8Array(32);
 		crypto.getRandomValues(bytes);
 		const token = hex(bytes);
+		// Encrypt before the write: the row must never hold the plaintext snapshot. `prepare`
+		// still returns the plaintext preview, because that is what the user confirms.
+		const ciphertext = await encryptSecret(snapshot);
 		await ctx.runMutation(internal.mcp.insertApproval, {
 			owner,
 			tokenHash: await hashToken(token),
 			alias,
 			tool: args.tool,
-			arguments: snapshot,
+			arguments: ciphertext,
 			expiresAt: Date.now() + APPROVAL_TTL_MS
 		});
 		return { token, alias, tool: args.tool, arguments: snapshot };
@@ -364,6 +373,7 @@ export const insertApproval = internalMutation({
 		tokenHash: v.string(),
 		alias: v.string(),
 		tool: v.string(),
+		/** AES-256-GCM blob: the field name is historical, the value is ciphertext. */
 		arguments: v.string(),
 		expiresAt: v.number()
 	},
@@ -453,6 +463,15 @@ export const call = action({
 		if (!tools.includes(approval.tool))
 			fail('not_allowed', 'That tool is no longer in this server allowlist.');
 
+		// The snapshot is decrypted only after the row is consumed, so a replay cannot use it.
+		// A rotated key makes the pending approval unusable, which is the same outcome as expiry.
+		let snapshot: string;
+		try {
+			snapshot = await decryptSecret(approval.arguments);
+		} catch {
+			fail('expired', 'This approval can no longer be read. Review the call again.');
+		}
+
 		const discovery = await discoverToolNames(endpoint, secret);
 		if (!discovery.reachable)
 			fail('provider_error', discovery.error ?? 'The MCP server could not be reached.');
@@ -460,7 +479,7 @@ export const call = action({
 			fail('not_allowed', 'The server no longer advertises that tool.');
 
 		try {
-			return await callRemoteToolOnce(endpoint, secret, approval.tool, approval.arguments);
+			return await callRemoteToolOnce(endpoint, secret, approval.tool, snapshot);
 		} catch (error) {
 			// The remote text and the credential never reach the client; only a short cause.
 			const raw = error instanceof Error ? error.message : 'The remote tool call failed.';

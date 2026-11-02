@@ -44,7 +44,10 @@ function event(
 		url,
 		request: new Request(url, { method: 'POST', headers, body: init.body ?? undefined }),
 		cookies: { get: () => undefined, set: () => undefined, delete: () => undefined },
-		setHeaders: vi.fn()
+		setHeaders: vi.fn(),
+		// The burst bucket is per caller address, so a fixed address would make one test's
+		// 20-request ceiling leak into the next.
+		getClientAddress: () => `10.${tokenSeq % 250}.0.1`
 	} as unknown as RequestEvent<Record<string, never>, never>;
 }
 
@@ -147,7 +150,7 @@ describe('auth boundary', () => {
 		expect(response.status).toBe(200);
 	});
 
-	test('the burst limit is per token and answers 429 with a clean body', async () => {
+	test('the burst limit is per caller address and answers 429 with a clean body', async () => {
 		const authorization = `Bearer ${token}`;
 		for (let attempt = 0; attempt < 20; attempt++)
 			expect(

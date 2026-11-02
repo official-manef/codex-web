@@ -19,6 +19,62 @@ const TOOL = /^[A-Za-z0-9_.:-]{1,128}$/;
 const CREDENTIAL_PARAM = /token|secret|key|password|auth/i;
 const IP_LITERAL = /^\d+(?:\.\d+){3}$/;
 const LOCAL_HOST = /^(?:localhost|.*\.localhost|.*\.local)$/i;
+/**
+ * A dotted quad anywhere in the name is the address the resolver will hand back:
+ * `127.0.0.1.nip.io` and `10-0-0-1.sslip.io` are loopback/RFC1918 by construction.
+ */
+const EMBEDDED_IPV4 = /(?:^|\.)\d{1,3}(?:\.\d{1,3}){3}(?:\.|$)/;
+/** Wildcard resolvers that encode an arbitrary address in the name itself. */
+const WILDCARD_RESOLVER =
+	/^(?:.*\.)?(?:nip\.io|sslip\.io|xip\.io|traefik\.me|lvh\.me|vcap\.me|localtest\.me|local\.gd)$/i;
+
+/**
+ * True when an IPv4/IPv6 literal is routable on the public internet.
+ *
+ * Pure arithmetic on the text: no network, no `node:net`, so it runs in every Convex runtime.
+ */
+export function isPublicAddress(input: string): boolean {
+	const address = input
+		.trim()
+		.toLowerCase()
+		.replace(/^\[|\]$/g, '');
+	const quad = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address);
+	if (quad) {
+		const bytes = quad.slice(1, 5).map(Number);
+		if (bytes.some((byte) => byte > 255)) return false;
+		const [a, b] = bytes;
+		return !(
+			a === 0 ||
+			a === 10 ||
+			a === 127 ||
+			a >= 224 ||
+			(a === 100 && b >= 64 && b <= 127) || // carrier NAT
+			(a === 169 && b === 254) || // link-local, includes 169.254.169.254 metadata
+			(a === 172 && b >= 16 && b <= 31) ||
+			(a === 192 && b === 168) ||
+			(a === 192 && b === 0) ||
+			(a === 192 && b === 88) ||
+			(a === 198 && (b === 18 || b === 19)) ||
+			(a === 198 && b === 51) ||
+			(a === 203 && b === 0)
+		);
+	}
+	// IPv4 embedded in IPv6: mapped (`::ffff:7f00:1`) and NAT64 (`64:ff9b::7f00:1`).
+	const trailing = /(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/.exec(address);
+	if (trailing) return isPublicAddress(trailing[1]);
+	const mapped = /^(?:::ffff:|0:0:0:0:0:ffff:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(address);
+	if (mapped) {
+		const high = parseInt(mapped[1], 16);
+		const low = parseInt(mapped[2], 16);
+		return isPublicAddress(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+	}
+	if (address === '::' || address === '::1') return false;
+	if (/^f[cd]/.test(address)) return false; // fc00::/7 unique local
+	if (/^fe[89ab]/.test(address)) return false; // fe80::/10 link-local
+	if (/^ff/.test(address)) return false; // multicast
+	if (/^2001:0?db8:/.test(address)) return false; // documentation
+	return /^[0-9a-f:.]+$/.test(address) && address.includes(':');
+}
 
 /** Normalised alias, or null. Matches the operator config exactly. */
 export function validAlias(input: unknown): string | null {
@@ -32,6 +88,14 @@ export function validAlias(input: unknown): string | null {
  *
  * `new URL` normalises the host, so `https://0x7f.1`, `https://2130706433` and
  * `https://127.0.0.1` all reduce to an IPv4 literal before the check below.
+ *
+ * ponytail: shape-only, deliberately. This module must stay pure so the Convex runtime can run
+ * it from mutations, and that runtime has no resolver (DNS lives behind `'use node'`, which
+ * would make `mcp.ts` a Node module and drop its queries/mutations). So the deterministic
+ * classes are refused here — literals, names with an embedded dotted quad, wildcard-resolver
+ * suffixes — and the ceiling is a name that *does* resolve to a private address: only real
+ * resolution can see it. Upgrade path: resolve in a `'use node'` action before `connect`, or
+ * enforce outbound network policy at the deployment.
  */
 export function validPublicMcpUrl(input: unknown): string | null {
 	if (typeof input !== 'string') return null;
@@ -52,6 +116,9 @@ export function validPublicMcpUrl(input: unknown): string | null {
 	if (!host) return null;
 	if (host.startsWith('[') || IP_LITERAL.test(host)) return null;
 	if (LOCAL_HOST.test(host)) return null;
+	// `127.0.0.1.nip.io` is loopback and `10.0.0.1.sslip.io` is RFC1918: the name *is* the
+	// address. No DNS lookup is needed to know that, so this class is closed here.
+	if (EMBEDDED_IPV4.test(host) || WILDCARD_RESOLVER.test(host)) return null;
 	for (const key of url.searchParams.keys()) if (CREDENTIAL_PARAM.test(key)) return null;
 	return url.href;
 }
