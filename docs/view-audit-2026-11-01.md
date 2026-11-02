@@ -3,9 +3,10 @@
 > **This file is the authority for registry ids and their realness.** Its header figure
 > ("3 real / 4 partial / 15 stub / 5 guess", "27 registry entries") is the **pre-deletion
 > snapshot**; the follow-up sections at the end supersede it. Counted, not remembered:
-> `src/lib/registry.ts` holds **25 ids at `dff55b3`** and **28 at `337850c`** (21 in
-> `SECTIONS`, 7 in `CHAT_OUTPUTS`) — `memories`, `git` and `automations` were registered after
-> this audit was written. Other documents that quote 27 or 29 ids are dated observations, not
+> `src/lib/registry.ts` holds **25 ids at `dff55b3`**, **28 at `337850c`** and **29 at
+> `597fdaf`** (22 in `SECTIONS`, 7 in `CHAT_OUTPUTS`) — `memories`, `git`, `automations` and
+> `mcp-apps` were registered after this audit was written, and `src/lib/views/` holds **25**
+> files. Other documents that quote 21, 24, 27 or 28 ids are dated observations, not
 > contradictions to resolve. Index: [README.md](README.md).
 
 Which of the 27 registry entries are backed by something real, and which were reconstructed from

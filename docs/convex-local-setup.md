@@ -91,9 +91,15 @@ push the same request answered `Could not find public function for 'devices:list
 ```bash
 # 4. The security tests now execute instead of skipping.
 npx vitest run src/convex/deployment.spec.ts --reporter=verbose
-npx vitest run          # 446 passed, 0 skipped
-bash bin/gate           # exit 0
+npx vitest run          # 0 skipped in deployment.spec.ts; current totals in docs/progress.md
+bash bin/gate           # exit 0 once no step is skipped
 ```
+
+> **Why this page has no test total.** `446 passed, 0 skipped` was true on the branch this was
+> written on. It is not a fact about the code and it drifted the same day. The only number worth
+> quoting is the one in [progress.md](progress.md) §Gates, and the only claim this page makes is
+> the one it can reproduce: `deployment.spec.ts` reports **0 skips** and all four auth tests pass
+> once a deployment with functions pushed is answering.
 
 ## Why `npx convex dev --once` is the wrong command here
 

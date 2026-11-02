@@ -16,42 +16,45 @@ Index: [README.md](README.md). Related: [ac-coverage-2026-11-02.md](ac-coverage-
 | **console**   | No page error, no console error of its own, no failed request the screen does not document.                                                                                                                |
 | **honest**    | States why it cannot do the thing. A screen with no backend names the missing piece instead of a blank box or a fake "Connected".                                                                          |
 
-## The 28 ids
+## The 29 ids
 
-Counted from the registry, not assumed: 21 `SECTIONS` + 7 `CHAT_OUTPUTS` = **28**.
+Counted from the registry, not assumed: 22 `SECTIONS` + 7 `CHAT_OUTPUTS` = **29**. This was 28
+until `mcp-apps` was registered by the parity batch; `tests/surfaces.e2e.ts` fails
+(`every registry id has a surface case`) if this table and the registry ever disagree again.
 
-| id               | affordance                                | reachable | landmark                            | console                         | honest                                                            | verdict |
-| ---------------- | ----------------------------------------- | --------- | ----------------------------------- | ------------------------------- | ----------------------------------------------------------------- | ------- |
-| `chat`           | rail · Chat                               | pass      | `h1` "What would you like to do?"   | clean                           | "No provider configured · BROWSER"                                | pass    |
-| `manef`          | rail · MANEF AI                           | pass      | `h1` MANEF AI, `h2`×2               | 503 `/api/manef/*` (documented) | "No MANEF AI hub is configured. Set `MANEF_HUB_URL`"              | pass    |
-| `apps`           | rail · Automation                         | pass      | `h1` Automation, `h2`               | clean                           | "This browser build has no runtime behind it"                     | fixed   |
-| `transcribe`     | rail · Transcribe                         | pass      | `h1` Transcribe                     | clean                           | "No speech model in this build"                                   | fixed   |
-| `files`          | rail · Files                              | pass      | `section` File viewer               | clean                           | "Choose files or a folder… not uploaded"                          | fixed   |
-| `browser`        | rail · Browser                            | pass      | `section` Browser preview, `h2`     | clean                           | "Open a website … enter an address"                               | pass    |
-| `overview`       | More tools · Start here                   | pass      | `h1`, `h2`×6, `section`             | clean                           | "No compute device is configured"                                 | pass    |
-| `voice`          | More tools · Voice to action              | pass      | `h1`, region                        | clean                           | "No file limit is reported … this build loads none"               | fixed   |
-| `playground`     | More tools · Decision simulation          | pass      | `h1` + `h3` per example             | clean                           | "Stub · no runtime", "no model, so a run stops with an error"     | pass    |
-| `snake`          | More tools · Snake demo                   | pass      | `h1`, `section` Snake game          | clean                           | "No device is selected, so a run cannot start here"               | fixed   |
-| `embeddings`     | More tools · Embedding search             | pass      | `h1`, `h2`×2                        | clean                           | "Install an embedding model to try this"                          | fixed   |
-| `models`         | User menu ▸ Settings ▸ Models & downloads | pass      | `h1`, `h2`                          | clean                           | "no OpenVINO devices", "no download route"                        | pass    |
-| `setup`          | … Settings ▸ Setup check                  | pass      | `h1`, `h2` per check                | clean                           | "Not configured" ×2, "not detected", "unavailable"                | pass    |
-| `backends`       | … Settings ▸ Compute & devices            | pass      | `h1`                                | clean                           | "Template stub. No model runs", "No Intel NPU detected"           | pass    |
-| `providers`      | … Settings ▸ Providers                    | pass      | `h1`                                | clean                           | "Not configured", "Not measured"                                  | pass    |
-| `pricing`        | … Settings ▸ Costs                        | pass      | `h1`, `h2`                          | clean                           | "no endpoint is connected in this build"                          | pass    |
-| `keys`           | … Settings ▸ Model keys                   | pass      | `h1`                                | clean                           | "Cloud mode is not configured. Set `PUBLIC_CONVEX_URL`"           | pass    |
-| `faq`            | User menu ▸ Help                          | pass      | `h1`, `h2`×7                        | clean                           | "This browser build", "· desktop app" sections                    | pass    |
-| `tools`          | … Settings ▸ Tools                        | pass      | `h1`, `h2`×4                        | clean                           | per-row "Needs a runtime on this machine"                         | pass    |
-| `devices`        | … Settings ▸ Paired devices               | pass      | `h1`, `h2`×4                        | clean                           | "nothing is paired in this build", "Cloud mode is not configured" | pass    |
-| `memories`       | … Settings ▸ Memories                     | pass      | `h1`, `h2`                          | clean                           | "No memories stored yet … stay on this machine"                   | pass    |
-| `git`            | … Settings ▸ Repository                   | pass      | `h1` Git, nav "Repository"          | 404 `/api/git` (documented)     | "Set `GIT_SURFACE_ENABLED=true`"                                  | pass    |
-| `automations`    | … Settings ▸ Scheduled tasks              | pass      | `h1`                                | clean                           | "Cloud mode is not configured … nowhere to keep a schedule"       | pass    |
-| `chat-tools`     | User menu ▸ Integrations                  | pass      | `h2` Integrations, `h2` Tools       | clean                           | "Choose an MCP connection", "keeps no connections"                | pass    |
-| `chat-settings`  | User menu ▸ Settings (primary)            | pass      | `h2`×2, `h3`×2                      | clean                           | "No provider configured", "No model is installed in this build"   | pass    |
-| `chat-session`   | … Settings ▸ Session                      | pass      | `h2`×2, `h3`                        | clean                           | "Chat and utilities" list, per-action disabled reasons            | fixed   |
-| `workspace-home` | View ▸ Tools ▸ Open tools                 | pass      | `section` Open a local tool, `h2`×3 | clean                           | "Every tool this build registers … none reaches a server"         | pass    |
-| `terminal`       | launcher search → Terminal                | pass      | `h1` Terminal                       | clean                           | "No terminal can open yet: this build has no backend"             | pass    |
+| id               | affordance                                | reachable | landmark                            | console                          | honest                                                                | verdict |
+| ---------------- | ----------------------------------------- | --------- | ----------------------------------- | -------------------------------- | --------------------------------------------------------------------- | ------- |
+| `chat`           | rail · Chat                               | pass      | `h1` "What would you like to do?"   | clean                            | "No provider configured · BROWSER"                                    | pass    |
+| `manef`          | rail · MANEF AI                           | pass      | `h1` MANEF AI, `h2`×2               | 503 `/api/manef/*` (documented)  | "No MANEF AI hub is configured. Set `MANEF_HUB_URL`"                  | pass    |
+| `apps`           | rail · Automation                         | pass      | `h1` Automation, `h2`               | clean                            | "This browser build has no runtime behind it"                         | fixed   |
+| `transcribe`     | rail · Transcribe                         | pass      | `h1` Transcribe                     | clean                            | "No speech model in this build"                                       | fixed   |
+| `files`          | rail · Files                              | pass      | `section` File viewer               | clean                            | "Choose files or a folder… not uploaded"                              | fixed   |
+| `browser`        | rail · Browser                            | pass      | `section` Browser preview, `h2`     | clean                            | "Open a website … enter an address"                                   | pass    |
+| `overview`       | More tools · Start here                   | pass      | `h1`, `h2`×6, `section`             | clean                            | "No compute device is configured"                                     | pass    |
+| `voice`          | More tools · Voice to action              | pass      | `h1`, region                        | clean                            | "No file limit is reported … this build loads none"                   | fixed   |
+| `playground`     | More tools · Decision simulation          | pass      | `h1` + `h3` per example             | clean                            | "Stub · no runtime", "no model, so a run stops with an error"         | pass    |
+| `snake`          | More tools · Snake demo                   | pass      | `h1`, `section` Snake game          | clean                            | "No device is selected, so a run cannot start here"                   | fixed   |
+| `embeddings`     | More tools · Embedding search             | pass      | `h1`, `h2`×2                        | clean                            | "Install an embedding model to try this"                              | fixed   |
+| `models`         | User menu ▸ Settings ▸ Models & downloads | pass      | `h1`, `h2`                          | clean                            | "no OpenVINO devices", "no download route"                            | pass    |
+| `setup`          | … Settings ▸ Setup check                  | pass      | `h1`, `h2` per check                | clean                            | "Not configured" ×2, "not detected", "unavailable"                    | pass    |
+| `backends`       | … Settings ▸ Compute & devices            | pass      | `h1`                                | clean                            | "Template stub. No model runs", "No Intel NPU detected"               | pass    |
+| `providers`      | … Settings ▸ Providers                    | pass      | `h1`                                | clean                            | "Not configured", "Not measured"                                      | pass    |
+| `pricing`        | … Settings ▸ Costs                        | pass      | `h1`, `h2`                          | clean                            | "no endpoint is connected in this build"                              | pass    |
+| `keys`           | … Settings ▸ Model keys                   | pass      | `h1`                                | clean                            | "Cloud mode is not configured. Set `PUBLIC_CONVEX_URL`"               | pass    |
+| `faq`            | User menu ▸ Help                          | pass      | `h1`, `h2`×7                        | clean                            | "This browser build", "· desktop app" sections                        | pass    |
+| `tools`          | … Settings ▸ Tools                        | pass      | `h1`, `h2`×4                        | clean                            | per-row "Needs a runtime on this machine"                             | pass    |
+| `devices`        | … Settings ▸ Paired devices               | pass      | `h1`, `h2`×4                        | clean                            | "nothing is paired in this build", "Cloud mode is not configured"     | pass    |
+| `memories`       | … Settings ▸ Memories                     | pass      | `h1`, `h2`                          | clean                            | "No memories stored yet … stay on this machine"                       | pass    |
+| `git`            | … Settings ▸ Repository                   | pass      | `h1` Git, nav "Repository"          | 404 `/api/git` (documented)      | "Set `GIT_SURFACE_ENABLED=true`"                                      | pass    |
+| `automations`    | … Settings ▸ Scheduled tasks              | pass      | `h1`                                | clean                            | "Cloud mode is not configured … nowhere to keep a schedule"           | pass    |
+| `chat-tools`     | User menu ▸ Integrations                  | pass      | `h2` Integrations, `h2` Tools       | clean                            | "Choose an MCP connection", "keeps no connections"                    | pass    |
+| `chat-settings`  | User menu ▸ Settings (primary)            | pass      | `h2`×2, `h3`×2                      | clean                            | "No provider configured", "No model is installed in this build"       | pass    |
+| `chat-session`   | … Settings ▸ Session                      | pass      | `h2`×2, `h3`                        | clean                            | "Chat and utilities" list, per-action disabled reasons                | fixed   |
+| `workspace-home` | View ▸ Tools ▸ Open tools                 | pass      | `section` Open a local tool, `h2`×3 | clean                            | "Every tool this build registers … none reaches a server"             | pass    |
+| `terminal`       | launcher search → Terminal                | pass      | `h1` Terminal                       | clean                            | "No terminal can open yet: this build has no backend"                 | pass    |
+| `mcp-apps`       | User menu ▸ Settings ▸ MCP apps           | pass      | `h1` MCP apps, `h2`×0               | 404 `/api/mcp/apps` (documented) | "The app host is switched off on this server, set `MCP_APPS_ENABLED`" | pass    |
 
-**Verdicts: 21 pass, 7 fixed, 0 open findings.**
+**Verdicts: 22 pass, 7 fixed, 0 open findings.**
 
 ## Defects found
 
@@ -119,7 +122,7 @@ resulting surface to change, so a dead entry cannot come back silently.
 
 ## What is not covered
 
-- **Mobile and narrow projects.** The 28-id walk is skipped outside `desktop`
+- **Mobile and narrow projects.** The 29-id walk is skipped outside `desktop`
   (`testInfo.project.name`). The controls are the same DOM, but the off-canvas drawer makes each
   open path a different sequence; the existing acceptance suite covers the drawer's own behaviour.
 - **Behaviour inside a surface** (sending a message, running a classification, uploading audio). Those

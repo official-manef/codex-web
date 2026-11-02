@@ -1,17 +1,34 @@
 # HTTP route contract coverage — 2026-11-02
 
 Every HTTP route in this app now has a contract spec that pins **status codes and body shapes
-for the failure cases**, not just the happy path. 153 tests across seven files.
+for the failure cases**, not just the happy path. **138 tests across seven files** — counted by
+running the seven files, not by adding up this table:
+
+```bash
+npx vitest run src/routes/api/ai/config/contract.spec.ts \
+  src/routes/api/ai/chat/contract.spec.ts \
+  src/routes/api/mcp/server/contract.spec.ts \
+  src/routes/api/mcp/tools/contract.spec.ts \
+  'src/routes/api/manef/[...path]/contract.spec.ts' \
+  src/routes/auth/contract.spec.ts src/routes/contract.spec.ts
+#   Test Files  7 passed (7)
+#        Tests  138 passed (138)
+```
 
 | Spec file                                         | Tests | Covers                                       |
 | ------------------------------------------------- | ----- | -------------------------------------------- |
 | `src/routes/api/ai/config/contract.spec.ts`       | 13    | `/api/ai/config` GET                         |
-| `src/routes/api/ai/chat/contract.spec.ts`         | 27    | `/api/ai/chat` POST                          |
+| `src/routes/api/ai/chat/contract.spec.ts`         | 12    | `/api/ai/chat` POST                          |
 | `src/routes/api/mcp/server/contract.spec.ts`      | 19    | `/api/mcp/server` POST (MCP Streamable HTTP) |
 | `src/routes/api/mcp/tools/contract.spec.ts`       | 21    | `/api/mcp/tools` POST                        |
 | `src/routes/api/manef/[...path]/contract.spec.ts` | 28    | `/api/manef/*` GET + POST                    |
 | `src/routes/auth/contract.spec.ts`                | 30    | `/auth/{login,callback,logout,token}`        |
 | `src/routes/contract.spec.ts`                     | 15    | `/robots.txt`, `/sitemap.xml`                |
+
+An earlier revision of this page said **153**, with 27 for the chat file. Both were true on the
+branch the suites were written on (`edf5c32`, where that file held 27 cases); the merge into
+`integration` (`751f590`) left 12, and the total became 138. The table is now the measured
+value — re-run the command above before quoting it again.
 
 Method: the exported `GET`/`POST` handlers are called directly with a constructed
 `RequestEvent`, matching `src/routes/api/git/server.spec.ts` and
@@ -46,35 +63,46 @@ validation · **R** response shape · **U** upstream failure / timeout.
 
 ### `POST /api/ai/chat`
 
-| Case                                                                                            | Kind | Status               |
-| ----------------------------------------------------------------------------------------------- | ---- | -------------------- |
-| Only `POST` exported                                                                            | M    | —                    |
-| `AI_ENABLED` unset / `false` / `True` / `1` / `yes`                                             | D    | 404                  |
-| Disabled answer precedes authorization                                                          | D    | 404                  |
-| Enabled, no credential                                                                          | A    | 401                  |
-| Near-miss credentials: trailing char, truncated, missing scheme, lowercase scheme               | A    | 401                  |
-| Valid credential, foreign `Origin`                                                              | A    | 403                  |
-| Valid credential, no `Origin` at all                                                            | A    | 403                  |
-| Malformed JSON                                                                                  | I    | 400                  |
-| Non-JSON media type                                                                             | I    | 415                  |
-| Missing body                                                                                    | I    | 400                  |
-| Invalid UTF-8 bytes                                                                             | I    | 400                  |
-| Oversized via declared `content-length`                                                         | I    | 413                  |
-| Oversized via actual bytes                                                                      | I    | 413                  |
-| Missing / empty / wrong-typed fields, 17 messages, 2001-char memory (10 shapes)                 | I    | 400                  |
-| Unapproved model, unknown provider                                                              | I    | 400                  |
-| Caller-supplied `baseURL` rejected, value not echoed                                            | I    | 400                  |
-| Last message is not `user`                                                                      | I    | 400                  |
-| Image above 64 KiB body cap                                                                     | I    | 413 (see defect 2)   |
-| Image inside the cap starts a turn                                                              | R    | 200                  |
-| Unsupported image media type                                                                    | I    | 400                  |
-| Missing `AI_MODELS_JSON`                                                                        | I    | 503 (was 400, fixed) |
-| Malformed `AI_MODELS_JSON`                                                                      | I    | 503 (was 400, fixed) |
-| Success: `application/x-ndjson`, `no-store`, `X-Accel-Buffering: no`, lines `{text}` → `{done}` | R    | 200                  |
-| Provider error event → fixed `{type:"error",message}` line, no hang, no 5xx                     | U    | 200 + error event    |
-| Provider error body carries no key and no upstream host                                         | U    | —                    |
-| Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event    |
-| Log records counts and outcome only, never message text or key                                  | R    | —                    |
+> **Read the table below as the contract, not as a test inventory.** The suite was cut from 27
+> cases to 12 during the merge into `integration` (`751f590`), so several rows below are no
+> longer pinned by `contract.spec.ts`: method discipline, `415` non-JSON media type, `413`
+> oversized body, malformed JSON / invalid UTF-8, the 17-message and 2001-char field shapes,
+> caller-supplied `baseURL`, last-message-not-`user`, the 64 KiB image cap row (see defect 2),
+> and the NDJSON success shape. What still holds — in `contract.spec.ts` (12) plus
+> `server.spec.ts` (14) — is: `404` before the body is read, `401`/`403`, `400` for an
+> unapproved model and for an extra field, `503` for a broken catalog, per-turn image caps,
+> policy widening and deny-by-default, and the log fields. Do not cite a row here as proof
+> without checking which file runs it.
+>
+> | Case                                                                                            | Kind | Status               |
+> | ----------------------------------------------------------------------------------------------- | ---- | -------------------- |
+> | Only `POST` exported                                                                            | M    | —                    |
+> | `AI_ENABLED` unset / `false` / `True` / `1` / `yes`                                             | D    | 404                  |
+> | Disabled answer precedes authorization                                                          | D    | 404                  |
+> | Enabled, no credential                                                                          | A    | 401                  |
+> | Near-miss credentials: trailing char, truncated, missing scheme, lowercase scheme               | A    | 401                  |
+> | Valid credential, foreign `Origin`                                                              | A    | 403                  |
+> | Valid credential, no `Origin` at all                                                            | A    | 403                  |
+> | Malformed JSON                                                                                  | I    | 400                  |
+> | Non-JSON media type                                                                             | I    | 415                  |
+> | Missing body                                                                                    | I    | 400                  |
+> | Invalid UTF-8 bytes                                                                             | I    | 400                  |
+> | Oversized via declared `content-length`                                                         | I    | 413                  |
+> | Oversized via actual bytes                                                                      | I    | 413                  |
+> | Missing / empty / wrong-typed fields, 17 messages, 2001-char memory (10 shapes)                 | I    | 400                  |
+> | Unapproved model, unknown provider                                                              | I    | 400                  |
+> | Caller-supplied `baseURL` rejected, value not echoed                                            | I    | 400                  |
+> | Last message is not `user`                                                                      | I    | 400                  |
+> | Image above 64 KiB body cap                                                                     | I    | 413 (see defect 2)   |
+> | Image inside the cap starts a turn                                                              | R    | 200                  |
+> | Unsupported image media type                                                                    | I    | 400                  |
+> | Missing `AI_MODELS_JSON`                                                                        | I    | 503 (was 400, fixed) |
+> | Malformed `AI_MODELS_JSON`                                                                      | I    | 503 (was 400, fixed) |
+> | Success: `application/x-ndjson`, `no-store`, `X-Accel-Buffering: no`, lines `{text}` → `{done}` | R    | 200                  |
+> | Provider error event → fixed `{type:"error",message}` line, no hang, no 5xx                     | U    | 200 + error event    |
+> | Provider error body carries no key and no upstream host                                         | U    | —                    |
+> | Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event    |
+> | Log records counts and outcome only, never message text or key                                  | R    | —                    |
 
 ### `POST /api/mcp/server`
 
@@ -232,14 +260,21 @@ reaches `streamText`; 100 KiB is `413`.
 
 Not fixed here, because the fix is a product decision with a real cost: raising the cap to
 ~11 MB (2 × 4 MB after base64 overhead) means every chat request may buffer that much in
-memory, and the route currently has no streaming body parser. Pinned as current behaviour in
-`an image larger than 64 KiB is refused by the shared body cap before the schema runs`, so the
-day someone raises the cap that test fails and forces a deliberate update. Two options for
-whoever owns it:
+memory, and the route currently has no streaming body parser.
+
+**The pinning test is gone.** It was
+`an image larger than 64 KiB is refused by the shared body cap before the schema runs`, and it
+lived in `contract.spec.ts` at `edf5c32`. That file was cut from 27 cases to 12 in `751f590`, and
+the row went with it. What still covers the cap is `src/lib/server/access.spec.ts`
+(`readJsonBody` answers `413` at `65_536` and at an explicit smaller cap) — i.e. the _reader's_
+limit is pinned, but nothing now asserts that the chat route's image budget cannot reach it. The
+finding stands unverified by a test until someone re-adds that case. Two options for whoever
+owns it:
 
 - raise the chat route's cap explicitly (`readJsonBody(event.request, 12_000_000)`) and accept
   the memory cost, or
-- correct the doc and the schema to the real budget (64 KiB total, so roughly 48 KiB of image).
+- correct the doc and the schema to the real budget (64 KiB total, so roughly 48 KiB of image),
+  and re-add a case that asserts it.
 
 The first is honest to the product; the second is honest to the code. Either one closes it.
 

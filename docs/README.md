@@ -9,7 +9,8 @@ number or the same verdict, the one listed under "Source of truth" below wins an
 should point at it rather than repeat it. Three files restating one claim at three different
 times is how `138 passed (27 files)` outlived two route rebuilds.
 
-Last verified against the tree: `dff55b3`, 2026-11-02.
+Last verified against the tree: `597fdaf`, 2026-11-02. Numbers on this page were re-measured on
+that commit; a number copied from another document is a number nobody checked.
 
 ## Start here
 
@@ -29,7 +30,7 @@ Last verified against the tree: `dff55b3`, 2026-11-02.
 
 Status meanings:
 
-- **current** — describes the code as it is on `dff55b3`. Safe to rely on.
+- **current** — describes the code as it is on `597fdaf`. Safe to rely on.
 - **historical** — a record of one session or decision at a date. Not maintained. Useful for
   "why is it like this", not for "what is it now".
 - **superseded** — describes a structure that has been deleted. Kept because the decision and
@@ -40,6 +41,7 @@ is not always the last time its content was true.
 
 | File                                                                   | Purpose                                                          | Updated    | Status     |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------- | ---------- |
+| [README.md](README.md)                                                 | This page: what is current, and the one home per fact            | 2026-11-02 | current    |
 | [architecture.md](architecture.md)                                     | Boundaries, module map, source-of-truth table                    | 2026-11-02 | current    |
 | [progress.md](progress.md)                                             | Living status, gate numbers, known-unproven claims               | 2026-11-02 | current    |
 | [gate.md](gate.md)                                                     | `bin/gate`, its three verdicts and what each step does not prove | 2026-11-02 | current    |
@@ -49,14 +51,21 @@ is not always the last time its content was true.
 | [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md)               | Every checkable claim in these docs, verified or marked wrong    | 2026-11-02 | current    |
 | [surface-coverage-2026-11-02.md](surface-coverage-2026-11-02.md)       | Every registry id walked in a browser: reachable/named/honest    | 2026-11-02 | current    |
 | [a11y-2026-11-02.md](a11y-2026-11-02.md)                               | Accessibility defects found, fixed, and deliberately not fixed   | 2026-11-02 | current    |
+| [responsive-2026-11-02.md](responsive-2026-11-02.md)                   | Breakpoint × surface overflow matrix, tap targets, drawer        | 2026-11-02 | current    |
+| [runtime-perf-2026-11-02.md](runtime-perf-2026-11-02.md)               | Measured runtime cost of a 500-turn chat and the three fixes     | 2026-11-02 | current    |
+| [edge-cases-2026-11-02.md](edge-cases-2026-11-02.md)                   | Adversarial pass: 46 inputs, 19 fixed rows from 12 root causes   | 2026-11-02 | current    |
+| [api-contract-2026-11-02.md](api-contract-2026-11-02.md)               | Every HTTP route's failure status codes and body shapes          | 2026-11-02 | current    |
+| [csp.md](csp.md)                                                       | The enforced CSP, its three relaxations and what each one costs  | 2026-11-02 | current    |
+| [coverage-2026-11-02.md](coverage-2026-11-02.md)                       | Line/branch coverage before and after, and the gaps left open    | 2026-11-02 | current    |
 | [security-review-2026-11-02.md](security-review-2026-11-02.md)         | Trust-boundary review of routes, Convex, bridge, key handling    | 2026-11-02 | current    |
+| [convex-local-setup.md](convex-local-setup.md)                         | Reproducible local Convex deployment, and the two traps          | 2026-11-02 | current    |
 | [terminology.md](terminology.md)                                       | One term per concept, and the strings tests hold in place        | 2026-11-02 | current    |
 | [laya-parity.md](laya-parity.md)                                       | Provenance of the vendored Laya shell, deliberate deviations     | 2026-11-02 | current    |
 | [terminal.md](terminal.md)                                             | Terminal panel client + the bridge contract and reference bridge | 2026-11-02 | current    |
 | [byok.md](byok.md)                                                     | Three engines, the never-hold-a-key rule, Jev boundary           | 2026-11-02 | current    |
 | [auth.md](auth.md)                                                     | Optional Google OIDC, private notes, auth boundary proof         | 2026-11-02 | current    |
-| [ai-mcp.md](ai-mcp.md)                                                 | Optional BYOK chat routes and the MCP client/server panels       | 2026-10-30 | current    |
-| [integrations.md](integrations.md)                                     | Payment/email transport adapters, boundaries                     | 2026-09-08 | current    |
+| [ai-mcp.md](ai-mcp.md)                                                 | Optional BYOK chat routes and the MCP client/server panels       | 2026-11-02 | current    |
+| [integrations.md](integrations.md)                                     | Payment/email transport adapters, boundaries                     | 2026-11-02 | current    |
 | [deployment.md](deployment.md)                                         | Vercel vs Node targets, build selection, host requirements       | 2026-11-01 | current    |
 | [environment.md](environment.md)                                       | Every env var, default, and its actual consumer                  | 2026-11-02 | current    |
 | [assets.md](assets.md)                                                 | Brand identity, asset paths, placeholder/custom status           | 2026-09-08 | current    |
@@ -64,7 +73,7 @@ is not always the last time its content was true.
 | [linting.md](linting.md)                                               | What prettier/eslint/Svelte-5 guard enforce                      | 2026-09-08 | current    |
 | [releasing.md](releasing.md)                                           | Version bump, changelog, release gates                           | 2026-09-08 | current    |
 | [svelte-best-practices.md](svelte-best-practices.md)                   | Svelte 5 / SvelteKit rules for this repo                         | 2026-09-08 | current    |
-| [convex-best-practices.md](convex-best-practices.md)                   | Schema, validators, visibility rules                             | 2026-09-08 | current    |
+| [convex-best-practices.md](convex-best-practices.md)                   | Schema, validators, visibility rules                             | 2026-11-02 | current    |
 | [agent-start.md](agent-start.md)                                       | Entry procedure for an agent starting or resuming work           | 2026-09-08 | current    |
 | [agent-workflow.md](agent-workflow.md)                                 | Worktree inspection, update style, verification                  | 2026-09-08 | current    |
 | [prd-template.md](prd-template.md)                                     | Blank PRD to copy for a new product                              | 2026-09-08 | current    |
@@ -90,16 +99,26 @@ one place.
 
 ## Source of truth
 
-| Fact                                             | Single home                                                    | Everything else must point here              |
-| ------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------- |
-| Which AC has a browser test                      | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)         | PRD §7, implementation-plan §10, progress.md |
-| Gate numbers (test counts, build, lint)          | [progress.md](progress.md) §Gates                              | byok.md §7, handover, README                 |
-| Whether the auth boundary is proven              | [progress.md](progress.md) §auth boundary + [auth.md](auth.md) | handover, byok.md                            |
-| Registry id count and which ids are real         | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)           | handover, laya-parity                        |
-| Where the shell came from / what was changed     | [laya-parity.md](laya-parity.md)                               | REBUILD-PLAN, architecture                   |
-| Module boundaries and the authoritative file map | [architecture.md](architecture.md)                             | CONTRACT.md                                  |
-| Env var names, defaults, consumers               | [environment.md](environment.md)                               | .env.example                                 |
-| Bridge wire protocol                             | [terminal.md](terminal.md) §The bridge                         | progress.md §Terminal bridge                 |
+| Fact                                             | Single home                                                      | Everything else must point here              |
+| ------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------- |
+| Which AC has a browser test                      | [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md)           | PRD §7, implementation-plan §10, progress.md |
+| Gate numbers (test counts, build, lint)          | [progress.md](progress.md) §Gates                                | byok.md §7, handover, coverage, README       |
+| Whether the auth boundary is proven              | [progress.md](progress.md) §auth boundary + [auth.md](auth.md)   | handover, byok.md                            |
+| Registry id count and which ids are real         | [view-audit-2026-11-01.md](view-audit-2026-11-01.md)             | handover, laya-parity, surface-coverage      |
+| Where the shell came from / what was changed     | [laya-parity.md](laya-parity.md)                                 | REBUILD-PLAN, architecture                   |
+| Module boundaries and the authoritative file map | [architecture.md](architecture.md)                               | CONTRACT.md                                  |
+| Env var names, defaults, consumers               | [environment.md](environment.md)                                 | .env.example                                 |
+| Bridge wire protocol and its env surface         | [terminal.md](terminal.md) §The bridge                           | progress.md §Terminal bridge                 |
+| HTTP route status codes and failure body shapes  | [api-contract-2026-11-02.md](api-contract-2026-11-02.md)         | parity-checklist §3.2 (image budget)         |
+| The CSP, and why each relaxed source is allowed  | [csp.md](csp.md)                                                 | security-review, svelte.config.js comments   |
+| Line/branch coverage percentages                 | [coverage-2026-11-02.md](coverage-2026-11-02.md)                 | progress.md (totals only)                    |
+| Is a screen reachable, named, quiet and honest   | [surface-coverage-2026-11-02.md](surface-coverage-2026-11-02.md) | view-audit (classifies, does not walk)       |
+| Accessibility defects fixed and deferred         | [a11y-2026-11-02.md](a11y-2026-11-02.md)                         | laya-parity §1 (the two `:focus-visible`)    |
+| Overflow, tap-target and zoom behaviour          | [responsive-2026-11-02.md](responsive-2026-11-02.md)             | edge-cases rows 29–32 (the input only)       |
+| Runtime cost of a large chat, and its ceiling    | [runtime-perf-2026-11-02.md](runtime-perf-2026-11-02.md)         | progress.md (no perf numbers elsewhere)      |
+| Adversarial inputs and their verdicts            | [edge-cases-2026-11-02.md](edge-cases-2026-11-02.md)             | responsive (shares the 320px row)            |
+| Trust-boundary verdicts per surface              | [security-review-2026-11-02.md](security-review-2026-11-02.md)   | auth.md, csp.md, terminal.md                 |
+| How to reproduce a local Convex deployment       | [convex-local-setup.md](convex-local-setup.md)                   | progress.md §auth boundary, gate.md, auth.md |
 
 ## Superseded, and why they are still here
 
@@ -127,32 +146,34 @@ not have. Do not "clean them up" from guesswork.
 
 1. **View and registry counts disagree across four documents, and no two agree.**
 
-   | Document                                         | Claim                     | Measured on `337850c`                     |
-   | ------------------------------------------------ | ------------------------- | ----------------------------------------- |
-   | `handover-2026-11-01.md` (this repo)             | 23 views, 27 registry ids | 24 views, 28 ids                          |
-   | desktop `docs/HANDOVER-2026-11-01.md`            | 23 views, 29 registry ids | 24 views, 28 ids                          |
-   | `view-audit-2026-11-01.md` header                | "27 registry entries"     | 28 ids                                    |
-   | `view-audit-2026-11-01.md` follow-up (same file) | "25 ids, not 27"          | 25 was true at `dff55b3`; 28 at `337850c` |
+   | Document                                         | Claim                     | Measured on `597fdaf`              |
+   | ------------------------------------------------ | ------------------------- | ---------------------------------- |
+   | `handover-2026-11-01.md` (this repo)             | 23 views, 27 registry ids | 25 views, 29 ids                   |
+   | desktop `docs/HANDOVER-2026-11-01.md`            | 23 views, 29 registry ids | 25 views, 29 ids                   |
+   | `view-audit-2026-11-01.md` header                | "27 registry entries"     | 29 ids                             |
+   | `view-audit-2026-11-01.md` follow-up (same file) | "25 ids, not 27"          | 25 was true at `dff55b3`; 29 today |
+   | `surface-coverage-2026-11-02.md`                 | "The 28 ids"              | 28 was true at `337850c`; 29 today |
 
-   `src/lib/registry.ts` holds 28 ids today (21 in `SECTIONS`, 7 in `CHAT_OUTPUTS`), and
-   `src/lib/views/` holds 24 files. At `dff55b3` the same counts were 25 ids (18 + 7) and 21
-   files; `memories`, `git` and `automations` shipped after it. The audit's own follow-up
-   section is the version that matched the tree when it was written; its header is the
-   pre-deletion snapshot. The 27 and 29 figures are unrecoverable from this branch without
-   knowing exactly when each was counted, so they stay as written. **Treat
-   [view-audit-2026-11-01.md](view-audit-2026-11-01.md) as the authority and the rest as dated
-   observations.**
+   `src/lib/registry.ts` holds **29 ids today** (22 in `SECTIONS`, 7 in `CHAT_OUTPUTS`), and
+   `src/lib/views/` holds **25 files**. At `dff55b3` the same counts were 25 ids (18 + 7) and 21
+   files; `memories`, `git`, `automations` and `mcp-apps` shipped after it. The audit's own
+   follow-up section is the version that matched the tree when it was written; its header is the
+   pre-deletion snapshot. The 27 and 29-vs-23-view figures in the two handovers are
+   unrecoverable from this branch without knowing exactly when each was counted, so they stay as
+   written. **Treat [view-audit-2026-11-01.md](view-audit-2026-11-01.md) as the authority and
+   the rest as dated observations.**
 
 2. **`laya-parity.md` §2 lists a view set that does not exist.** It names 21 views including
    `Files`, `Browser`, `Performance`, `Parameters`, `Corpus`, `Schema` and `Reference`. Those
    files are gone (`6ed1f3e` removed `src/lib/views/` entirely; `d52e006` restored a different
-   set). The real 24 today are `Apps, Automations, BrowserCanvas, Chat, Compute, Devices,
-Embeddings, Faq, FileCanvas, Git, Manef, Memories, ModelKeys, Models, Overview, Playground,
-Pricing, Providers, Setup, Snake, Terminal, ToolsSettings, Transcribe, Voice`. At `dff55b3`
-   the count was 21 with a different membership, which is exactly why the mismatch was never
-   caught. The §2 block is provenance — what Laya contained — not a claim about this tree; the
-   file does not say which it means. **Unresolved: whether §2 describes the copy at `84c1823`
-   or the tree after the deletions.**
+   set). The real 25 today are `Apps, Automations, BrowserCanvas, Chat, Compute, Devices,
+Embeddings, Faq, FileCanvas, Git, Manef, McpApps, Memories, ModelKeys, Models, Overview,
+Playground, Pricing, Providers, Setup, Snake, Terminal, ToolsSettings, Transcribe, Voice`.
+   At `dff55b3` the count was 21 with a different membership, which is exactly why the mismatch
+   was never caught. The §2 block is provenance — what Laya contained — not a claim about this
+   tree. **Resolved in this pass:** §2 is now headed "as copied, not as shipped", so it is
+   explicitly the copy at `84c1823` and the reader is told to measure the tree instead of
+   grepping that block.
 
 3. **The two handover copies are not mirrors and neither is a superset.** `docs/handover-2026-11-01.md`
    here and `docs/HANDOVER-2026-11-01.md` in `rahmanef63/codex-desktop` share the identity
@@ -175,7 +196,7 @@ Pricing, Providers, Setup, Snake, Terminal, ToolsSettings, Transcribe, Voice`. A
    audit wins by weight of evidence — but the handover is a historical record and was left
    alone. **Unresolved only in the sense that the handover still reads as current guidance.**
 
-5. **`progress.md` baseline line says `d839f75` while its gate block now says `dff55b3`.**
+5. **`progress.md` baseline line says `d839f75` while its gate block now says `597fdaf`.**
    The baseline is where measurement _started_; the gate block is where it was last _run_.
    Both are correct and the distinction is not stated in the file. Left as-is rather than
    inventing a rule for it.
@@ -192,14 +213,44 @@ Recorded so the next reader does not have to reconstruct the reasoning:
   pass/fail summary at all.
 - **Gate numbers had four homes** (progress.md, byok.md §7, handover, README). `byok.md` §7's
   table was replaced by a pointer; it had drifted `95` → `138` while progress.md said `194`.
-  Measured now: **50 files / 441 passed / 3 skipped** on `337850c` (it was `36 / 197 / 3` on
-  `dff55b3`; three features landed in between).
+  Re-measured on `597fdaf`: **81 files / 939 passed / 3 skipped**. The chain that got here is
+  `36 / 197 / 3` (`dff55b3`) → `50 / 441 / 3` (`337850c`) → `57 / 596 / 3` (`test/convex`) →
+  `81 / 939 / 3`. Only [progress.md](progress.md) §Gates carries a full gate block; every other
+  document points there.
 - **`terminal.md` contradicted itself**: the opening sentence said the bridge "is not part of
   this template" while §"The bridge that ships here" documents `bridge/terminal-bridge.mjs`,
   which exists and is exercised by ten tests in
   `src/lib/runtime/terminal-bridge.spec.ts`. Resolved by evidence: the bridge ships. The
   opening was corrected to say the panel is the client half and the _remote_ bridge on the
   user's machine is theirs, which is what the rest of the file already said.
+
+### 2026-11-02, index pass two
+
+The wave-3 documents landed after the first pass, so the index drifted again. Re-measured on
+`597fdaf`; nothing below was copied from another document.
+
+- **Eight documents were reachable from no index row**: `README.md` itself, `api-contract`,
+  `convex-local-setup`, `coverage`, `csp`, `edge-cases`, `responsive` and `runtime-perf`. All
+  eight now have rows. Two more "Updated" cells were stale (`ai-mcp`, `integrations`) and a
+  third (`convex-best-practices`) had moved; all three were reset from
+  `git log -1 --format=%cs`.
+- **Registry ids: 28 → 29.** `mcp-apps` was registered by the parity batch after both
+  `surface-coverage` and `view-audit` were written. Measured: 22 `SECTIONS` + 7 `CHAT_OUTPUTS`.
+  [view-audit](view-audit-2026-11-01.md) keeps the authoritative count (now naming all three
+  commits); `surface-coverage` was given the missing `mcp-apps` row and its verdict line
+  recalculated from its own table (22 pass / 7 fixed), not hand-edited.
+- **Contract tests: 153 → 138.** `api-contract` claimed 153 across seven files with 27 for the
+  chat route. The merge into `integration` (`751f590`) cut that file from 27 cases to 12.
+  Measured by running the seven files: **138 passed**. The page now also says which rows of
+  its chat table are no longer pinned, because a table that reads like a test inventory after
+  the inventory shrank is the exact failure this page exists to catch.
+- **Six documents each carried their own unit total** (`441`, `446`, `473`, `596`, `636`,
+  `205`). Each is now labelled as the snapshot it is, with a pointer to
+  [progress.md](progress.md) §Gates, which carries the single measured block:
+  **81 files / 939 passed / 3 skipped**.
+- **Coverage percentages are not gate numbers.** `coverage-2026-11-02.md` now says so in its
+  header: it is the only home for the percentages and the per-file before/after, and it points
+  at progress.md for the totals.
 
 ## Secret scan
 
