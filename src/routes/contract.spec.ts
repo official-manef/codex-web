@@ -96,11 +96,15 @@ describe('sitemap.xml', () => {
 		expectNoInternals(body);
 	});
 
-	test('lists exactly the public landing page when indexing is on', async () => {
+	test('lists every public page when indexing is on', async () => {
 		publicEnv.PUBLIC_SEO_INDEXABLE = 'true';
 		const body = await sitemap().text();
+		// The landing page plus the two pages an OAuth reviewer must be able to reach. A policy
+		// nobody can find is not a published policy, so these three are the whole public surface.
 		expect(body).toContain('<loc>https://app.example.com/</loc>');
-		expect(body.match(/<url>/g)).toHaveLength(1);
+		expect(body).toContain('<loc>https://app.example.com/privacy</loc>');
+		expect(body).toContain('<loc>https://app.example.com/terms</loc>');
+		expect(body.match(/<url>/g)).toHaveLength(3);
 	});
 
 	test('the origin is escaped rather than interpolated raw', async () => {

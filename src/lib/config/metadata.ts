@@ -72,7 +72,11 @@ export function robotsDocument(seo: ReturnType<typeof seoSettings>) {
 }
 
 export function sitemapDocument(seo: ReturnType<typeof seoSettings>) {
-	// Only the shipped public landing page. Add real public product URLs when those routes exist.
-	const location = seo.indexable ? `<url><loc>${seo.origin}/</loc></url>` : '';
-	return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${location}</urlset>\n`;
+	// The public pages that exist as routes. `/privacy` and `/terms` are listed because an OAuth
+	// reviewer has to reach them, and a page nobody can find is not a published policy.
+	const paths = ['/', '/privacy', '/terms'];
+	const locations = seo.indexable
+		? paths.map((path) => `<url><loc>${seo.origin}${path}</loc></url>`).join('')
+		: '';
+	return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${locations}</urlset>\n`;
 }

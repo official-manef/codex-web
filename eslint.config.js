@@ -100,6 +100,19 @@ export default defineConfig(
 		}
 	},
 	{
+		// The public legal and landing pages link mostly to absolute external URLs (the source
+		// repository, the app origin) plus two sibling pages. `resolve()` is typed for internal
+		// SvelteKit routes only, so wrapping an external URL in it is a type error, and the rule
+		// has no way to express "external is fine". The pages are static: no `goto`, no
+		// pushState, and every internal link is a plain path that exists.
+		files: [
+			'src/routes/home/**/*.svelte',
+			'src/routes/privacy/**/*.svelte',
+			'src/routes/terms/**/*.svelte'
+		],
+		rules: { 'svelte/no-navigation-without-resolve': 'off' }
+	},
+	{
 		files: ['src/lib/components/ui/**/*.svelte'],
 		rules: {
 			// Generated shadcn primitives intentionally accept external href values.

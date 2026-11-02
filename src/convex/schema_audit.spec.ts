@@ -203,6 +203,7 @@ describe('ownership audit: enumerated, not hand-checked', () => {
 			'projects.ofSession',
 			'projects.remove',
 			'projects.rename',
+			'projects.setDetail',
 			'starter.status',
 			'threads.appendMessage',
 			'threads.createSession',

@@ -188,3 +188,58 @@ export const ofSession = query({
 		};
 	}
 });
+
+const MAX_PROJECT_FILES = 20;
+
+/** A relative label, never a filesystem path: nothing reads it from disk. */
+function cleanProjectPath(value: unknown): string | null {
+	if (typeof value !== 'string') return null;
+	const path = value.trim();
+	if (!path || path.length > 300) return null;
+	if (path.startsWith('/') || path.includes('..') || path.includes('\0')) return null;
+	return /^[A-Za-z0-9._/-]+$/.test(path) ? path : null;
+}
+
+/**
+ * Per-project instructions and file labels.
+ *
+ * `files` are labels only — a relative path and a byte count. Nothing here reads a file, and a
+ * project is never a permission. Bounded: 2000 characters of instructions, 20 labels.
+ */
+export const setDetail = mutation({
+	args: {
+		id: v.id('projects'),
+		instructions: v.optional(v.string()),
+		files: v.optional(v.array(v.object({ path: v.string(), bytes: v.number() })))
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const owner = await requireUser(ctx);
+		const row = await ctx.db.get('projects', args.id);
+		if (!row || row.owner !== owner) fail('not_found', 'Project not found.');
+
+		const instructions = args.instructions?.trim() ?? '';
+		if (instructions.length > MAX_INSTRUCTIONS_CHARS)
+			fail('invalid_request', 'Instructions are too long.');
+
+		const files = args.files ?? [];
+		if (files.length > MAX_PROJECT_FILES) fail('invalid_request', 'Too many file labels.');
+
+		const seen = new Set<string>();
+		const cleaned = files.map((file) => {
+			const path = cleanProjectPath(file.path);
+			if (!path) fail('invalid_request', 'A file label needs a relative path.');
+			if (seen.has(path)) fail('invalid_request', 'Duplicate file label.');
+			seen.add(path);
+			if (!Number.isInteger(file.bytes) || file.bytes < 0)
+				fail('invalid_request', 'A file label needs a byte count.');
+			return { path, bytes: file.bytes };
+		});
+
+		await ctx.db.patch('projects', args.id, {
+			...(instructions ? { instructions } : {}),
+			files: cleaned
+		});
+		return null;
+	}
+});
