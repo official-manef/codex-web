@@ -3,9 +3,18 @@
  * Install this workspace on a Linux host: VPS, container, or a laptop.
  *
  * Everything here is answerable from a terminal, which is why it is a CLI and not a setup screen.
- * `PUBLIC_CONVEX_URL` and `PUBLIC_SITE_URL` are read at BUILD time by Vite and baked into the
- * bundle — the app cannot render a form to collect a value that it needed before it started. A
- * frontend wizard can only ever change runtime variables, and those are the wrong ones.
+ * The values have to reach the build and the server as real environment variables; a browser form
+ * can only change runtime values in a process it does not own.
+ *
+ * What is genuinely build-time is narrow: `DEPLOY_TARGET` (it picks the adapter), the
+ * `NODE_IMAGE` build arg, and `PUBLIC_CONVEX_URL`, which `convex deploy
+ * --cmd-url-env-var-name` injects into its own build command. Everything else — including
+ * `PUBLIC_SITE_URL` — is read at runtime through `$env/dynamic/*`, and `/_app/env.js` serves
+ * `public_env` from `process.env`, so changing it does not require a rebuild.
+ *
+ * The file is written because the Node target does NOT read `.env` at runtime: SvelteKit reads
+ * `process.env` and nothing loads the file for you. That is why the final instruction starts the
+ * server with `node --env-file=.env build`. A `.env` without that flag is inert.
  *
  * The script is deliberately boring: check tools, ask for the few values that have no safe
  * default, write `.env`, build, and print the exact command to start. It never writes a secret to
@@ -184,7 +193,10 @@ if (!['node', 'vercel'].includes(deployTarget)) fail('--target must be node or v
 
 const lines = [
 	`# Written by scripts/install.mjs on ${new Date().toISOString().slice(0, 10)}.`,
-	`# Read at build time by Vite. Editing PUBLIC_* here requires a rebuild.`,
+	`# The Node target does not read this file by itself: start the server with`,
+	`#   node --env-file=.env build`,
+	`# These are read at runtime through $env/dynamic/*, so editing them needs a restart,`,
+	`# not a rebuild. Only DEPLOY_TARGET and PUBLIC_CONVEX_URL affect the build.`,
 	'',
 	`PUBLIC_SITE_URL=${site}`,
 	`PUBLIC_CONVEX_URL=${convex}`,
@@ -194,6 +206,8 @@ const lines = [
 	`AUTH_CLIENT_ID=${clientId}`,
 	`AUTH_CLIENT_SECRET=${clientSecret}`,
 	`AUTH_SESSION_SECRET=${sessionSecret}`,
+	'',
+	`BODY_SIZE_LIMIT=11446960`,
 	'',
 	'# Convex reads this on the deployment itself, not here:',
 	'#   npx convex env set MODELS_ENC_KEY "$(openssl rand -base64 32)"',
@@ -252,10 +266,16 @@ if (flag('deploy-convex')) {
 heading('Installed');
 note('Start the server:');
 console.log(`
-  DEPLOY_TARGET=${deployTarget} HOST=127.0.0.1 PORT=3000 ORIGIN=${site} node build
+  node --env-file=.env build
 
-  Put a TLS proxy in front of it before exposing it to anyone else, and set
-  PUBLIC_SITE_URL to that https origin, then rebuild.
+  --env-file is required: the Node target reads process.env and does not load .env on its
+  own, so the file this script just wrote is inert without it. DEPLOY_TARGET and ORIGIN are
+  passed on the command line because they are not in the file:
+
+  DEPLOY_TARGET=${deployTarget} HOST=127.0.0.1 PORT=3000 ORIGIN=${site} node --env-file=.env build
+
+  Put a TLS proxy in front of it before exposing it to anyone else, and set PUBLIC_SITE_URL
+  to that https origin. Editing it needs a restart, not a rebuild.
 
   Google sign-in needs ${site}/auth/callback registered as a redirect URI,
   and the same AUTH_CLIENT_ID set on the Convex deployment:

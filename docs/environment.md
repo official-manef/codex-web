@@ -48,38 +48,59 @@ by changing an environment string. Migrate subjects and sessions when changing p
 Also absent from `.env.example` on purpose, because they are host/adapter settings rather than app
 settings: `DEPLOY_TARGET` (build target), `ORIGIN`, `HOST`, `PORT` (Node adapter runtime),
 `LOG_LEVEL`/`LOG_FILE` (optional activity log), and `GOOGLE_APPLICATION_CREDENTIALS` (commented out
-as recipe-only). Every one is documented in its own section below.
+as recipe-only). `BODY_SIZE_LIMIT` is the exception: it ships as a commented line, because a
+wrong value breaks image chat silently. Every one is documented in its own section below.
+
+## Node adapter body limit
+
+`BODY_SIZE_LIMIT` is the one host setting that also appears in `.env.example`, as a commented
+line next to `ORIGIN` and `PORT` so a bare-VPS operator sees it at the place they set the other
+adapter values. adapter-node rejects a request body above it (default `512K`,
+`node_modules/@sveltejs/adapter-node/files/handler.js`) with a bare `413` **before routing**.
+`/api/ai/chat` accepts two 4 MB base64 images, so `MAX_CHAT_BODY_BYTES` in
+`src/lib/uploads.ts` derives `11 446 960` bytes from that cap. Any Node or Docker deployment
+must therefore raise the adapter limit to at least that value, or image chat silently breaks:
+
+```sh
+BODY_SIZE_LIMIT=11446960 node build
+```
+
+The included Dockerfile sets `ENV BODY_SIZE_LIMIT=11446960`, so a container is correct by
+default. A bare VPS deploy, a Cloud Run revision or any host-managed `ORIGIN`/`PORT` pair needs
+the variable set alongside them. Keep the number equal to `MAX_CHAT_BODY_BYTES`; a lower value
+turns a supported request into an adapter 413 with no app-level error, a higher one only raises
+the adapter's buffer ceiling and does not widen what the route accepts.
 
 ## AI and MCP: implemented, off by default
 
 The SvelteKit server validates selection in `src/lib/server/ai/config.ts` and
 `src/lib/server/mcp/config.ts`. [AI/MCP setup](ai-mcp.md) documents limits and Composio.
 
-| Setting                   | Default | Actual consumer                                                                                                                 |
-| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `AI_ENABLED`              | `false` | Enables bounded BYOK chat streaming.                                                                                            |
-| `AI_MODELS_JSON`          | Empty   | Approved model IDs grouped by `openai`, `anthropic`, `google`, `nine-router`; no automatically selected model.                  |
-| `CAPABILITY_ACCESS_TOKEN` | Empty   | Optional private operator bearer credential, at least 32 characters. Google sessions are the normal per-user alternative.       |
-| `MCP_CLIENT_ENABLED`      | `false` | Enables discovery and manually confirmed calls to configured remote servers.                                                    |
-| `MCP_SERVERS_JSON`        | Empty   | Private aliases, fixed public HTTPS URLs, `bearer`/`x-api-key`, exact tool allowlists. Never put credentials in endpoint URLs.  |
-| `MCP_SERVER_ENABLED`      | `false` | Enables the read-only `/api/mcp/server` endpoint.                                                                               |
-| `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                  |
-| `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing.  |
-| `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                         |
-| `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                             |
-| `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                     |
-| `GIT_POLICY_JSON`         | Empty   | Per-verb decision for `git_diff`/`git_stage`/`git_commit`/`git_worktree`. Empty or malformed denies every write.                |
-| `AI_TOOLS_ENABLED`        | `false` | Lets a BYOK turn use the tool loop at all. The request must also ask, and the policy must allow the verb.                       |
-| `AI_POLICY_JSON`          | Empty   | Per-verb decision for `read_file`/`write_file`/`apply_patch`/`exec`/`mcp_app`. Empty or malformed denies every verb.            |
-| `BRIDGE_URL`              | Empty   | Loopback/LAN/HTTPS base URL of the user's bridge. With `BRIDGE_TOKEN`, tool calls reach that machine; without it, tools refuse. |
-| `BRIDGE_TOKEN`            | Empty   | Bearer for the bridge. Never logged, never in a URL. Unset disables tool execution entirely.                                    |
-| `AUTOMATIONS_ENABLED`     | `false` | Enables `POST /api/automations/run`, a **dry run** that previews `decideRun` and executes nothing.                              |
-| `MCP_APPS_ENABLED`        | `false` | Enables `GET /api/mcp/apps`, the operator's sandboxed app allowlist.                                                            |
-| `MCP_APPS_JSON`           | Empty   | Closed list of `{ id, name, origin, entry, surfaces }`. Invalid entries are dropped, invalid JSON is a 503.                     |
-| `MCP_APPS_ALLOW`          | Empty   | Comma-separated app ids actually permitted. Empty means **nothing** runs, never everything.                                     |
-| `MCP_APPS_POLICY_JSON`    | Empty   | Per-verb decision including `mcp_app`. Empty or malformed denies, so no frame is created.                                       |
-| `MEMORY_DUAL_WRITE`       | `false` | Mirrors local notes to Convex when `true` **and** the user is signed in. Off by default.                                        |
-| `BRIDGE_FS_ROOTS`         | cwd     | `:`-separated directories `/v1/fs/read` and `/v1/fs/write` may touch. A path outside every root is a 403.                       |
+| Setting                   | Default | Actual consumer                                                                                                                    |
+| ------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_ENABLED`              | `false` | Enables bounded BYOK chat streaming.                                                                                               |
+| `AI_MODELS_JSON`          | Empty   | Approved model IDs grouped by `openai`, `anthropic`, `google`, `nine-router`; no automatically selected model.                     |
+| `CAPABILITY_ACCESS_TOKEN` | Empty   | Optional private operator bearer credential, at least 32 characters. Google sessions are the normal per-user alternative.          |
+| `MCP_CLIENT_ENABLED`      | `false` | Enables discovery and manually confirmed calls to configured remote servers.                                                       |
+| `MCP_SERVERS_JSON`        | Empty   | Private aliases, fixed public HTTPS URLs, `bearer`/`x-api-key`, exact tool allowlists. Never put credentials in endpoint URLs.     |
+| `MCP_SERVER_ENABLED`      | `false` | Enables the read-only `/api/mcp/server` endpoint.                                                                                  |
+| `MCP_SERVER_TOKEN`        | Empty   | Separate private bearer credential for the MCP server, at least 32 characters.                                                     |
+| `LOG_LEVEL`               | Unset   | `src/lib/server/log.ts`; `debug`/`info`/`warn`/`error` enable the local activity log, unset or any other value writes nothing.     |
+| `LOG_FILE`                | Unset   | `src/lib/server/log.ts`; NDJSON destination. Unset writes `./.local-logs/activity.jsonl` (git-ignored).                            |
+| `GIT_SURFACE_ENABLED`     | `false` | Enables the read-only `/api/git` route: one repository's status and recent commits.                                                |
+| `GIT_SURFACE_ROOTS`       | Empty   | `:`-separated absolute paths the git route may read. Cap 8, `..` refused, no other subcommand is reachable.                        |
+| `GIT_POLICY_JSON`         | Empty   | Per-verb decision for `git_diff`/`git_stage`/`git_commit`/`git_worktree`. Empty or malformed denies every write.                   |
+| `AI_TOOLS_ENABLED`        | `false` | Lets a BYOK turn use the tool loop at all. The request must also ask, and the policy must allow the verb.                          |
+| `AI_POLICY_JSON`          | Empty   | Per-verb decision for `read_file`/`write_file`/`apply_patch`/`exec`/`mcp_app`. Empty or malformed denies every verb.               |
+| `BRIDGE_URL`              | Empty   | Loopback/LAN/HTTPS base URL of the user's bridge. With `BRIDGE_TOKEN`, tool calls reach that machine; without it, tools refuse.    |
+| `BRIDGE_TOKEN`            | Empty   | Bearer for the bridge. Never logged, never in a URL. Unset disables tool execution entirely.                                       |
+| `AUTOMATIONS_ENABLED`     | `false` | Enables `POST /api/automations/run`, a **dry run** that previews `decideRun` and executes nothing.                                 |
+| `MCP_APPS_ENABLED`        | `false` | Enables `GET /api/mcp/apps`, the operator's sandboxed app allowlist.                                                               |
+| `MCP_APPS_JSON`           | Empty   | Closed list of `{ id, name, origin, entry, surfaces }`. Invalid entries are dropped, invalid JSON is a 503.                        |
+| `MCP_APPS_ALLOW`          | Empty   | Comma-separated app ids actually permitted. Empty means **nothing** runs, never everything.                                        |
+| `MCP_APPS_POLICY_JSON`    | Empty   | Per-verb decision including `mcp_app`. Empty or malformed denies, so no frame is created.                                          |
+| `MEMORY_DUAL_WRITE`       | `false` | Mirrors local notes to Convex when `true` **and** the user is signed in. Off by default.                                           |
+| `BRIDGE_FS_ROOTS`         | cwd     | `:`-separated directories `/v1/fs/read` and `/v1/fs/write` may touch. `realpath`'d, so a symlink pointing outside a root is a 403. |
 
 Provider keys and remote MCP credentials come from the current request and stay in memory;
 they are not stored in Convex, browser storage or server fallback environment variables.
@@ -149,15 +170,16 @@ and real merchant/mail acceptance follow [integrations.md](integrations.md).
 
 ## Hosting and optional cloud services
 
-| Setting                                                               | Default             | Actual consumer                                                                                                  |
-| --------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `DEPLOY_TARGET`                                                       | `vercel` when unset | `svelte.config.js`: `vercel` or `node`; unsupported targets fail at build time. Docker selects Node.             |
-| `ORIGIN`                                                              | Unset               | Node adapter runtime trusted application origin; align with `PUBLIC_SITE_URL`.                                   |
-| `PORT`, `HOST`                                                        | Adapter defaults    | Node server listen settings; Docker listens on `0.0.0.0:3000`.                                                   |
-| `GCP_ENABLED`, `CLOUDFLARE_ENABLED`                                   | `false`             | Resolver guards for unimplemented application service adapters; these flags do not deploy infrastructure.        |
-| `GCP_PROJECT_ID`, `GCP_LOCATION`, `GCP_STORAGE_BUCKET`                | Empty               | Recipe-only identifiers for a future selected GCP service.                                                       |
-| `GOOGLE_APPLICATION_CREDENTIALS`                                      | Omitted             | Optional local ADC file path used by Google tooling when installed. Cloud Run uses an attached service identity. |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_API_TOKEN` | Empty               | Recipe-only scoped infrastructure API access; ordinary DNS/proxy use needs no runtime token.                     |
+| Setting                                                               | Default             | Actual consumer                                                                                                                                                             |
+| --------------------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEPLOY_TARGET`                                                       | `vercel` when unset | `svelte.config.js`: `vercel` or `node`; unsupported targets fail at build time. Docker selects Node.                                                                        |
+| `ORIGIN`                                                              | Unset               | Node adapter runtime trusted application origin; align with `PUBLIC_SITE_URL`.                                                                                              |
+| `PORT`, `HOST`                                                        | Adapter defaults    | Node server listen settings; Docker listens on `0.0.0.0:3000`.                                                                                                              |
+| `BODY_SIZE_LIMIT`                                                     | `512K` (adapter)    | adapter-node request body cap, checked before any route runs. Must be ≥ `MAX_CHAT_BODY_BYTES` (11446960) or `/api/ai/chat` answers 413 for image turns. Dockerfile sets it. |
+| `GCP_ENABLED`, `CLOUDFLARE_ENABLED`                                   | `false`             | Resolver guards for unimplemented application service adapters; these flags do not deploy infrastructure.                                                                   |
+| `GCP_PROJECT_ID`, `GCP_LOCATION`, `GCP_STORAGE_BUCKET`                | Empty               | Recipe-only identifiers for a future selected GCP service.                                                                                                                  |
+| `GOOGLE_APPLICATION_CREDENTIALS`                                      | Omitted             | Optional local ADC file path used by Google tooling when installed. Cloud Run uses an attached service identity.                                                            |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_API_TOKEN` | Empty               | Recipe-only scoped infrastructure API access; ordinary DNS/proxy use needs no runtime token.                                                                                |
 
 The Node artifact/container is suitable for VPS or Cloud Run; account deployment is
 product-specific. Cloudflare DNS/proxy can front it. Workers hosting and R2/Turnstile
@@ -172,10 +194,13 @@ A string placeholder does not provision a resource or bridge runtime boundaries.
 | `CONVEX_DEPLOYMENT` | CLI-managed local `.env.local` | Selects the linked development deployment.                                                                                                                                                                                     |
 | `CONVEX_DEPLOY_KEY` | Hosting/CI secret store        | Deployment script/CLI. Scope preview and production keys separately.                                                                                                                                                           |
 
-`MODELS_ENC_KEY` is the one setting in this file that is deliberately absent from `.env.example`'s
-active block: it belongs on the Convex deployment (`npx convex env set MODELS_ENC_KEY …`), never in
-a frontend env file. The same holds for `LOG_LEVEL` and `LOG_FILE`, which are optional and ship
-unset.
+`MODELS_ENC_KEY` is the one setting in this file that is deliberately **commented out** in
+`.env.example`, with the warning inline: it belongs on the Convex deployment
+(`npx convex env set MODELS_ENC_KEY …`), never in a frontend env file. It is printed rather than
+omitted so an operator finds the name and its target in one place instead of guessing. The same
+holds for `LOG_LEVEL` and `LOG_FILE`, which are optional and ship unset, and for `MANEF_HUB_URL`,
+which ships commented out at its documented empty default (`http://127.0.0.1:3210` is the hub's
+own port, not a value this app should assume).
 
 Backend settings belong on the corresponding Convex deployment, not only the frontend
 host. Never copy another project's deployment identifiers, secrets or private files into

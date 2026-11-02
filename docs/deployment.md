@@ -18,9 +18,21 @@ create final artwork. See [assets](assets.md) and [the release checklist](../CHE
 ## Vercel
 
 Import the generated repository with SvelteKit as the framework and the repository root
-as the root directory. Install with `bun install --frozen-lockfile`; build with
-`bun run verify`. Install devDependencies because validation and build tooling need them.
-Select a supported Node major with the minimum patch listed in `engines.node` and
+as the root directory. Install with `bun install --frozen-lockfile`; set the build command to
+`bun run build:deploy` (the same command the Convex section below requires, because it is the
+one that deploys Convex and then builds with the injected URL). `bun run verify` is a local
+check, not a build command: it never deploys Convex and leaves `PUBLIC_CONVEX_URL` unresolved.
+
+That build command runs `bin/gate`, and the gate will not pass without a Chromium binary, so
+install one as part of the build step:
+
+```sh
+bunx playwright install --with-deps chromium && bun run build:deploy
+```
+
+Without it, `bin/gate` reports `playwright` as UNPROVEN and exits 2 — a deploy is refused rather
+than shipped with no browser proof. Install devDependencies because validation and build tooling
+need them. Select a supported Node major with the minimum patch listed in `engines.node` and
 `.node-version`.
 
 A Convex deployment is required for anything that stores data: this app keeps user rows and
@@ -34,16 +46,37 @@ On a Linux host with the repository's Bun and supported Node installed:
 ```sh
 bun install --frozen-lockfile
 DEPLOY_TARGET=node bun run verify
-HOST=127.0.0.1 PORT=3000 ORIGIN=http://localhost:3000 node build
+HOST=127.0.0.1 PORT=3000 ORIGIN=http://localhost:3000 BODY_SIZE_LIMIT=11446960 node build
 ```
+
+`bun run verify` is `check && lint && test && build`; it does not run `bin/gate` (secret scan,
+bridge contract, browser suite, dev smoke, Node-adapter smoke, skip accounting). Use `bin/gate`
+when you need that proof — `bun run build:deploy` does.
 
 ### Automated install on a VPS
 
 `scripts/install.mjs` does the steps above and writes `.env` for you. It is a CLI and not a
-setup screen for one structural reason: **`PUBLIC_CONVEX_URL` and `PUBLIC_SITE_URL` are read at
-build time** by Vite and baked into the bundle. An app that has not been built cannot render a
-form to collect a value it needed before it could start. A frontend wizard can only ever change
-runtime values, and those are the wrong ones.
+setup screen because the values it collects have to reach the build as real environment
+variables, and a browser form cannot write them into the process that later builds the app.
+
+The premise is **not** that `PUBLIC_*` is baked into the bundle. At runtime every consumer
+reads `$env/dynamic/public` / `$env/dynamic/private`, and `/_app/env.js` serves `public_env`
+from `process.env` per process — so a restart with a different `PUBLIC_SITE_URL` changes the
+answer without a rebuild. What is genuinely build-time is small: `DEPLOY_TARGET` (it selects
+the adapter), the `NODE_IMAGE` build arg, and `PUBLIC_CONVEX_URL`, which
+`convex deploy --cmd-url-env-var-name PUBLIC_CONVEX_URL` injects into its own build command.
+
+The real reason the installer writes `.env` is narrower, and worth stating because it is easy
+to get wrong: **the Node target does not read `.env` at runtime.** SvelteKit reads
+`process.env`; nothing loads the file. The installer writes it as the record of what to pass,
+not as a loader. Start the server with the file explicit:
+
+```sh
+node --env-file=.env build
+```
+
+Without `--env-file`, a `.env` written by the installer has no effect and the server starts
+with no Convex URL and no site origin.
 
 ```sh
 # interactive
@@ -71,8 +104,13 @@ node scripts/install.mjs --dry-run --site https://app.example.com --convex https
 | `--yes`              | Non-interactive; every prompt takes its default.                                |
 | `--dry-run`          | Print the plan and the file, change nothing.                                    |
 
-It refuses rather than guessing: a URL with a path or credentials, an `AUTH_SESSION_SECRET`
-that is not 43 base64url characters, or Node older than 22 all stop the install.
+It refuses rather than guessing: a URL with a path or credentials, or an `AUTH_SESSION_SECRET`
+that is not 43 base64url characters, stop the install. Node older than 22 also stops it. A Node
+major above 24 only warns: Convex refuses `'use node'` actions on those, so `convex deploy` will
+fail, but `vite build` and `node build` work — which is why `scripts/install.mjs` and
+`scripts/install.sh` both warn instead of exiting. This host runs Node v26.7.0 while
+`package.json` declares `engines.node` as `^22.23.2 || ^24.15.0`; frontend install and serve are
+unaffected there.
 
 #### Convex cloud
 
@@ -114,6 +152,11 @@ docker run --rm --name svelte-convex-starter-local \
   -e ORIGIN=http://localhost:3000 \
   svelte-convex-starter:local
 ```
+
+The image already sets `BODY_SIZE_LIMIT=11446960` (equal to `MAX_CHAT_BODY_BYTES`), so image
+chat works out of the box. adapter-node defaults to `512K` and answers `413` before any route
+runs, so a non-Docker Node deploy must set the same variable or `/api/ai/chat` refuses every
+image turn. `-e BODY_SIZE_LIMIT=...` overrides it per container.
 
 The default base tracks the supported Node 22 image. For reproducible production
 images, pass `--build-arg NODE_IMAGE=<reviewed-node-image@sha256:digest>` and deliberately
@@ -173,11 +216,20 @@ For linked deployment, create the application's own Convex project and separate
 development/production deployments. In Vercel Production, set that deployment's
 `CONVEX_DEPLOY_KEY` and use `bun run build:deploy` as the build command.
 
-The command runs the full offline gate, including a frontend build, before contacting
-Convex. Then `convex deploy` runs the linked web build with `PUBLIC_CONVEX_URL` injected.
-For an explicitly selected Node build, the same command produces `build/`; shipping or
-running that artifact is still the host's deployment step. Remove a manually configured
-URL pointing at another backend. A passing build does not validate provider settings.
+The command runs `bin/gate` before contacting Convex — the real gate, not `bun run verify`:
+secret scan, prettier, eslint, svelte-check, Convex types, version check, Svelte 5 guard, assets,
+vitest with skip accounting, the bridge contract test, `vite build`, the Playwright browser
+suite, the dev-server smoke and the standalone Node-adapter smoke. Then `convex deploy` runs the
+linked web build with `PUBLIC_CONVEX_URL` injected. For an explicitly selected Node build, the
+same command produces `build/`; shipping or running that artifact is still the host's deployment
+step. Remove a manually configured URL pointing at another backend. A passing build does not
+validate provider settings.
+
+The deploying machine therefore needs what a local gate needs: bun, `node_modules`, and a
+Chromium for `@playwright/test` (`npx playwright install --with-deps chromium`). Without them
+`bin/gate` exits 2 or reports UNPROVEN and the deploy stops, by design — a deploy with no
+browser proof is the failure this replaced. If a host cannot run a browser, do not silently fall
+back to `bun run verify`; run the gate in CI and deploy the artifact it produced.
 
 The deploy guard requires a preview key in Vercel Preview and a production key in
 Production, rejecting mismatches before remote changes. On other hosts, the operator

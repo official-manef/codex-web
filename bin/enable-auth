@@ -14,7 +14,8 @@
 #   bin/enable-auth                           # local .env.local + `convex env set`
 #   bin/enable-auth --vercel <project>        # also set them on a Vercel project (needs vercel CLI)
 #
-# Exit codes: 0 ok, 1 bad input, 2 missing tool, 3 a write failed.
+# Exit codes: 0 ok, 1 bad input, 2 missing tool. A failed write is a warning, not an exit: the
+# script writes what it can and names the setting an operator must apply by hand.
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 2

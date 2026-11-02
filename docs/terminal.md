@@ -37,17 +37,33 @@ The right-hand canvas can open a real shell on a machine the user paired. The pa
 
 ## Bridge contract
 
-The bridge must implement exactly this:
+The bridge exposes two families of request. The **terminal** family is what the browser panel
+uses: `GET /v1/health` and the `WebSocket /v1/terminal`. The **tool** family is what the
+server-side client in `src/lib/server/bridge.ts` uses when a tool call has to run on the user's
+machine: `POST /v1/exec`, `POST /v1/fs/read`, `POST /v1/fs/write`.
 
-| Request                  | Requirement                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/health`         | `Authorization: Bearer <token>` accepted, `200` returned. Any other credential is `401`.                                                    |
-| `WebSocket /v1/terminal` | Accepts the `bearer.<token>` subprotocol offered by the browser. Anything else is rejected during the handshake.                            |
-| Frames                   | Text only, both directions. Outbound from the browser is raw shell input; inbound is shell output. Binary frames are refused by the client. |
-| Resize                   | Accepts `{"type":"resize","cols":N,"rows":N}` inbound and applies it to the pty.                                                            |
+A bridge must implement exactly this:
+
+| Request                  | Requirement                                                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/health`         | `Authorization: Bearer <token>` accepted, `200` returned. Any other credential is `401`.                                                        |
+| `WebSocket /v1/terminal` | Accepts the `bearer.<token>` subprotocol offered by the browser. Anything else is rejected during the handshake.                                |
+| Frames                   | Text only, both directions. Outbound from the browser is raw shell input; inbound is shell output. Binary frames are refused by the client.     |
+| Resize                   | Accepts `{"type":"resize","cols":N,"rows":N}` inbound and applies it to the pty.                                                                |
+| `POST /v1/exec`          | `Authorization: Bearer <token>` and `{"argv": string[]}`. Returns `{"code": number, "stdout": string}`. No shell, bounded argv, bounded output. |
+| `POST /v1/fs/read`       | Bearer token and `{"path": string}`. Returns `{"text": string}`. Path must resolve inside `BRIDGE_FS_ROOTS`; anything else is `403`.            |
+| `POST /v1/fs/write`      | Bearer token and `{"path": string, "text": string}`. Returns `{"ok": true}`. Same root confinement as the read.                                 |
 
 Browsers cannot set an `Authorization` header on a WebSocket, which is why the token travels
 as the `bearer.<token>` subprotocol on `/v1/terminal` and as a normal header on `/v1/health`.
+
+**CORS covers `/v1/health` only.** It is the one verb a browser calls cross-origin — the
+"Test connection" button — so it answers `OPTIONS` with the allowlisted origin and a 10-minute
+preflight cache. `/v1/exec` and `/v1/fs/*` send no `access-control-allow-*` headers and have no
+`OPTIONS` handler, so a browser on another origin cannot call them: they are reachable only
+same-origin or by a non-browser client (the SvelteKit server in `src/lib/server/bridge.ts`,
+which is the intended consumer). A foreign `Origin` header is still refused with `403` on those
+verbs, so a same-origin page cannot be used to smuggle a call either.
 
 ## Three transports
 
@@ -90,15 +106,16 @@ never on the app server. One file, no build step, no native dependency.
 BRIDGE_TOKEN=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=') node bridge/terminal-bridge.mjs
 ```
 
-| Setting                  | Default     | Meaning                                                                                                                                                                     |
-| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BRIDGE_TOKEN`           | none        | Required, ≥16 chars, `A-Z a-z 0-9 . _ ~ -` only. Compared in constant time, never logged, and removed from the shell's environment.                                         |
-| `BRIDGE_PORT`            | `8649`      | Listening port.                                                                                                                                                             |
-| `BRIDGE_HOST`            | `127.0.0.1` | Loopback by default. Expose it with `tailscale serve`, not by binding `0.0.0.0`.                                                                                            |
-| `BRIDGE_ALLOW_ORIGIN`    | empty       | Comma-separated exact origins allowed to open a socket. Empty means this bridge's own loopback origins only — a proxy sends the browser's real origin, so it needs listing. |
-| `BRIDGE_SHELL`           | `bash`      | `powershell.exe` on Windows.                                                                                                                                                |
-| `BRIDGE_CWD`             | `$HOME`     | Starting directory of the shell.                                                                                                                                            |
-| `BRIDGE_MAX_CONNECTIONS` | `8`         | Concurrent sockets. Over the limit the handshake gets `503`. Must be a positive whole number or the bridge refuses to start.                                                |
+| Setting                  | Default     | Meaning                                                                                                                                                                                                    |
+| ------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BRIDGE_TOKEN`           | none        | Required, ≥16 chars, `A-Z a-z 0-9 . _ ~ -` only. Compared in constant time, never logged, and removed from the shell's environment.                                                                        |
+| `BRIDGE_PORT`            | `8649`      | Listening port.                                                                                                                                                                                            |
+| `BRIDGE_HOST`            | `127.0.0.1` | Loopback by default. Expose it with `tailscale serve`, not by binding `0.0.0.0`.                                                                                                                           |
+| `BRIDGE_ALLOW_ORIGIN`    | empty       | Comma-separated exact origins allowed to open a socket. Empty means this bridge's own loopback origins only — a proxy sends the browser's real origin, so it needs listing.                                |
+| `BRIDGE_SHELL`           | `bash`      | `powershell.exe` on Windows.                                                                                                                                                                               |
+| `BRIDGE_CWD`             | `$HOME`     | Starting directory of the shell.                                                                                                                                                                           |
+| `BRIDGE_MAX_CONNECTIONS` | `8`         | Concurrent sockets. Over the limit the handshake gets `503`. Must be a positive whole number or the bridge refuses to start.                                                                               |
+| `BRIDGE_FS_ROOTS`        | bridge cwd  | `:`-separated directories `/v1/fs/read` and `/v1/fs/write` may touch. Both the root and the resolved target are `realpath`'d, so a symlink inside a root that points outside it is a `403`, not an escape. |
 
 Behaviour worth knowing:
 
@@ -106,6 +123,17 @@ Behaviour worth knowing:
   a token the user pasted into this page. With no `BRIDGE_ALLOW_ORIGIN` the allowed set comes
   from `BRIDGE_HOST`/`BRIDGE_PORT`, never from the request's `Host` header — a client sets both
   headers, so agreeing with itself proves nothing.
+- The token is compared as SHA-256 digests, so neither its length nor a matching prefix is
+  observable from response timing: a wrong-length candidate costs the same as a wrong one.
+- `/v1/exec` and `/v1/fs/*` are confined to `BRIDGE_FS_ROOTS` by `realpath`, not by string
+  comparison. A symlink placed inside an allowed directory that points outside it is refused for
+  both read and write. A path whose leaf does not exist is checked through its real parent, so a
+  write cannot create a file through a symlinked directory.
+- `/v1/exec` runs `spawn` with `shell: false`, at most 32 arguments of 200 characters, a 10 s
+  timeout and 64 KB of captured stdout; the marker `[truncated]` is appended when output is cut.
+- `/v1/exec` and `/v1/fs/*` answer to the bearer token and the origin allowlist only. They send
+  no CORS headers and handle no `OPTIONS`, so a browser cannot call them cross-origin; the
+  intended caller is the SvelteKit server in `src/lib/server/bridge.ts`.
 - The shell does not inherit `BRIDGE_TOKEN`: `BRIDGE_*` variables are stripped from the child
   environment, so a transcript or an `env` cannot reveal the credential that opened the socket.
 - Binary frames close the socket with `1003`, because the client refuses them anyway.

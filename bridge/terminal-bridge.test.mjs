@@ -8,6 +8,7 @@
  * - exec refuses an empty argv and an oversized argv
  * - fs/write then fs/read round-trips inside the root
  * - a write outside the root is 403
+ * - a symlink inside the root that points outside is 403 for read and write
  * - a body over 64 KB is 413
  * - an unknown path is 404
  * - a foreign Origin is 403
@@ -16,7 +17,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -282,6 +283,38 @@ describe('terminal bridge contract', () => {
 		assert.equal(res.headers.get('cache-control'), 'no-store');
 		const data = await res.json();
 		assert.deepEqual(data, { error: 'not found' });
+	});
+
+	test('a symlink inside the root cannot escape it', async () => {
+		const outside = await mkdtemp(join(tmpdir(), 'bridge-outside-'));
+		const secret = join(outside, 'secret.txt');
+		await writeFile(secret, 'outside the root\n', 'utf8');
+		const link = join(tempDir, 'escape.txt');
+		try {
+			await symlink(secret, link);
+		} catch {
+			// Windows without developer mode cannot create symlinks; the escape is POSIX-shaped.
+			await rm(outside, { recursive: true, force: true });
+			return;
+		}
+
+		const readRes = await fetch(`${base}/v1/fs/read`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
+			body: JSON.stringify({ path: link })
+		});
+		assert.equal(readRes.status, 403);
+		assert.deepEqual(await readRes.json(), { error: 'forbidden' });
+
+		const writeRes = await fetch(`${base}/v1/fs/write`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
+			body: JSON.stringify({ path: link, text: 'overwritten' })
+		});
+		assert.equal(writeRes.status, 403);
+		assert.deepEqual(await writeRes.json(), { error: 'forbidden' });
+
+		await rm(outside, { recursive: true, force: true });
 	});
 
 	test('a foreign Origin is 403', async () => {

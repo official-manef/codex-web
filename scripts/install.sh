@@ -25,14 +25,19 @@ if ! command -v node >/dev/null 2>&1; then
 	exit 1
 fi
 
-# Node 22 or 24 only: Convex refuses to deploy 'use node' actions on anything newer.
+# Node 22 or 24 is required to DEPLOY Convex 'use node' actions; anything newer is refused by
+# Convex with `DeploymentNotConfiguredForNodeActions`. That is a Convex deployment limit, not a
+# limit on building or serving this app: `vite build` and `node build` run on a newer major.
+# So this warns and continues, exactly like scripts/install.mjs — an earlier version exited
+# here, which made a Node 26 host unable to install a frontend it can serve perfectly well.
 major="$(node -p 'process.versions.node.split(".")[0]')"
 case "$major" in
 22 | 24) ;;
 *)
-	echo "error: Node $major found, but Convex needs 22 or 24 for 'use node' actions." >&2
-	echo "       With nvm: export PATH=\"\$HOME/.nvm/versions/node/v22.23.2/bin:\$PATH\"" >&2
-	exit 1
+	echo "warning: Node $major found; Convex 'use node' actions need 22 or 24." >&2
+	echo "         'convex deploy' will fail until you switch. With nvm:" >&2
+	echo "         export PATH=\"\$HOME/.nvm/versions/node/v22.23.2/bin:\$PATH\"" >&2
+	echo "         Build and serve are unaffected." >&2
 	;;
 esac
 

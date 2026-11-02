@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # bin/gate — one honest gate for this repo.
 #
-# `.github/workflows/ci.yml` runs THIS script (`bun run gate:ci`), not a re-implementation of
-# it, so "verified" has one definition. It exists because the pieces it replaces each lied at
-# least once:
+# `.github/workflows/ci.yml` runs THIS script (`bin/gate --ci`, invoked directly — there is no
+# npm wrapper), not a re-implementation of it, so "verified" has one definition. It exists
+# because the pieces it replaces each lied at least once:
 #
 #   * `npx vitest run` printed `197 passed | 3 skipped` on one machine and `179 passed |
 #     4 skipped` on another for the same commit. The skip count was not a property of the

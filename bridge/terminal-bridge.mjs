@@ -12,8 +12,8 @@
  *   frames                   text only, both directions
  *   resize                   {"type":"resize","cols":N,"rows":N} inbound
  *
- * Two deliberate limits: the token is compared in constant time and never logged, and every
- * connection is checked against an origin allowlist so another site cannot open a socket
+ * Two deliberate limits: the token is compared as digests in constant time and never logged, and
+ * every connection is checked against an origin allowlist so another site cannot open a socket
  * with a token the user pasted here. Run it on loopback and expose it with `tailscale serve`;
  * binding it to a public interface is the user's decision, not a default.
  *
@@ -22,11 +22,11 @@
  *   BRIDGE_TOKEN=... BRIDGE_ALLOW_ORIGIN=https://app.example node bridge/terminal-bridge.mjs
  */
 import { createServer } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
-import { readFile, stat, writeFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.BRIDGE_PORT ?? 8649);
@@ -90,12 +90,16 @@ if (!Number.isInteger(MAX_CONNECTIONS) || MAX_CONNECTIONS < 1) {
 	process.exit(1);
 }
 
-/** Constant-time compare that does not leak the token length through an early return. */
+/**
+ * Constant-time compare. Both sides are hashed first, so the length check below is on two
+ * fixed-size digests rather than on the secret: a candidate of any length costs the same, and
+ * neither its length nor a prefix match is observable from response timing.
+ */
 function tokenMatches(candidate) {
-	if (typeof candidate !== 'string' || candidate.length !== TOKEN.length) return false;
-	const a = Buffer.from(candidate);
-	const b = Buffer.from(TOKEN);
-	return a.length === b.length && timingSafeEqual(a, b);
+	if (typeof candidate !== 'string') return false;
+	const a = createHash('sha256').update(candidate).digest();
+	const b = createHash('sha256').update(TOKEN).digest();
+	return timingSafeEqual(a, b);
 }
 
 function bearerFrom(header) {
@@ -170,7 +174,41 @@ function getFsRoots() {
 	return entries.map((part) => resolve(process.cwd(), part));
 }
 
-function resolveSafePath(filePath) {
+/** Roots as the filesystem really spells them: a root that is itself a symlink is resolved once. */
+async function realRoots() {
+	const roots = [];
+	for (const root of getFsRoots()) {
+		try {
+			roots.push(await realpath(root));
+		} catch {
+			// A root that does not exist contains nothing; it cannot be a valid escape hatch.
+		}
+	}
+	return roots;
+}
+
+function within(root, target) {
+	const rel = relative(root, target);
+	return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+/**
+ * Resolve a client path to a path that is genuinely inside a configured root.
+ *
+ * `resolve` + `relative` alone is a lexical check: a symlink that lives inside a root but points
+ * outside it passes that check and is then followed for both read and write. So the comparison is
+ * made against `realpath` instead, and against roots that were themselves realpath'd.
+ *
+ * A file that does not exist yet cannot be realpath'd; its parent can, and the parent is what a
+ * symlink would redirect. The returned path is the real one, so the caller opens what was
+ * checked rather than re-traversing the symlink chain.
+ *
+ * ponytail: check-then-open, not open-then-check. A local attacker who can write inside
+ * BRIDGE_FS_ROOTS can swap a path for a symlink between the two calls. Closing that needs
+ * `fs.open` with `O_NOFOLLOW` and an fstat loop; add it when the bridge ever serves more than
+ * one trusted user on the same filesystem.
+ */
+async function resolveSafePath(filePath) {
 	if (
 		typeof filePath !== 'string' ||
 		filePath.length < 1 ||
@@ -180,12 +218,25 @@ function resolveSafePath(filePath) {
 		return { status: 400, path: null };
 	}
 	const candidate = resolve(process.cwd(), filePath);
-	const roots = getFsRoots();
-	for (const root of roots) {
-		const rel = relative(root, candidate);
-		if (!rel.startsWith('..') && !isAbsolute(rel)) {
-			return { status: 200, path: candidate };
+	const roots = await realRoots();
+
+	let target;
+	try {
+		target = await realpath(candidate);
+	} catch (err) {
+		if (!err || err.code !== 'ENOENT') return { status: 403, path: null };
+		// Nothing at the leaf yet. Its parent is the part a symlink could redirect, so that is
+		// what has to be real. A missing parent is a 404, not a permission problem: the client
+		// asked for a path under a directory that does not exist.
+		try {
+			target = resolve(await realpath(dirname(candidate)), basename(candidate));
+		} catch {
+			return { status: 404, path: null };
 		}
+	}
+
+	for (const root of roots) {
+		if (within(root, target)) return { status: 200, path: target };
 	}
 	return { status: 403, path: null };
 }
@@ -345,10 +396,15 @@ async function handleFsRead(request, response) {
 	const body = await readJsonBody(request, response);
 	if (!body) return;
 
-	const resolved = resolveSafePath(body.path);
+	const resolved = await resolveSafePath(body.path);
 	if (resolved.status !== 200) {
 		sendJson(response, resolved.status, {
-			error: resolved.status === 400 ? 'invalid path' : 'forbidden'
+			error:
+				resolved.status === 400
+					? 'invalid path'
+					: resolved.status === 404
+						? 'parent directory does not exist'
+						: 'forbidden'
 		});
 		return;
 	}
@@ -390,10 +446,15 @@ async function handleFsWrite(request, response) {
 	const body = await readJsonBody(request, response);
 	if (!body) return;
 
-	const resolved = resolveSafePath(body.path);
+	const resolved = await resolveSafePath(body.path);
 	if (resolved.status !== 200) {
 		sendJson(response, resolved.status, {
-			error: resolved.status === 400 ? 'invalid path' : 'forbidden'
+			error:
+				resolved.status === 400
+					? 'invalid path'
+					: resolved.status === 404
+						? 'parent directory does not exist'
+						: 'forbidden'
 		});
 		return;
 	}
