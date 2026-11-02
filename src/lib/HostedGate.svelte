@@ -226,9 +226,6 @@
           The connection expires after one hour and is forgotten on refresh. Text, audio and files
           go directly to your local runtime.
         </p>
-        <a href="/portal-connect.md" target="_blank" rel="noopener noreferrer"
-          >Setup and connection help</a
-        >
       {/if}
       {#if error}<p class="connection-error" role="alert">{error}</p>{/if}
       <button class="sign-out" onclick={logout} disabled={busy}>Sign out of this portal</button>

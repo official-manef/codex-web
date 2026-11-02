@@ -80,7 +80,7 @@
 						<th scope="row">Notes, memories and project labels you create</th>
 						<td>When you create them</td>
 						<td>
-							In this browser's <code>localStorage</code>, unless you enable the Convex-backed
+							In this browser's <code>sessionStorage</code>, unless you enable the Convex-backed
 							option, in which case they are stored on the configured deployment under your
 							signed-in identity.
 						</td>

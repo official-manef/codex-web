@@ -86,7 +86,7 @@
 <View
 	title="MCP apps"
 	icon="grid"
-	subtitle="Apps are an operator-configured allowlist, not a marketplace; a hosted app runs in a sandboxed frame with no same-origin access; a per-app approval gate now exists via the mcp_app policy verb and MCP_APPS_ALLOW allowlist (an empty allowlist means nothing runs)."
+	subtitle="Apps come from an operator-configured allowlist, not a marketplace. Each hosted app runs in a sandboxed frame with no same-origin access, and every launch passes the mcp_app policy verb against the MCP_APPS_ALLOW allowlist."
 >
 	{#snippet actions()}
 		<button
@@ -103,7 +103,7 @@
 		<p>Apps are an operator-configured allowlist, not a marketplace.</p>
 		<p>A hosted app runs in a sandboxed frame with no same-origin access.</p>
 		<p>
-			A per-app approval gate now exists via the mcp_app policy verb and MCP_APPS_ALLOW allowlist. An empty allowlist means nothing runs.
+			Every launch passes the mcp_app policy verb, checked against the MCP_APPS_ALLOW allowlist.
 		</p>
 	</div>
 

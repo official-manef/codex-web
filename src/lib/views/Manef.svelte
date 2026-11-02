@@ -114,7 +114,7 @@
 <View
 	title="MANEF AI"
 	icon="layers"
-	subtitle="Four independent products under one versioned contract. What you see are declarations, source pins and previews: no product is started, called or granted authority here."
+	subtitle="Four independent products under one versioned contract, with the declarations, source pins and previews each one publishes."
 >
 	<div class="mb-4 flex flex-wrap items-center gap-2">
 		<Button size="sm" variant="outline" onclick={refresh} disabled={loading}>

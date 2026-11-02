@@ -11,6 +11,6 @@
 		{#if page.status >= 500}<Button variant="outline" onclick={() => window.location.reload()}
 				>Reload page</Button
 			>{/if}
-		<Button href="/apps/dashboard">Back to dashboard</Button>
+		<Button href="/">Back to the workspace</Button>
 	</div>
 </main>

@@ -118,7 +118,7 @@
 <View
   title="Transcribe"
   icon="mic"
-  subtitle="Speech to text from a recording. The desktop app runs Whisper int8 on the device you pick, with no API key and no per-minute cost. This browser build has no speech model, so the panel stays closed and says why."
+  subtitle="Speech to text from a recording. The desktop app runs Whisper int8 on the device you pick, with no API key and no per-minute cost."
 >
   {#snippet actions()}
     <button

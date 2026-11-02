@@ -393,11 +393,19 @@
     <div
       id="file-view-content"
       class="file-content"
-      aria-live="polite"
       role={selected ? "tabpanel" : "region"}
       aria-label={selected ? undefined : "File content"}
       aria-labelledby={selected ? `file-tab-${openFiles.indexOf(selected)}` : undefined}
     >
+      <!-- Announcing the whole panel on every tab change re-read the entire document. Only the
+           short status line below is a live region. -->
+      <p class="sr-only" role="status"
+        >{loading
+          ? "Opening file"
+          : selected
+            ? `Viewing ${displayPath(selected)}`
+            : "No file open"}</p
+      >
       {#if loading}
         <p class="notice">Opening file…</p>
       {:else if message && selected}

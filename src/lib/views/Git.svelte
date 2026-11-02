@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { Dialog } from "bits-ui";
 	import View from "#lib/View.svelte";
 
 	type Props = { backends?: any[] };
@@ -45,6 +46,9 @@
 	let worktrees = $state<GitWorktree[] | null>(null);
 	let newWorktreePath = $state("");
 	let newWorktreeBranch = $state("");
+	// Removal is destructive and outside the policy gate's review, so it asks in a real dialog
+	// instead of a native confirm box.
+	let pendingRemove = $state<string | null>(null);
 
 	function hasStagedFiles(): boolean {
 		if (!data?.status.files || data.status.files.length === 0) return false;
@@ -271,8 +275,6 @@
 	}
 
 	async function removeWorktree(path: string) {
-		const confirmed = window.confirm(`Remove worktree at "${path}"?`);
-		if (!confirmed) return;
 		actionLoading = "worktree-remove";
 		policyNotice = null;
 		actionError = null;
@@ -511,7 +513,7 @@
 										<button
 											type="button"
 											class="text-[12px] text-ink-2 hover:text-ink underline"
-											onclick={() => removeWorktree(wt.path)}
+											onclick={() => (pendingRemove = wt.path)}
 											disabled={Boolean(actionLoading)}
 										>
 											Remove
@@ -589,4 +591,32 @@
 			</div>
 		{/if}
 	{/if}
+
+	<Dialog.Root open={pendingRemove !== null} onOpenChange={(open) => !open && (pendingRemove = null)}>
+		<Dialog.Portal>
+			<Dialog.Overlay class="dialog-overlay" />
+			<Dialog.Content class="dialog-shell w-[min(420px,calc(100vw-32px))] p-5">
+				<Dialog.Title class="text-[15px] font-semibold text-ink">Remove worktree</Dialog.Title>
+				<Dialog.Description class="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+					The worktree at <span class="mono text-ink">{pendingRemove}</span> is removed from this
+					repository. The branch and its commits stay.
+				</Dialog.Description>
+				<div class="mt-4 flex justify-end gap-2">
+					<Dialog.Close class="btn">Keep worktree</Dialog.Close>
+					<button
+						type="button"
+						class="btn btn-solid"
+						disabled={Boolean(actionLoading)}
+						onclick={() => {
+							const path = pendingRemove;
+							pendingRemove = null;
+							if (path) void removeWorktree(path);
+						}}
+					>
+						Remove worktree
+					</button>
+				</div>
+			</Dialog.Content>
+		</Dialog.Portal>
+	</Dialog.Root>
 </View>

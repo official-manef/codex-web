@@ -129,7 +129,7 @@
 <View
 	title="Scheduled tasks"
 	icon="workflow"
-	subtitle="Records a prompt and a due time. This build does not run them yet: the runner and its failure path come first, so nothing here claims to be scheduling anything. The dry run previews decisions and executes nothing."
+	subtitle="Records a prompt and the interval it should repeat on. The runner does not run them yet; the dry run previews which records would run and why, and executes nothing."
 >
 	{#snippet actions()}
 		<div class="flex items-center gap-2">
@@ -200,7 +200,7 @@
 			{#if error}<p class="mt-2 text-[12px]" role="alert">{error}</p>{/if}
 			<p class="mt-2 text-[12px] leading-relaxed text-ink-2">
 				Minimum interval is 15 minutes. An automation disables itself after three consecutive
-				failures once the runner exists.
+				failed runs.
 			</p>
 		</section>
 
@@ -208,7 +208,7 @@
 			<StateNote
 				state="empty"
 				title="No automations recorded"
-				detail="The schedule store answered and holds zero rows. Recording one is harmless: nothing will run until the runner ships."
+				detail="The schedule store answered and holds zero rows. Record a prompt and an interval to start."
 				fix="you"
 			/>
 		{:else if rows.length > 0}
@@ -241,7 +241,7 @@
 	{/if}
 
 	{#if dryRunError}
-		<p class="mt-4 text-[12px] text-crimson" role="alert">{dryRunError}</p>
+		<p class="mt-4 text-[12px] text-destructive" role="alert">{dryRunError}</p>
 	{/if}
 
 	{#if dryRunResult}
