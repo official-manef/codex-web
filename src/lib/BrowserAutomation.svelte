@@ -6,6 +6,7 @@
   import PanelResizeHandle from "#lib/PanelResizeHandle.svelte";
   import { get, post, headers, runtimeFetch } from "#lib/http.js";
   import { readDraft, saveDraft } from "#lib/drafts.js";
+  import { readRunPointer, saveRunPointer, clearRunPointer } from "#lib/rpa_pointer.js";
   let {
     active = true,
     kind = "browser",
@@ -19,7 +20,7 @@
   } = $props();
   let base = $derived(`/api/${kind === "desktop" ? "desktop" : "browser"}-rpa`);
   let native = $derived(kind === "desktop");
-  let storageKey = $derived(`laya-${kind}-rpa`);
+  let runKind = $derived<"browser" | "desktop">(kind === "desktop" ? "desktop" : "browser");
   let status = $state<any>(null);
   let recipe = $state("");
   let query = $state("");
@@ -87,13 +88,7 @@
         recipe = status.recipes?.[0]?.id ?? "";
       if (syncRun && selection === selectionVersion && !requesting && !reading) {
         let identifier = provided || value.active_run_id;
-        if (!identifier && !run) {
-          try {
-            identifier = localStorage.getItem(storageKey);
-          } catch {
-            /* Optional history. */
-          }
-        }
+        if (!identifier && !run) identifier = readRunPointer(runKind);
         if (
           /^[a-f0-9]{24}$/.test(identifier ?? "") &&
           (provided ||
@@ -131,11 +126,8 @@
     if (typeof value.query === "string" && value.query) query = value.query;
     recipe = value.recipe;
     if (following) frameIndex = Math.max(0, (value.frames?.length ?? 1) - 1);
-    try {
-      localStorage.setItem(storageKey, value.run_id);
-    } catch {
-      /* storage can be unavailable */
-    }
+    // Versioned pointer, so a build that writes a newer envelope is not overwritten.
+    saveRunPointer(runKind, value.run_id);
   }
   onMount(() => {
     alive = true;
@@ -146,7 +138,7 @@
   });
   $effect(() => {
     const scope = base;
-    const key = storageKey;
+    const pointerKind = runKind;
     const provided = managedRunId;
     const version = ++selectionVersion;
     runRequest++;
@@ -169,7 +161,7 @@
         query = stored.query;
         queryInitialized = true;
       }
-      const id = provided || localStorage.getItem(key);
+      const id = provided || readRunPointer(pointerKind);
       if (id)
         post(`${scope}/run`, { run_id: id })
           .then((value) => {
@@ -441,11 +433,7 @@
       run = null;
       frameIndex = 0;
       deleteConfirmation = "";
-      try {
-        if (localStorage.getItem(storageKey) === id) localStorage.removeItem(storageKey);
-      } catch {
-        /* deleting a recording does not require browser storage */
-      }
+      clearRunPointer(runKind, id);
       await refresh();
     } catch (e) {
       if (alive && scope === base && version === selectionVersion)

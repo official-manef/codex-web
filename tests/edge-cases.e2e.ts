@@ -104,7 +104,10 @@ async function streamChat(
 /** Every turn the store has written for the newest chat. */
 async function storedTurns(page: Page) {
 	return page.evaluate((key) => {
-		const rows = JSON.parse(sessionStorage.getItem(key) ?? '[]') as Array<{
+		// The store writes `{ version, value }`; this reads the list either way so the assertion
+		// is about turns, not about the envelope.
+		const raw = JSON.parse(sessionStorage.getItem(key) ?? '[]') as unknown;
+		const rows = (Array.isArray(raw) ? raw : (raw as { value: unknown }).value) as Array<{
 			title: string;
 			turns: Array<{ status: string; replies?: Array<{ text: string }> }>;
 		}>;
@@ -215,6 +218,104 @@ test.describe('storage that this build did not write', () => {
 		await page.reload();
 		await expect(composer(page)).toBeEnabled();
 		await expect(composer(page)).toHaveValue('draft typed near the quota');
+	});
+});
+
+test.describe('storage from another version', () => {
+	// The unit suite pins the reader; this pins the shipped bundle, because the store loads at
+	// import time and a build that reads its spec too early would throw before anything renders.
+	test('a chat list from a newer build is reported and never overwritten', async ({ page }) => {
+		const newer = JSON.stringify({ version: 9, value: [{ id: 'from-9', title: 'future chat' }] });
+		await page.addInitScript(([key, payload]) => sessionStorage.setItem(key, payload), [
+			SESSIONS_KEY,
+			newer
+		] as const);
+		await openWorkspace(page);
+
+		// Usable, and it says why the chats are not here instead of pretending they never were.
+		await expect(page.getByText(/newer version of the app/i)).toBeVisible();
+		// Sending a message is the write path that used to replace what it could not read.
+		await composer(page).fill('a message for this build');
+		await composer(page).press('Enter');
+		await expect(page.getByRole('log', { name: 'Conversation' })).toContainText(
+			'a message for this build'
+		);
+		expect(await page.evaluate((key) => sessionStorage.getItem(key), SESSIONS_KEY)).toBe(newer);
+	});
+
+	test('an unreadable chat list is quarantined before anything overwrites it', async ({ page }) => {
+		const payload = '[{"id": "broken"';
+		await page.addInitScript(([key, raw]) => sessionStorage.setItem(key, raw), [
+			SESSIONS_KEY,
+			payload
+		] as const);
+		await openWorkspace(page);
+
+		await expect(page.getByText(/could not be read/i)).toBeVisible();
+		const stored = await page.evaluate((key) => {
+			return {
+				rescue: sessionStorage.getItem(`${key}:quarantine`),
+				// Whatever replaced it, it is a shape this build wrote and can read.
+				original: sessionStorage.getItem(key)
+			};
+		}, SESSIONS_KEY);
+		// The rescue copy is byte-identical to what the user had, and it is never overwritten.
+		expect(stored.rescue).toBe(payload);
+		expect(JSON.parse(stored.original ?? 'null')).toMatchObject({ version: 1 });
+	});
+
+	test('a legacy chat list is migrated in place and still renders its turns', async ({ page }) => {
+		await page.addInitScript((key) => {
+			const turn = (index: number) => ({
+				id: `turn-${index}`,
+				content: `legacy message ${index}`,
+				attachments: [],
+				status: 'done',
+				created_at: 1,
+				replies: []
+			});
+			sessionStorage.setItem(
+				key,
+				JSON.stringify([
+					{
+						id: 'session-legacy',
+						title: 'legacy',
+						settings: {},
+						turns: [turn(0), turn(1)],
+						tool_events: [],
+						created_at: 1,
+						updated_at: 1
+					}
+				])
+			);
+			// The pointer is a bare id, exactly as the older build wrote it.
+			localStorage.setItem('laya-session', 'session-legacy');
+		}, SESSIONS_KEY);
+		await openWorkspace(page);
+
+		await expect(page.getByRole('log', { name: 'Conversation' })).toContainText('legacy message 1');
+		const migrated = await page.evaluate((key) => {
+			const raw = JSON.parse(sessionStorage.getItem(key) ?? 'null') as {
+				version?: number;
+				value?: unknown[];
+			};
+			const pointer = JSON.parse(localStorage.getItem('laya-session') ?? 'null') as {
+				version?: number;
+				value?: unknown;
+			};
+			return {
+				version: raw?.version,
+				chats: raw?.value?.length,
+				pointerVersion: pointer?.version,
+				pointer: pointer?.value
+			};
+		}, SESSIONS_KEY);
+		expect(migrated).toEqual({
+			version: 1,
+			chats: 1,
+			pointerVersion: 1,
+			pointer: 'session-legacy'
+		});
 	});
 });
 
@@ -632,10 +733,10 @@ test.describe('the write cap', () => {
 			await page.getByRole('button', { name: 'New chat' }).first().click();
 		}
 
-		const stored = await page.evaluate(
-			(key) => JSON.parse(sessionStorage.getItem(key) ?? '[]').length,
-			SESSIONS_KEY
-		);
+		const stored = await page.evaluate((key) => {
+			const raw = JSON.parse(sessionStorage.getItem(key) ?? '[]') as unknown;
+			return (Array.isArray(raw) ? raw : (raw as { value: unknown[] }).value).length;
+		}, SESSIONS_KEY);
 		expect(stored).toBe(50);
 		// The oldest chat no longer fits in storage; the app says how many were dropped.
 		await expect(page.getByText(/older chats were dropped|chat was dropped/i)).toBeVisible();

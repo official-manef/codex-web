@@ -15,6 +15,13 @@
  * the single change a product needs to become backend-connected: call sites never move.
  */
 
+import {
+	readVersioned,
+	writeVersioned,
+	type StorageLike,
+	type VersionedSpec
+} from '#lib/storage_version.js';
+
 type RuntimeConnection = {
 	hosted: boolean;
 	connected: boolean;
@@ -156,12 +163,14 @@ const JOB_MS = 700;
 /** Oldest chats beyond this are not written; the session list says how many were dropped. */
 const MAX_SESSIONS = 50;
 
-let sessions: LocalSession[] = load();
 const jobs = new Map<string, { job: LocalJob; startedAt: number }>();
 let sequence = 0;
 let persistFailed = false;
 /** Sessions that exist in memory but are past the write cap, so the view can say so. */
 let droppedFromStorage = 0;
+/** Where an unreadable payload was copied on load, and whether it was too new to read. */
+let quarantinedOnLoad: string | null = null;
+let newerOnLoad: number | null = null;
 
 function nextId(prefix: string): string {
 	sequence += 1;
@@ -187,7 +196,7 @@ function cleanTurns(value: unknown): LocalTurn[] {
  * shape alone was not enough: `[null]`, a row without `turns`, and `turns: null` each threw
  * during `initialize()`, which left the composer disabled with no way back — "New chat" could
  * not run because `session` was never assigned. Every row is therefore rebuilt here, and a row
- * that cannot be rebuilt is dropped rather than trusted.
+ * that cannot be rebuilt is left out of the view; the shared reader keeps the original bytes.
  */
 function loadSession(value: unknown): LocalSession | null {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -205,41 +214,84 @@ function loadSession(value: unknown): LocalSession | null {
 	};
 }
 
-function load(): LocalSession[] {
-	try {
-		if (typeof sessionStorage === 'undefined') return [];
-		const raw = sessionStorage.getItem(SESSIONS_KEY);
-		const parsed: unknown = raw ? JSON.parse(raw) : [];
-		if (!Array.isArray(parsed)) return [];
-		return parsed.map(loadSession).filter((row): row is LocalSession => row !== null);
-	} catch {
-		return [];
+/** Rows this build cannot address are counted, so the original payload is preserved. */
+function validateSessions(value: unknown): { value: LocalSession[]; dropped: number } | null {
+	if (!Array.isArray(value)) return null;
+	const seen = new Set<string>();
+	const out: LocalSession[] = [];
+	let dropped = 0;
+	for (const row of value) {
+		const session = loadSession(row);
+		if (!session || seen.has(session.id)) {
+			dropped += 1;
+			continue;
+		}
+		seen.add(session.id);
+		out.push(session);
 	}
+	return { value: out, dropped };
+}
+
+const SESSIONS_SPEC: VersionedSpec<LocalSession[]> = {
+	key: SESSIONS_KEY,
+	current: 1,
+	// A whole chat list can be large; this ceiling is abuse, not a size policy.
+	maxChars: 8_000_000,
+	fromLegacy: (parsed) => (Array.isArray(parsed) ? parsed : null),
+	validate: validateSessions
+};
+
+function sessionStorageLike(): StorageLike | undefined {
+	try {
+		return typeof sessionStorage === 'undefined' ? undefined : sessionStorage;
+	} catch {
+		return undefined;
+	}
+}
+
+function load(): LocalSession[] {
+	const result = readVersioned(SESSIONS_SPEC, sessionStorageLike);
+	quarantinedOnLoad = result.quarantineKey;
+	newerOnLoad = result.status === 'newer' ? (result.version ?? null) : null;
+	return result.value ?? [];
 }
 
 /**
  * `false` means this turn exists only in memory. The caller has to say so: a full quota used
  * to drop everything past the write with no message at all, and the chat looked saved until
- * the next reload.
+ * the next reload. A newer payload on disk is never overwritten either, so a downgraded client
+ * cannot destroy chats it cannot read.
  */
 function persist(): boolean {
-	try {
-		const kept = sessions.slice(0, MAX_SESSIONS);
-		droppedFromStorage = sessions.length - kept.length;
-		sessionStorage?.setItem(SESSIONS_KEY, JSON.stringify(kept));
-		persistFailed = false;
-		return true;
-	} catch {
-		// Quota or private mode: losing persistence must not break the live session.
-		persistFailed = true;
-		return false;
-	}
+	const kept = sessions.slice(0, MAX_SESSIONS);
+	droppedFromStorage = sessions.length - kept.length;
+	const written = writeVersioned(SESSIONS_SPEC, kept, sessionStorageLike);
+	persistFailed = !written;
+	return written;
 }
 
 /** Read by the session list so the view can tell the user their turn was not written. */
-function persistState(): { persisted: boolean; dropped: number } {
-	return { persisted: !persistFailed, dropped: droppedFromStorage };
+function persistState(): {
+	persisted: boolean;
+	dropped: number;
+	/** Key holding a verbatim copy of a payload this build could not read, if any. */
+	quarantined: string | null;
+	/** Version found on disk when it was newer than this build can read, if any. */
+	newer: number | null;
+} {
+	return {
+		persisted: !persistFailed,
+		dropped: droppedFromStorage,
+		quarantined: quarantinedOnLoad,
+		newer: newerOnLoad
+	};
 }
+
+/**
+ * Declared after `SESSIONS_SPEC`: the store loads at import time and the spec is a `const`, so
+ * an earlier declaration would read it in its temporal dead zone.
+ */
+let sessions: LocalSession[] = load();
 
 function findSession(id: string): LocalSession {
 	const found = sessions.find((item) => item.id === id);

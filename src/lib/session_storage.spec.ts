@@ -134,7 +134,7 @@ describe('a storage quota that is already spent', () => {
 		expect(created.session.turns).toEqual([]);
 		// ...and the list says it was not written.
 		const listed = await api.api.sessions();
-		expect(listed.storage).toEqual({ persisted: false, dropped: 0 });
+		expect(listed.storage).toMatchObject({ persisted: false, dropped: 0 });
 		expect(map.has(SESSIONS_KEY)).toBe(false);
 	});
 
@@ -143,7 +143,7 @@ describe('a storage quota that is already spent', () => {
 		const api = await freshApi();
 		await api.api.sessionCreate({});
 		const listed = await api.api.sessions();
-		expect(listed.storage).toEqual({ persisted: true, dropped: 0 });
+		expect(listed.storage).toMatchObject({ persisted: true, dropped: 0 });
 		expect(map.has(SESSIONS_KEY)).toBe(true);
 	});
 });
@@ -157,6 +157,56 @@ describe('the 50-chat write cap', () => {
 		expect(listed.sessions).toHaveLength(53);
 		expect(listed.storage.dropped).toBe(3);
 		const stored = JSON.parse(globalThis.sessionStorage.getItem(SESSIONS_KEY) ?? '[]');
-		expect(stored).toHaveLength(50);
+		expect(stored.value).toHaveLength(50);
+	});
+});
+
+describe('a chat list from another version', () => {
+	test('a legacy array is migrated to the envelope on first read', async () => {
+		const map = stubStorage({
+			[SESSIONS_KEY]: JSON.stringify([{ id: 'legacy', title: 'old', turns: [] }])
+		});
+		const api = await freshApi();
+		expect((await api.api.sessions()).sessions).toHaveLength(1);
+		expect(JSON.parse(map.get(SESSIONS_KEY)!)).toMatchObject({ version: 1 });
+		expect(JSON.parse(map.get(SESSIONS_KEY)!).value).toHaveLength(1);
+	});
+
+	test('a newer list is reported and never overwritten', async () => {
+		const newer = JSON.stringify({ version: 5, value: [{ id: 'from-5', title: 'future' }] });
+		const map = stubStorage({ [SESSIONS_KEY]: newer });
+		const api = await freshApi();
+		const listed = await api.api.sessions();
+		// This build cannot read it, so it shows nothing rather than pretending the chat is gone.
+		expect(listed.sessions).toEqual([]);
+		expect(listed.storage.newer).toBe(5);
+		// A create must not replace what it cannot read.
+		await api.api.sessionCreate({});
+		expect(map.get(SESSIONS_KEY)).toBe(newer);
+	});
+
+	test('an unreadable list is copied aside and the tab still opens', async () => {
+		const map = stubStorage({ [SESSIONS_KEY]: '[{"id": "broken"' });
+		const api = await freshApi();
+		const listed = await api.api.sessions();
+		expect(listed.sessions).toEqual([]);
+		expect(listed.storage.quarantined).toBe(SESSIONS_KEY + ':quarantine');
+		expect(map.get(SESSIONS_KEY + ':quarantine')).toBe('[{"id": "broken"');
+		// The original is still there until the first write, and the app is usable.
+		expect(map.get(SESSIONS_KEY)).toBe('[{"id": "broken"');
+		expect((await api.api.sessionCreate({})).session.id).toEqual(expect.any(String));
+	});
+
+	test('a row this build cannot address is quarantined while the good rows load', async () => {
+		const payload = JSON.stringify([
+			{ id: 'good', title: 'kept', turns: [] },
+			{ title: 'no id' },
+			null
+		]);
+		const map = stubStorage({ [SESSIONS_KEY]: payload });
+		const api = await freshApi();
+		const listed = await api.api.sessions();
+		expect(listed.sessions.map((row: { id: string }) => row.id)).toEqual(['good']);
+		expect(map.get(SESSIONS_KEY + ':quarantine')).toBe(payload);
 	});
 });
