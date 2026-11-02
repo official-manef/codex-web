@@ -397,7 +397,12 @@
         </p>
       {/if}
 
-      <p class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3">
+      <p
+        role="status"
+        aria-live="polite"
+        aria-label="Terminal status"
+        class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-3"
+      >
         <span class="font-medium text-ink-2">{status}</span>
         {#if statusDetail}<span class="min-w-0 break-words">{statusDetail}</span>{/if}
         {#if status === "error"}
