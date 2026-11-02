@@ -88,6 +88,7 @@ export type WorkspaceLabels = {
   hostedConnection: string;
   connectedTooltip: string;
   disconnectedTooltip: string;
+  stubTooltip: string;
   connectionFailed: string;
   connectionLost: string;
   moreTools: string;
@@ -184,6 +185,9 @@ export const defaultWorkspaceLabels: Readonly<WorkspaceLabels> = {
   hostedConnection: "Connection settings",
   connectedTooltip: "Connected",
   disconnectedTooltip: "Disconnected",
+  // A backend can answer every request from inside the page. That is not a connection, and
+  // saying "Connected" over it was the exact claim this pass exists to remove.
+  stubTooltip: "In-page stub · no runtime",
   connectionFailed: "The service could not be reached.",
   connectionLost: "Connection lost.",
   moreTools: "More tools",

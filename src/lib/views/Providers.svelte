@@ -1,8 +1,20 @@
 <script lang="ts">
   import View from "#lib/View.svelte";
-  type Props = { backends?: any[] };
-  let { backends = [] }: Props = $props();
+  import StateNote from "#lib/StateNote.svelte";
+  import { deviceListState } from "#lib/view_states.js";
+  type Props = { backends?: any[]; connection?: string; connectionError?: string };
+  let {
+    backends = [],
+    connection = "online",
+    connectionError = "",
+  }: Props = $props();
   const stub = $derived(backends.some((b) => (b as any).stub));
+  const listState = $derived(
+    deviceListState({
+      connection: connection as "checking" | "online" | "offline",
+      backends,
+    }),
+  );
 </script>
 
 <View
@@ -10,7 +22,23 @@
   icon="server"
   subtitle="The compute backends this build can see. A device being present does not mean a model on it will compile; run one example in Decision simulation to find out."
 >
-  {#if backends.length}
+  {#if listState === "loading"}
+    <StateNote
+      state="loading"
+      title="Reading this build's providers"
+      detail="The device list has not answered yet. Each row appears as it is reported."
+      fix="none"
+    />
+  {:else if listState === "error"}
+    <StateNote
+      state="error"
+      title="The provider list did not load"
+      detail={connectionError ||
+        "The runtime did not answer, so no device could be listed. This says nothing about which devices exist."}
+      fix="you"
+      action={{ label: "Check again", onclick: () => location.reload() }}
+    />
+  {:else if listState === "ready"}
     <div class="card overflow-x-auto">
       <table class="w-full min-w-[520px] text-left text-[12px]">
         <caption class="sr-only">Decision providers, device and status</caption><thead
@@ -39,11 +67,13 @@
       </table>
     </div>
   {:else}
-    <p class="mt-4 text-[13px] text-ink-2" role="status">
-      No provider data. Reconnect a runtime, then open <a class="text-link" href="#setup"
-        >Setup check</a
-      >.
-    </p>
+    <StateNote
+      state="degraded"
+      title="No provider is configured"
+      detail="The device list answered with zero rows. A provider is a device or an endpoint that runs a model; nothing here is one."
+      fix="you"
+      action={{ label: "Open Compute & devices", href: "#backends" }}
+    />
   {/if}
   <p class="mt-4 max-w-[70ch] text-[12px] leading-relaxed text-ink-2">
     {#if stub}

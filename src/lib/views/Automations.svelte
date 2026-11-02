@@ -1,5 +1,6 @@
 <script lang="ts">
 	import View from "#lib/View.svelte";
+	import StateNote from "#lib/StateNote.svelte";
 	import { onMount } from "svelte";
 	import { useMutation, useQuery } from "convex-svelte";
 	import { env } from "$env/dynamic/public";
@@ -143,11 +144,29 @@
 	{/snippet}
 
 	{#if !available}
-		<p class="text-[13px] leading-relaxed text-ink-2" role="status">
-			Cloud mode is not configured, so there is nowhere to keep a schedule. Set
-			<code>PUBLIC_CONVEX_URL</code> to your own deployment to record one.
-		</p>
+		<StateNote
+			state="degraded"
+			title="No schedule store is configured"
+			detail="A saved automation lives in a Convex deployment. This build has none, so there is nowhere to keep a schedule and nothing would run it if there were."
+			fix="operator"
+		/>
 	{:else}
+		{#if list?.isLoading && rows.length === 0}
+			<StateNote
+				state="loading"
+				title="Reading your recorded automations"
+				detail="The schedule store has not answered yet. An empty list while this is showing means it is still reading, not that nothing is recorded."
+				fix="none"
+			/>
+		{:else if list?.error}
+			<StateNote
+				state="error"
+				title="The recorded automations did not load"
+				detail={`${list.error.message}. A failed read is not an empty schedule: a row recorded earlier may still be stored.`}
+				fix="you"
+				action={{ label: "Reload the page", onclick: () => location.reload() }}
+			/>
+		{/if}
 		<section class="card mb-6 p-4">
 			<label for="automation-prompt" class="mb-1.5 block text-[13px] font-medium">
 				What should run
@@ -185,12 +204,14 @@
 			</p>
 		</section>
 
-		{#if rows.length === 0}
-			<p class="text-[13px] text-ink-2" role="status">
-				No automations recorded. Saving one is harmless: nothing will run until the runner
-				ships.
-			</p>
-		{:else}
+		{#if rows.length === 0 && !list?.isLoading && !list?.error}
+			<StateNote
+				state="empty"
+				title="No automations recorded"
+				detail="The schedule store answered and holds zero rows. Recording one is harmless: nothing will run until the runner ships."
+				fix="you"
+			/>
+		{:else if rows.length > 0}
 			<ul class="card divide-y divide-line">
 				{#each rows as row (row._id)}
 					<li class="flex items-start justify-between gap-3 px-4 py-3">

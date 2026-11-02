@@ -236,6 +236,22 @@
     {#if recommendationNotice}<p role="status" class="recommendation-note">
         {recommendationNotice}
       </p>{/if}
+    {#if recommendationLoading && !recommendations}
+      <p class="recommendation-note" role="status">
+        Checking which models fit this task and the detected devices…
+      </p>
+    {:else if !recommendations && !recommendationError}
+      <p class="recommendation-note" role="status">
+        No compatibility check has run yet. Choose a task and a compute target, then press Check
+        compatibility; nothing is downloaded by checking.
+      </p>
+    {/if}
+    {#if recommendations && (recommendations.tasks ?? []).length === 0}
+      <p class="recommendation-note" role="status">
+        The check answered with no task rows. That means this build reports no task to rank
+        against, not that no model exists.
+      </p>
+    {/if}
     {#if recommendations}<p class="recommendation-note">
         Detected: {recommendations.hardware.devices.join(" / ") || "no OpenVINO devices"}. Ranked by
         what is already prepared and installed, then by catalogue compatibility. This ranks

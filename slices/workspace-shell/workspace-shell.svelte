@@ -699,6 +699,14 @@
   let releaseResize: (() => void) | undefined;
   let connection = $state<"checking" | "online" | "offline">("checking");
   let connectionError = $state("");
+  /**
+   * A backend can answer every request from inside the page. The shell used to paint that as
+   * "Connected" and the screen claimed a link that does not exist; this is the fact every
+   * connection label is derived from.
+   */
+  let stubConnection = $derived(
+    backends.length > 0 && backends.every((row) => (row as { stub?: boolean }).stub === true),
+  );
   let meta = $derived(OUTPUTS.find((section) => section.id === layout.output));
   let chatOutput = $derived(chatPanels.some((route) => route.id === layout.output));
   let SETTINGS = $derived(
@@ -1158,7 +1166,9 @@
         >{:else}
         <span class="titlebar-status" role="status"
           >{connection === "online"
-            ? labels.statusOnline
+            ? stubConnection
+              ? labels.stubTooltip
+              : labels.statusOnline
             : connection === "checking"
               ? labels.statusConnecting
               : labels.statusOffline}</span
@@ -1317,8 +1327,11 @@
                   ><span
                     class="connection-dot"
                     class:connected={connection === "online"}
+                    class:stub={stubConnection}
                     title={connection === "online"
-                      ? labels.connectedTooltip
+                      ? stubConnection
+                        ? labels.stubTooltip
+                        : labels.connectedTooltip
                       : labels.disconnectedTooltip}
                   ></span>
                 </div>
@@ -1534,6 +1547,8 @@
                           screenProps={{
                             backend,
                             backends,
+                            connection,
+                            connectionError,
                             comparison,
                             compareBackends,
                             active: workspaceActive && regions.output && layout.output === id,
@@ -1924,6 +1939,12 @@
   }
   .connection-dot.connected {
     background: #74bc95;
+  }
+  /* A filled dot means a link exists. The in-page stub is not one, so it keeps the hollow
+     outline and the tooltip says why. */
+  .connection-dot.stub {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px #74bc95;
   }
   .pane-divider {
     position: relative;

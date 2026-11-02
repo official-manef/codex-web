@@ -1,5 +1,6 @@
 <script lang="ts">
 	import View from '#lib/View.svelte';
+	import StateNote from '#lib/StateNote.svelte';
 	import { Icon } from '../../../shared/icons/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -120,7 +121,11 @@
 			<Icon name="chevron" size={13} />Refresh declarations
 		</Button>
 		<span class="text-[11.5px] text-ink-3">
-			{foundationVersion ? `Foundation contract ${foundationVersion}` : 'Contract unavailable'}
+			{loading && !foundationVersion
+				? 'Reading the contract…'
+				: foundationVersion
+					? `Foundation contract ${foundationVersion}`
+					: 'Contract unavailable'}
 		</span>
 	</div>
 
@@ -138,7 +143,13 @@
 		<div>
 			<dt class="text-ink-3">Live adapters</dt>
 			<dd class="font-medium">
-				{readiness && 'status' in readiness ? readiness.liveAdapters : 'Unknown'}
+				{#if loading && !readiness}
+					Reading
+				{:else if readiness && 'status' in readiness}
+					{readiness.liveAdapters}
+				{:else}
+					Unknown
+				{/if}
 			</dd>
 		</div>
 		<div>
@@ -166,6 +177,25 @@
 	</p>
 
 	<div class="grid gap-3 pb-6 md:grid-cols-2">
+		{#if loading && modules.length === 0}
+			<div class="md:col-span-2">
+				<StateNote
+					state="loading"
+					title="Reading the hub's module declarations"
+					detail="The registry has not answered yet. Each card is a declaration the hub reports, so an empty grid here means it is still reading, not that the hub declares nothing."
+					fix="none"
+				/>
+			</div>
+		{:else if modules.length === 0}
+			<div class="md:col-span-2">
+				<StateNote
+					state="degraded"
+					title="No module declarations came back"
+					detail="The hub answered, and its registry held no modules. A module is a contract this console may preview; without one there is nothing to compose."
+					fix="operator"
+				/>
+			</div>
+		{/if}
 		{#each modules as module, index (module.id)}
 			<article class="rounded-lg border border-line p-4">
 				<div class="mb-2 flex items-start justify-between gap-3">

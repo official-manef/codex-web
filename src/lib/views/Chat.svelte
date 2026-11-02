@@ -3226,11 +3226,22 @@
               label="Model"
               bind:value={modelId}
               options={modelOptions}
-              disabled={busy || !!operation}
+              disabled={busy || !!operation || !modelOptions.length}
             />
           </div>
-          <ModelCapabilities capabilities={model?.capabilities} />
-          <div class="inspector-field">
+          {#if !catalogue}
+            <p class="inspector-note" role="status">
+              Reading this build's model catalogue. The model and device selectors stay empty until
+              it answers.
+            </p>
+          {:else if modelOptions.length === 0}
+            <p class="inspector-note" role="status">
+              The catalogue answered with no model rows. No model is installed here, so there is
+              nothing to select; <a class="underline" href="#models">Models &amp; downloads</a> is
+              where one would come from.
+            </p>
+          {/if}
+          <ModelCapabilities capabilities={model?.capabilities} />          <div class="inspector-field">
             <span>Device</span><AppSelect
               label="Chat device"
               value={device}
