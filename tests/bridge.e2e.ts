@@ -484,16 +484,19 @@ test('the page can read the health answer, which is what Test connection needs',
 	const bridge = await startBridge({ allowOrigin: await app() });
 	try {
 		await page.goto(await app());
-		const result = await page.evaluate(async (origin) => {
-			try {
-				const response = await fetch(`${origin}/v1/health`, {
-					headers: { Authorization: `Bearer ${TOKEN}` }
-				});
-				return { status: response.status, body: await response.json() };
-			} catch (error) {
-				return { threw: String(error) };
-			}
-		}, bridge.origin);
+		const result = await page.evaluate(
+			async ([origin, token]) => {
+				try {
+					const response = await fetch(`${origin}/v1/health`, {
+						headers: { Authorization: `Bearer ${token}` }
+					});
+					return { status: response.status, body: await response.json() };
+				} catch (error) {
+					return { threw: String(error) };
+				}
+			},
+			[bridge.origin, TOKEN] as const
+		);
 		expect(result.threw, `the page could not read the answer: ${result.threw}`).toBeUndefined();
 		expect(result.status).toBe(200);
 		expect(result.body).toMatchObject({ ok: true });
