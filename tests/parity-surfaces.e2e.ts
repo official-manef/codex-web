@@ -16,7 +16,9 @@ test('scheduled tasks renders an honest state and never claims to run', async ({
 	const about = page.getByText(/does not run them yet/i).first();
 	await expect(about).toBeAttached();
 	// With no deployment configured it says so instead of showing a form that cannot save.
-	await expect(page.getByText(/Cloud mode is not configured/i).first()).toBeVisible();
+	// Copy updated 2026-11-02 with `docs/empty-states-2026-11-02.md`: the degraded state now names
+	// the store it lacks and who can supply it, instead of naming one environment variable.
+	await expect(page.getByText(/No schedule store is configured/i).first()).toBeVisible();
 	await expect(page.getByText(/0 of 20/).first()).toBeVisible();
 });
 

@@ -7,6 +7,7 @@
   import WorkflowStudio from "#lib/WorkflowStudio.svelte";
   import { readDraft, saveDraft } from "#lib/drafts.js";
   import RecoveryNotice from "#lib/RecoveryNotice.svelte";
+  import StateNote from "#lib/StateNote.svelte";
   import { get, post } from "#lib/http.js";
 
   type Props = {
@@ -357,6 +358,14 @@
         <span class="chip">{selected?.device || "Local device"} · runs locally</span>
       </section>
 
+      {#if config === null && !error}
+        <StateNote
+          state="loading"
+          title="Reading the folder policy"
+          detail="The recipe has not answered with its output root, its accepted file types or its confidence threshold yet, so the controls below are disabled rather than guessing them."
+          fix="none"
+        />
+      {/if}
       {#if !local}
         <div role="status" class="notice">
           Select NPU, GPU or CPU in Compute &amp; devices to run this local recipe. An endpoint is not

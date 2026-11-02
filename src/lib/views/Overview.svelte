@@ -1,9 +1,21 @@
 <script lang="ts">
   import View from "#lib/View.svelte";
   import { Icon } from "../../../shared/icons/index.js";
-  type Props = { backend?: string; backends?: any[] };
-  let { backend = "", backends = [] }: Props = $props();
+  import { deviceListState } from "#lib/view_states.js";
+  type Props = { backend?: string; backends?: any[]; connection?: string; connectionError?: string };
+  let {
+    backend = "",
+    backends = [],
+    connection = "online",
+    connectionError = "",
+  }: Props = $props();
   let selected = $derived(backends.find((item) => item.id === backend));
+  const listState = $derived(
+    deviceListState({
+      connection: connection as "checking" | "online" | "offline",
+      backends,
+    }),
+  );
   const TASKS = [
     {
       title: "Try a decision",
@@ -51,18 +63,31 @@
       <span class="status-symbol"><Icon name="cpu" size={22} /></span>
       <div>
         <h2>
-          {#if selected?.stub}
+          {#if listState === "loading"}
+            Reading the device list
+          {:else if listState === "error"}
+            The device list did not load
+          {:else if selected?.stub}
             No compute device is configured
           {:else if selected?.ready}
             {selected.kind === "local"
               ? `${selected.device} selected for local decisions`
               : `${selected.device} endpoint selected`}
+          {:else if listState === "empty"}
+            No compute device is reported
           {:else}
             Choose a ready compute device
           {/if}
         </h2>
         <p>
-          {#if selected?.stub}
+          {#if listState === "loading"}
+            The device list has not answered yet. Setup check and the screens below wait for the
+            same answer.
+          {:else if listState === "error"}
+            {connectionError ||
+              "The runtime did not answer, so no device could be listed. This is a failed read, not a machine without a model."}
+            Reload the page to try again.
+          {:else if selected?.stub}
             Every request in this build is answered by a fixed stub. <a
               class="text-link"
               href="#setup">Setup check</a
@@ -72,6 +97,9 @@
             {selected.kind === "local"
               ? "Decision inference stays on this machine. Every result shows which device ran."
               : "This selection sends decision requests to your configured endpoint. Choose a local device for local inference."}
+          {:else if listState === "empty"}
+            The device list answered with zero rows. Setup check names which piece of the runtime
+            is absent; this build has none to report.
           {:else}
             Open Setup check to see detected devices and the next step.
           {/if}

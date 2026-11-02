@@ -1,5 +1,6 @@
 <script lang="ts">
 	import View from "#lib/View.svelte";
+	import StateNote from "#lib/StateNote.svelte";
 	import McpAppFrame from "#lib/McpAppFrame.svelte";
 	import { page } from "$app/state";
 	import { onMount } from "svelte";
@@ -107,19 +108,34 @@
 	</div>
 
 	{#if loading && !disabled && !unavailable && !fetchError && apps.length === 0}
-		<p class="text-[13px] text-ink-2" role="status">Checking MCP apps…</p>
+		<StateNote
+			state="loading"
+			title="Reading the configured app list"
+			detail="The server has not answered yet. An empty list while this is showing means the request is still out, not that no app is configured."
+			fix="none"
+		/>
 	{:else if disabled}
-		<p class="text-[13px] leading-relaxed text-ink-2" role="status">
-			The app host is switched off on this server, set MCP_APPS_ENABLED.
-		</p>
+		<StateNote
+			state="degraded"
+			title="The app host is switched off"
+			detail="A server operator turned this surface off, so no app can run here and none is listed."
+			fix="operator"
+		/>
 	{:else if unavailable}
-		<p class="text-[13px] leading-relaxed text-ink-2" role="status">
-			The app host is temporarily unavailable.
-		</p>
+		<StateNote
+			state="degraded"
+			title="The app host cannot read its configuration"
+			detail="The server answered, but its app configuration could not be parsed, so it cannot say which apps are allowed."
+			fix="operator"
+		/>
 	{:else if fetchError}
-		<p class="text-[13px] leading-relaxed text-red-600 dark:text-red-400" role="alert">
-			{fetchError}
-		</p>
+		<StateNote
+			state="error"
+			title="The app list did not load"
+			detail={fetchError}
+			fix="you"
+			action={{ label: "Request the list again", onclick: () => void loadApps(true) }}
+		/>
 	{:else}
 		{#if blocked > 0}
 			<p class="mb-4 text-[13px] leading-relaxed text-ink-2" role="status">
@@ -128,9 +144,12 @@
 		{/if}
 
 		{#if apps.length === 0}
-			<p class="text-[13px] leading-relaxed text-ink-2" role="status">
-				No MCP apps configured.
-			</p>
+			<StateNote
+				state="empty"
+				title="No MCP app is configured"
+				detail="The allowlist answered with zero entries. An app appears here only because an operator wrote it into MCP_APPS_JSON, so this is a complete list, not a partial one."
+				fix="operator"
+			/>
 		{:else}
 			<ul class="space-y-4">
 				{#each apps as app (app.id)}

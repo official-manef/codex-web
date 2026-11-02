@@ -1,13 +1,32 @@
 <script lang="ts">
   import View from "#lib/View.svelte";
+  import StateNote from "#lib/StateNote.svelte";
+  import { deviceListState } from "#lib/view_states.js";
   import { Icon } from "../../../shared/icons/index.js";
   import { get, post, configureEndpoint } from "#lib/http.js";
 
-  type Props = { backends?: any[]; backend?: string; onPick?: (id: string) => void };
-  let { backends = [], backend = "", onPick = () => {} }: Props = $props();
-
-  let local = $derived(backends.filter((b) => b.kind === "local"));
+  type Props = {
+    backends?: any[];
+    backend?: string;
+    connection?: string;
+    connectionError?: string;
+    onPick?: (id: string) => void;
+  };
+  let {
+    backends = [],
+    backend = "",
+    connection = "online",
+    connectionError = "",
+    onPick = () => {},
+  }: Props = $props();
   let hosted = $derived(backends.filter((b) => b.kind === "byok"));
+  let local = $derived(backends.filter((b) => b.kind === "local"));
+  const listState = $derived(
+    deviceListState({
+      connection: connection as "checking" | "online" | "offline",
+      backends,
+    }),
+  );
 
   let byokUrl = $state("");
   let byokKey = $state("");
@@ -113,11 +132,30 @@
   subtitle="Where the forward pass would run: this machine's NPU, GPU or CPU, or an endpoint you supply. This browser build reports no local device and no driver; the desktop app is the build that has them."
 >
 
-  {#if !local.length}
-    <p class="mb-3 text-[12.5px] leading-relaxed text-ink-2" role="status">
-      No local device is detected. <a class="text-link" href="#setup">Setup check</a> names what is
-      missing: the runtime, the decision model or the NPU driver.
-    </p>
+  {#if listState === "loading"}
+    <StateNote
+      state="loading"
+      title="Reading this build's devices"
+      detail="The device list has not answered yet, so no device is listed or selected."
+      fix="none"
+    />
+  {:else if listState === "error"}
+    <StateNote
+      state="error"
+      title="The device list did not load"
+      detail={connectionError ||
+        "The runtime did not answer, so no device could be listed. A failed read is not the same as a machine with no NPU."}
+      fix="you"
+      action={{ label: "Check again", onclick: () => location.reload() }}
+    />
+  {:else if !local.length}
+    <StateNote
+      state="degraded"
+      title="No local device is detected"
+      detail="No CPU, GPU or NPU row came back for this machine. Setup check names which of the three is missing: the runtime, the decision model or the NPU driver."
+      fix="build"
+      action={{ label: "Open Setup check", href: "#setup" }}
+    />
   {/if}
   <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
     {#each local as b}
@@ -166,12 +204,12 @@
   <span class="label mt-6 mb-2 block">Your own endpoint</span>
 
   {#if !hosted.length}
-    <p class="text-[11.5px] leading-relaxed text-ink-2" role="status">
-      No endpoint row is configured. In the desktop app you enter a URL, a model and a key here and
-      the server keeps them in memory. This build has no transport to send a request through, so
-      there is nothing to connect and the form stays closed rather than accepting input it would
-      drop.
-    </p>
+    <StateNote
+      state="degraded"
+      title="No endpoint provider is set up"
+      detail="In the desktop app you enter a URL, a model and a key here and the server keeps them in memory. This build has no transport to send a request through, so there is nothing to connect and the form stays closed rather than accepting input it would drop."
+      fix="build"
+    />
   {/if}
 
   {#each hosted as b}

@@ -98,6 +98,11 @@
 
   {#each groups as group (group.heading)}
     <h2 class="mb-2 text-[13px] font-semibold">{group.heading}</h2>
+    {#if group.rows.length === 0}
+      <p class="mb-5 text-[11.5px] leading-relaxed text-ink-3" role="status">
+        No tool in this build falls in this group.
+      </p>
+    {:else}
     <ul class="mb-5 flex flex-col gap-2">
       {#each group.rows as row (row.id)}
         <li class="card flex min-w-0 items-start gap-3 px-4 py-3">
@@ -129,6 +134,7 @@
         </li>
       {/each}
     </ul>
+    {/if}
   {/each}
 
   <h2 class="mb-2 text-[13px] font-semibold">Paired-device tools</h2>
@@ -152,9 +158,14 @@
           </label>
           <p id={`${uid}-device-${row.id}-reason`} class="mt-0.5 text-[11px] leading-relaxed text-ink-3">
             {#if !toolsStarted}
-              Read on mount.
+              Reading this tab's tool switches.
             {:else if !cloudUrl}
               Cloud mode is not configured, so no device can be paired in this build.
+            {:else if paired?.isLoading}
+              Reading your paired devices. This switch stays off until the list answers.
+            {:else if paired?.error}
+              The paired device list did not load, so this switch cannot tell whether a {row.needs}
+              device exists. Reload the page to read it again.
             {:else if !hasDevice(row.needs)}
               Pair a {row.needs} device on <a class="underline" href="#devices">Paired devices</a> first.
             {:else}

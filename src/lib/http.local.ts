@@ -715,8 +715,34 @@ function stubResponse(path: string): Record<string, unknown> {
 		case '/api/auth/session':
 			return { session: null, stub: true, reason };
 
+		// Apps.svelte reads `extensions`, `max_bytes`, `policy.folders`, `policy.min_confidence`,
+		// `policy.review_folder`, `output_root` and `available`. Answering with the generic
+		// `{error}` shape made `config.policy.folders` throw, so the whole document recipe
+		// reported "Automation status did not load" — a build with no runtime shown as a
+		// failure.
 		case '/api/automation/status':
-			return { runs: [], stub: true, reason };
+			return {
+				available: false,
+				output_root: '',
+				extensions: [],
+				max_bytes: null,
+				policy: { folders: {}, min_confidence: 0.85, review_folder: 'Needs review' },
+				reason,
+				stub: true
+			};
+
+		// Embeddings reads `installed`, `reason`, `devices`, `limits` and `job`. The generic
+		// error shape threw instead of reaching the view's own "install a model" panel.
+		case '/api/embeddings':
+			return {
+				installed: false,
+				reason,
+				devices: [],
+				dimensions: null,
+				limits: { max_documents: 0, max_query_chars: 500 },
+				job: { state: 'idle' },
+				stub: true
+			};
 
 		default:
 			return { error: reason, stub: true, reason };
