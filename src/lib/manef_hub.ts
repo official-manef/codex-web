@@ -76,7 +76,10 @@ const ERRORS: Record<string, string> = {
 };
 
 export function hubMessage(code: string): string {
-	return ERRORS[code] ?? 'The local request could not complete.';
+	// Own-property lookup only. `ERRORS[code] ?? …` returned inherited members, so an upstream
+	// code of `toString` reached the user as `function toString() { [native code] }` instead of
+	// the fixed text this table promises.
+	return Object.hasOwn(ERRORS, code) ? ERRORS[code] : 'The local request could not complete.';
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
