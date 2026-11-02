@@ -373,7 +373,7 @@ describe('fuzz: src/lib/server/mcp/config.ts', () => {
 		const tails = ['', '/mcp', '?token=x', '?key=y', '#frag', ':8443/mcp', '/a//b', ' '];
 		for (let i = 0; i < 1500; i++) {
 			const url = r.pick(['https://', 'http://', '']) + r.pick(hosts) + r.pick(tails);
-			let accepted: { url: string } | null = null;
+			let accepted: { url: string } | null;
 			try {
 				const [first] = mcpConnections(config(url));
 				accepted = { url: first.url };
@@ -707,7 +707,7 @@ describe('fuzz: zod schemas at the route boundaries', () => {
 			} catch {
 				continue;
 			}
-			let parsed: unknown = null;
+			let parsed: unknown;
 			try {
 				parsed = parseChat(chatEnv, value);
 			} catch {
@@ -770,7 +770,7 @@ describe('fuzz: auth configuration boundary', () => {
 				'https://app.example.com/?q=1',
 				'not a url'
 			]);
-			let config: ReturnType<typeof resolveAuthConfig> | null = null;
+			let config: ReturnType<typeof resolveAuthConfig> | null;
 			try {
 				config = resolveAuthConfig({
 					...base,

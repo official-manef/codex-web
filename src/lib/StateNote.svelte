@@ -41,6 +41,9 @@
 	<p class="state-note-fix">{FIX[fix]}</p>
 	{#if action}
 		{#if 'href' in action}
+			<!-- A hash fragment on the current route: there is no route to resolve, and
+			     `resolve()` takes a path, not a fragment. -->
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 			<a class="btn state-note-action" href={action.href}>{action.label}</a>
 		{:else}
 			<button type="button" class="btn state-note-action" onclick={action.onclick}>

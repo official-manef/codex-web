@@ -82,7 +82,9 @@ test('the template offers one backend and never offers a BYOK key as a device', 
 	expect(backendSelection.chatEligible(backend('byok', 'byok', true))).toBe(false);
 	expect(backendSelection.chatSelectable('local', [backend('local', 'local', true)])).toBe(true);
 	// `local:npu` exists in Laya, not here, so it is not selectable in the template.
-	expect(backendSelection.chatSelectable('local:npu', [backend('local:npu', 'local', true)])).toBe(false);
+	expect(backendSelection.chatSelectable('local:npu', [backend('local:npu', 'local', true)])).toBe(
+		false
+	);
 	expect(backendSelection.persistBackend('local')).toBe(true);
 	expect(backendSelection.persistBackend('byok')).toBe(false);
 	expect(backendSelection.defaultCompareIds).toEqual(['local']);

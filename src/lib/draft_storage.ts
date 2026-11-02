@@ -37,9 +37,10 @@ export function createDraftStore(options: {
 			key,
 			current: CURRENT,
 			maxChars: options.maxChars,
-			// Version 0 is the bare value: no envelope, no wrapper, no migration needed. An object
-			// that *looks* like a broken envelope is not a draft value, so it is quarantined rather
-			// than handed to the view as `{ version: 1 }`.
+			// Version 0 is the bare value: no envelope, no wrapper, no migration needed. The chat
+			// draft's bare value is itself an object (`{ content, attachments }`), so an object is
+			// only refused when it *claims* to be an envelope — the store never wrote `{ version }`
+			// without `value`, so that shape is a broken envelope rather than a legacy draft.
 			fromLegacy: (parsed) =>
 				parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'version' in parsed
 					? null

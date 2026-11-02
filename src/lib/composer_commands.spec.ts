@@ -17,7 +17,7 @@ test('nextComposerSelection always answers with a real index or -1', () => {
 	expect(nextComposerSelection(-5, 'Enter', -1)).toBe(-1);
 	expect(nextComposerSelection(0, 'ArrowUp', -1)).toBe(-1);
 	// A usable count always yields a row inside it, whatever the incoming cursor.
-	expect(nextComposerSelection(-5, 'ArrowDown', 4)).toBe(4 % 4 === 0 ? 0 : 0);
+	expect(nextComposerSelection(-5, 'ArrowDown', 4)).toBe(0);
 	expect(nextComposerSelection(-2, 'ArrowUp', 4)).toBe(1);
 	expect(nextComposerSelection(9, 'Enter', 4)).toBe(1);
 	for (const count of [1, 2, 5])

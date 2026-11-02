@@ -97,7 +97,9 @@ test('a corrupted stored layout loads as defaults without throwing', () => {
 	expect(createLayaWorkspacePersistence({ draftStorage: storage }).loadLayout([])).toEqual(
 		DEFAULTS
 	);
-	expect(map.size).toBe(1);
+	// The map holds the key itself plus its `:quarantine` copy — the reader keeps the unreadable
+	// bytes rather than deleting them, so a user can be told and the data can be recovered.
+	expect(map.size).toBe(2);
 });
 
 test('the two products keep separate backend keys, so neither overrides the other', () => {

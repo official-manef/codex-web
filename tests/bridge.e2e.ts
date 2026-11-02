@@ -36,7 +36,9 @@ import WebSocket from 'ws';
 
 const BRIDGE = 'bridge/terminal-bridge.mjs';
 const VITE = path.join('node_modules', 'vite', 'bin', 'vite.js');
-const TOKEN = 'e2e-token-0123456789-abcdefghijklmnop';
+// Deliberately not shaped like a credential: this value only has to be long enough for the
+// bridge's own 32-character floor, and the repo's secret scanner should never see a fake one.
+const TOKEN = 'fixture-not-a-secret-bridge-token';
 const ROTATED = 'rotated-token-0987654321-ponmlkjihgfedcba';
 const MAX_OUTPUT = 200_000;
 const TS = 'AAAAAAAAAAA=';
@@ -485,7 +487,7 @@ test('the page can read the health answer, which is what Test connection needs',
 		const result = await page.evaluate(async (origin) => {
 			try {
 				const response = await fetch(`${origin}/v1/health`, {
-					headers: { Authorization: 'Bearer e2e-token-0123456789-abcdefghijklmnop' }
+					headers: { Authorization: `Bearer ${TOKEN}` }
 				});
 				return { status: response.status, body: await response.json() };
 			} catch (error) {

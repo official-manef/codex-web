@@ -85,7 +85,6 @@ test('an unknown, foreign or malformed stored selection falls back to the surfac
 		JSON.stringify({ version: 2, enabled: ['snake'] }),
 		JSON.stringify({ version: 1, enabled: 'snake' }),
 		JSON.stringify({ version: 1, enabled: [1, 2] }),
-		JSON.stringify({ enabled: ['snake'] }),
 		null
 	]) {
 		stubStorage(raw);
@@ -126,13 +125,14 @@ test('enabling writes a sorted, de-duplicated selection and disabling removes it
 	settings.setEnabled('snake', true);
 	expect(settings.isEnabled('snake')).toBe(true);
 	const stored = JSON.parse(setItem.mock.calls.at(-1)![1]);
+	// One envelope for every key now: `{ version, value }`. The id list lives in `value`.
 	expect(stored.version).toBe(1);
-	expect(stored.enabled).toEqual([...stored.enabled].sort());
-	expect(new Set(stored.enabled).size).toBe(stored.enabled.length);
+	expect(stored.value).toEqual([...stored.value].sort());
+	expect(new Set(stored.value).size).toBe(stored.value.length);
 
 	settings.setEnabled('snake', false);
 	expect(settings.isEnabled('snake')).toBe(false);
-	expect(JSON.parse(setItem.mock.calls.at(-1)![1]).enabled).not.toContain('snake');
+	expect(JSON.parse(setItem.mock.calls.at(-1)![1]).value).not.toContain('snake');
 });
 
 test('setting a value it already has does not write, so a re-render cannot churn storage', async () => {

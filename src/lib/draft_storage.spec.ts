@@ -47,19 +47,23 @@ test('a saved value round-trips through its versioned envelope', () => {
 	expect(JSON.parse(map.get('d:key')!)).toEqual({ version: 1, value: { text: 'hello' } });
 });
 
-test('an unversioned, foreign-version or valueless envelope is refused', () => {
+test('a foreign-version or valueless envelope is refused, a bare value is read as version 0', () => {
 	const cases: Record<string, string> = {
-		'plain json': '{"text":"hello"}',
 		'version 2': '{"version":2,"value":"hello"}',
 		'value missing': '{"version":1}',
 		'value undefined key': '{"version":1,"value":null}'
 	};
 	for (const [label, raw] of Object.entries(cases)) {
 		const { storage } = store({ 'd:key': raw });
-		// `value: null` is a stored value, not an absent one; only the first three are refused.
+		// `value: null` is a stored value, not an absent one; the other two are refused.
 		const expected = label === 'value undefined key' ? null : 'fallback';
 		expect(drafts().read('key', 'fallback', storage), label).toEqual(expected);
 	}
+
+	// A bare value with no envelope is version 0, and the chat draft's bare value *is* an object.
+	// Reading it as corruption would lose every draft written before the envelope existed.
+	const { storage } = store({ 'd:key': '{"text":"hello"}' });
+	expect(drafts().read('key', 'fallback', storage)).toEqual({ text: 'hello' });
 });
 
 test('an unparseable, empty or oversized raw value falls back without throwing', () => {

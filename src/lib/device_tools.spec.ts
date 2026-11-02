@@ -81,13 +81,17 @@ test('enabling writes the selection, and disabling removes it', () => {
 	tools.start();
 	tools.setEnabled('terminal', true);
 	expect(tools.isEnabled('terminal')).toBe(true);
-	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual(['terminal']);
+	// Every key is written as one envelope now: `{ version, value }`.
+	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual({ version: 1, value: ['terminal'] });
 
 	tools.setEnabled('browser', true);
-	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual(['terminal', 'browser']);
+	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual({
+		version: 1,
+		value: ['terminal', 'browser']
+	});
 	tools.setEnabled('terminal', false);
 	expect(tools.isEnabled('terminal')).toBe(false);
-	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual(['browser']);
+	expect(JSON.parse(setItem.mock.calls.at(-1)![1])).toEqual({ version: 1, value: ['browser'] });
 });
 
 test('setting a tool to the value it already has does not write again', () => {

@@ -41,19 +41,25 @@ test('a default mode outside the kept set falls back to the first surviving mode
 			.defaultMode
 	).toBe('chat');
 	// A default with no modes at all still resolves to the fallback mode.
-	expect(resolveLayaChatPresentation(withoutModes({ defaultMode: 'compare' })).defaultMode).toBe('chat');
+	expect(resolveLayaChatPresentation(withoutModes({ defaultMode: 'compare' })).defaultMode).toBe(
+		'chat'
+	);
 });
 
 test('comparison kinds are filtered to the two Laya supports', () => {
 	expect(
-		resolveLayaChatPresentation(withoutModes({ comparisonKinds: ['processors', 'models'] })).comparisonKinds
+		resolveLayaChatPresentation(withoutModes({ comparisonKinds: ['processors', 'models'] }))
+			.comparisonKinds
 	).toEqual(['processors', 'models']);
 	expect(
-		resolveLayaChatPresentation(withoutModes({ comparisonKinds: ['models', 'prices', 'models'] })).comparisonKinds
+		resolveLayaChatPresentation(withoutModes({ comparisonKinds: ['models', 'prices', 'models'] }))
+			.comparisonKinds
 	).toEqual(['models']);
 	// No comparison configured is an empty list, not a default pair.
 	expect(resolveLayaChatPresentation().comparisonKinds).toEqual([]);
-	expect(resolveLayaChatPresentation(withoutModes({ comparisonKinds: [] })).comparisonKinds).toEqual([]);
+	expect(
+		resolveLayaChatPresentation(withoutModes({ comparisonKinds: [] })).comparisonKinds
+	).toEqual([]);
 });
 
 test('presentation-only fields pass through untouched, so the shell keeps its own labels', () => {

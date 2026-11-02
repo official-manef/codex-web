@@ -93,11 +93,7 @@ async function installed(overrides: Partial<WebMCPAdapter> = {}, options = {}) {
 	return { ...fake, ...harness, integration };
 }
 
-const run = async (
-	tool: Registered,
-	input: unknown,
-	options: { signal?: AbortSignal } = {}
-) =>
+const run = async (tool: Registered, input: unknown, options: { signal?: AbortSignal } = {}) =>
 	JSON.parse(await tool.execute(input, options));
 
 test('without a modelContext nothing is registered and the state is unsupported', async () => {

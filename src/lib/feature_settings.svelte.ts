@@ -18,6 +18,9 @@ import {
 export const STORAGE_KEY = 'workspace-template:tools-v1';
 export const MAX_STORED_BYTES = 8 * 1024;
 
+/** The envelope version this build writes; a legacy payload may state it but not exceed it. */
+const SPEC_VERSION = 1;
+
 /**
  * The build before the envelope wrote `{ version: 1, enabled: [...] }`. It is version 0 in the
  * shared scheme because it has no `value` field: reading it as an envelope would hand the view
@@ -26,7 +29,11 @@ export const MAX_STORED_BYTES = 8 * 1024;
  */
 function fromLegacy(parsed: unknown): unknown {
 	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-	const shape = parsed as { enabled?: unknown };
+	const shape = parsed as { version?: unknown; enabled?: unknown };
+	// The pre-envelope shape carried `version: 1` alongside `enabled`, so a stated version alone
+	// is not a reason to refuse a legacy read. A version this build does not know *is*: reading it
+	// would let an older build rewrite a list it cannot interpret.
+	if (typeof shape.version === 'number' && shape.version > SPEC_VERSION) return null;
 	return Array.isArray(shape.enabled) ? shape.enabled : null;
 }
 
@@ -48,7 +55,7 @@ function validate(value: unknown): { value: string[]; dropped: number } | null {
 
 const SPEC: VersionedSpec<string[]> = {
 	key: STORAGE_KEY,
-	current: 1,
+	current: SPEC_VERSION,
 	maxChars: MAX_STORED_BYTES,
 	fromLegacy,
 	validate
