@@ -13,6 +13,8 @@ const MAX_PROJECTS = 50;
 const MAX_NAME_CHARS = 60;
 const MAX_INSTRUCTIONS_CHARS = 2000;
 const MAX_PROJECT_CHATS = 500;
+/** Bounded drain rounds when deleting a project's memberships. */
+const DELETE_ROUNDS = 20;
 
 function fail(code: 'invalid_request' | 'limit' | 'not_found', message: string): never {
 	throw new ConvexError({ code, message });
@@ -113,12 +115,18 @@ export const remove = mutation({
 		if (!row || row.owner !== owner) {
 			fail('not_found', 'Project not found.');
 		}
-		const chats = await ctx.db
-			.query('projectChats')
-			.withIndex('by_project', (q) => q.eq('projectId', args.id))
-			.take(MAX_PROJECT_CHATS);
-		for (const chat of chats) {
-			await ctx.db.delete('projectChats', chat._id);
+		// Drain, not one page: a single `take(MAX_PROJECT_CHATS)` used to leave every membership
+		// past the 500th pointing at a project that no longer exists. Ceiling: DELETE_ROUNDS.
+		// ponytail: raise DELETE_ROUNDS if a project can legitimately hold more than 10 000 chats.
+		for (let round = 0; round < DELETE_ROUNDS; round++) {
+			const chats = await ctx.db
+				.query('projectChats')
+				.withIndex('by_project', (q) => q.eq('projectId', args.id))
+				.take(MAX_PROJECT_CHATS);
+			if (!chats.length) break;
+			for (const chat of chats) {
+				await ctx.db.delete('projectChats', chat._id);
+			}
 		}
 		await ctx.db.delete('projects', args.id);
 		return null;
@@ -144,10 +152,9 @@ export const assign = mutation({
 		}
 		const existing = await ctx.db
 			.query('projectChats')
-			.withIndex('by_owner', (q) => q.eq('owner', owner))
+			.withIndex('by_owner_session', (q) => q.eq('owner', owner).eq('sessionId', args.sessionId))
 			.take(MAX_PROJECT_CHATS);
-		const matches = existing.filter((row) => row.sessionId === args.sessionId);
-		for (const row of matches) {
+		for (const row of existing) {
 			await ctx.db.delete('projectChats', row._id);
 		}
 		if (args.projectId !== null) {
@@ -168,11 +175,10 @@ export const ofSession = query({
 		const owner = await requireUser(ctx);
 		const rows = await ctx.db
 			.query('projectChats')
-			.withIndex('by_owner', (q) => q.eq('owner', owner))
-			.take(MAX_PROJECT_CHATS);
-		const assignment = rows.find((row) => row.sessionId === args.sessionId);
-		if (!assignment) return null;
-		const projectRow = await ctx.db.get('projects', assignment.projectId);
+			.withIndex('by_owner_session', (q) => q.eq('owner', owner).eq('sessionId', args.sessionId))
+			.first();
+		if (!rows) return null;
+		const projectRow = await ctx.db.get('projects', rows.projectId);
 		if (!projectRow || projectRow.owner !== owner) return null;
 		return {
 			_id: projectRow._id,
