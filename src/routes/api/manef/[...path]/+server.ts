@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { error, json } from '@sveltejs/kit';
-import { readJsonBody } from '$lib/server/access';
+import { readJsonBody, requireCapabilityAccess } from '$lib/server/access';
 import { hubConfigured, hubRequest } from '$lib/server/manef';
 import type { RequestHandler } from './$types';
 
@@ -15,18 +15,25 @@ const ROUTES = {
 	'/api/manef/plan': { path: '/api/plan', method: 'POST', accept: [] }
 } as const;
 
-export const GET: RequestHandler = async ({ url }) => {
-	const route = ROUTES[url.pathname as keyof typeof ROUTES];
+export const GET: RequestHandler = async (event) => {
+	// Reading the registry is what the console renders, and the hub descriptors grant no
+	// authority, so this path carries no identity: a deployment without sign-in would otherwise
+	// show a dead panel instead of the honest "no hub configured" state it exists to show.
+	const route = ROUTES[event.url.pathname as keyof typeof ROUTES];
 	if (!route) error(404, 'Unknown MANEF hub path.');
 	if (route.method !== 'GET') error(405, 'Use POST for this MANEF hub path.');
 	return reply(route.path, route.accept, { method: 'GET' });
 };
 
-export const POST: RequestHandler = async ({ url, request }) => {
-	const route = ROUTES[url.pathname as keyof typeof ROUTES];
+export const POST: RequestHandler = async (event) => {
+	// A plan preview forwards a caller-supplied JSON body into the operator's loopback hub, so it
+	// needs an identity even though nothing is executed. The three-path allowlist limits where the
+	// body can land; it does not say who may send it.
+	await requireCapabilityAccess(event);
+	const route = ROUTES[event.url.pathname as keyof typeof ROUTES];
 	if (!route) error(404, 'Unknown MANEF hub path.');
 	if (route.method !== 'POST') error(405, 'Use GET for this MANEF hub path.');
-	const body = await readJsonBody(request);
+	const body = await readJsonBody(event.request);
 	return reply(route.path, route.accept, { method: 'POST', body: JSON.stringify(body) });
 };
 

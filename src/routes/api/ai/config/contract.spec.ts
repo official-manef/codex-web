@@ -70,9 +70,15 @@ describe('method discipline', () => {
 });
 
 describe('feature disabled', () => {
-	test('answers an empty catalog without requiring a credential', async () => {
-		Object.assign(privateEnv, { AI_ENABLED: 'false', MCP_CLIENT_ENABLED: 'false' });
-		const response = await route.GET(event());
+	test('answers 401 without a credential even when both features are off', async () => {
+		const token = operatorToken();
+		Object.assign(privateEnv, {
+			AI_ENABLED: 'false',
+			MCP_CLIENT_ENABLED: 'false',
+			CAPABILITY_ACCESS_TOKEN: token
+		});
+		expect((await failure(route.GET(event()))).status).toBe(401);
+		const response = await route.GET(event({ authorization: `Bearer ${token}` }));
 		expect(response.status).toBe(200);
 		expect(response.headers.get('content-type')).toContain('application/json');
 		expect(response.headers.get('cache-control')).toBe('no-store');

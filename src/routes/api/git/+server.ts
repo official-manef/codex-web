@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { error, isHttpError, json } from '@sveltejs/kit';
 import { z } from 'zod';
-import { requireCapabilityAccess } from '$lib/server/access';
+import { readJsonBody, requireCapabilityAccess } from '$lib/server/access';
 import {
 	gitCommit,
 	gitDiff,
@@ -141,12 +141,9 @@ export const POST: RequestHandler = async (event) => {
 	const roots = gitRoots(env as { GIT_SURFACE_ROOTS?: string });
 	if (roots.length === 0) error(503, 'No repository root is configured.');
 
-	let rawBody: unknown;
-	try {
-		rawBody = await event.request.json();
-	} catch {
-		error(400, 'Invalid request body.');
-	}
+	// Same reader as every other route: media type, declared length and a streaming cap, so a
+	// caller cannot stream an unbounded body into the git route.
+	const rawBody = await readJsonBody(event.request);
 
 	const parseResult = actionSchema.safeParse(rawBody);
 	if (!parseResult.success) {

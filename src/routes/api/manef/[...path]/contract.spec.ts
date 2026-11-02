@@ -2,12 +2,26 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import * as route from './+server';
 
-const { privateEnv } = vi.hoisted(() => ({ privateEnv: {} as Record<string, string> }));
+const { privateEnv, publicEnv } = vi.hoisted(() => ({
+	privateEnv: {} as Record<string, string>,
+	publicEnv: { PUBLIC_SITE_URL: 'https://app.example.com' }
+}));
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnv }));
+vi.mock('$env/dynamic/public', () => ({ env: publicEnv }));
 
 const ORIGIN = 'https://app.example.com';
 const HUB = 'http://127.0.0.1:3210';
+let tokenSeq = 0;
+
+// Each event gets its own operator token: the burst limiter allows 20 requests per identity and
+// this file makes more than that, so a shared token would measure the limiter, not the route.
+function nextToken() {
+	tokenSeq++;
+	const token = `manef-token-${tokenSeq}`.padEnd(40, '0');
+	privateEnv.CAPABILITY_ACCESS_TOKEN = token;
+	return token;
+}
 
 type ManefEvent = RequestEvent<{ path: string }, '/api/manef/[...path]'>;
 
@@ -16,6 +30,8 @@ function event(pathname: string, init: { body?: string; contentType?: string | n
 	const headers = new Headers();
 	if (init.contentType !== null)
 		headers.set('content-type', init.contentType ?? 'application/json');
+	headers.set('authorization', `Bearer ${nextToken()}`);
+	headers.set('origin', ORIGIN);
 	return {
 		url,
 		request: new Request(url, {
@@ -55,6 +71,51 @@ function stubbedFetch(handler: () => Response | Promise<Response>) {
 
 beforeEach(() => {
 	for (const key of Object.keys(privateEnv)) delete privateEnv[key];
+});
+
+describe('auth boundary', () => {
+	test('GET needs no identity, POST does, and neither reaches the hub unauthenticated', async () => {
+		privateEnv.MANEF_HUB_URL = HUB;
+		nextToken();
+		const calls = stubbedFetch(() => hubResponse('{}'));
+		const bare = (pathname: string, method = 'GET') => {
+			const url = new URL(`${ORIGIN}${pathname}`);
+			return {
+				url,
+				request: new Request(url, { method, headers: { origin: ORIGIN } }),
+				params: { path: pathname.replace('/api/manef/', '') }
+			} as unknown as ManefEvent;
+		};
+		// Reading the registry renders the console and grants nothing; a plan preview forwards a
+		// caller-supplied body into the operator's loopback hub, so it is the one that needs a
+		// credential.
+		expect((await route.GET(bare('/api/manef/modules'))).status).toBe(200);
+		const afterGet = calls.length;
+		expect((await failure(route.POST(bare('/api/manef/plan', 'POST')))).status).toBe(401);
+		expect(calls.length, 'the unauthenticated POST never reached the hub').toBe(afterGet);
+	});
+
+	test('a valid token from a foreign origin is 403 and the hub is never called', async () => {
+		privateEnv.MANEF_HUB_URL = HUB;
+		const calls = stubbedFetch(() => hubResponse('{}'));
+		const token = nextToken();
+		const result = await failure(
+			route.POST({
+				...event('/api/manef/plan', { body: '{"goal":"x"}' }),
+				request: new Request(`${ORIGIN}/api/manef/plan`, {
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json',
+						authorization: `Bearer ${token}`,
+						origin: 'https://attacker.example'
+					},
+					body: '{"goal":"x"}'
+				})
+			} as unknown as ManefEvent)
+		);
+		expect(result.status).toBe(403);
+		expect(calls).toHaveLength(0);
+	});
 });
 
 afterEach(() => {
@@ -159,13 +220,20 @@ describe('input validation', () => {
 	});
 
 	test('a missing body is 400', async () => {
+		const token = nextToken();
+		const url = new URL(`${ORIGIN}/api/manef/plan`);
 		const result = await failure(
 			route.POST({
-				...event('/api/manef/plan'),
-				request: new Request(`${ORIGIN}/api/manef/plan`, {
+				url,
+				request: new Request(url, {
 					method: 'POST',
-					headers: { 'content-type': 'application/json' }
-				})
+					headers: {
+						'content-type': 'application/json',
+						authorization: `Bearer ${token}`,
+						origin: ORIGIN
+					}
+				}),
+				params: { path: 'plan' }
 			} as unknown as ManefEvent)
 		);
 		expect(result.status).toBe(400);

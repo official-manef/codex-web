@@ -96,10 +96,13 @@ describe('/api/ai/config GET', () => {
 		expect(body.ai.enabled).toBe(true);
 	});
 
-	test('does not require a token when both AI and MCP are disabled', async () => {
+	test('is guarded even when both AI and MCP are disabled', async () => {
 		privateEnv.AI_ENABLED = 'false';
 		privateEnv.MCP_CLIENT_ENABLED = 'false';
-		const body = await (await GET(makeEvent())).json();
+		// A configured operator token is enforced regardless of the feature flags: the disabled
+		// answer is still a catalog, not a public one.
+		await expect(GET(makeEvent())).rejects.toMatchObject({ status: 401 });
+		const body = await (await GET(makeEvent(token))).json();
 		expect(body).toEqual({
 			ai: { enabled: false, providers: [] },
 			mcp: { enabled: false, servers: [] }

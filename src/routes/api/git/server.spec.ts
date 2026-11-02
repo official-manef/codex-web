@@ -121,6 +121,20 @@ describe('/api/git GET', () => {
 		});
 	});
 
+	test('stays closed without sign-in: git is not part of the anonymous BYOK surface', async () => {
+		// A no-auth deployment with no operator token used to open every capability route. The
+		// repository path, branch and commit subjects are machine state, not BYOK settings.
+		delete privateEnv.CAPABILITY_ACCESS_TOKEN;
+		privateEnv.AUTH_ENABLED = 'false';
+		await expect(GET(makeEvent(''))).rejects.toMatchObject({ status: 401 });
+		await expect(POST(makePostEvent({ action: 'diff' }, '', undefined))).rejects.toMatchObject({
+			status: 401
+		});
+		expect(gitMock.gitStatus).not.toHaveBeenCalled();
+		expect(gitMock.gitDiff).not.toHaveBeenCalled();
+		delete privateEnv.AUTH_ENABLED;
+	});
+
 	test('returns 503 when no git roots configured', async () => {
 		privateEnv.GIT_SURFACE_ROOTS = '';
 		await expect(GET(makeEvent('', validToken))).rejects.toMatchObject({
@@ -228,6 +242,26 @@ describe('/api/git POST', () => {
 		await expect(POST(makePostEvent('{not-json', '', validToken))).rejects.toMatchObject({
 			status: 400
 		});
+	});
+
+	test('refuses a non-JSON media type and an oversized body instead of reading them', async () => {
+		const url = new URL('https://app.example.com/api/git');
+		const headers = new Headers({
+			origin: 'https://app.example.com',
+			'content-type': 'text/plain',
+			authorization: `Bearer ${validToken}`
+		});
+		await expect(
+			POST({
+				url,
+				request: new Request(url, { method: 'POST', headers, body: '{"action":"diff"}' }),
+				cookies: { get: () => undefined }
+			} as unknown as RequestEvent<Record<string, never>, '/api/git'>)
+		).rejects.toMatchObject({ status: 415 });
+		await expect(
+			POST(makePostEvent({ action: 'commit', message: 'a'.repeat(70_000) }, '', validToken))
+		).rejects.toMatchObject({ status: 413 });
+		expect(gitMock.gitCommit).not.toHaveBeenCalled();
 	});
 
 	test('returns 400 when action is unknown', async () => {

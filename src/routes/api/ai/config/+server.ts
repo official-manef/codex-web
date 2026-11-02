@@ -8,8 +8,9 @@ import { EFFORTS, effortForProvider } from '$lib/reasoning';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async (event) => {
-	if (env.AI_ENABLED === 'true' || env.MCP_CLIENT_ENABLED === 'true')
-		await requireCapabilityAccess(event);
+	// Guarded even when both features are off: the answer still names provider ids and aliases,
+	// and a feature being disabled is not a reason to hand the catalog to an anonymous caller.
+	await requireCapabilityAccess(event, { surface: 'byok' });
 	try {
 		const ai = aiSettings(env);
 		const servers = mcpConnections(env);

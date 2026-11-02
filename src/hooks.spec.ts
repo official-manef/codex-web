@@ -32,6 +32,21 @@ test('auth responses preserve no-referrer, prevent caching and use a server-crea
 	expect(current.locals.requestId).toMatch(/^[0-9a-f-]{36}$/);
 });
 
+test('HSTS is sent for an HTTPS request and withheld over plain HTTP', async () => {
+	const resolve = async () => new Response(null, { status: 200 });
+	const secure = await handle({
+		event: { ...event(), url: new URL('https://app.example/') },
+		resolve
+	});
+	expect(secure.headers.get('strict-transport-security')).toBe('max-age=31536000');
+	// A dev server on http:// must not pin the browser to a scheme it cannot serve.
+	const plain = await handle({
+		event: { ...event(), url: new URL('http://localhost:5173/') },
+		resolve
+	});
+	expect(plain.headers.get('strict-transport-security')).toBeNull();
+});
+
 test('unexpected server errors expose correlation data without provider exceptions or request secrets', async () => {
 	const log = vi.spyOn(console, 'error').mockImplementation(() => {});
 	const current = event();

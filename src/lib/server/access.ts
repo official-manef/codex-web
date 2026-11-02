@@ -26,6 +26,7 @@ export function requireAppOrigin(request: Request, origin: string | undefined): 
 }
 
 // ponytail: per-process burst protection; use an edge/distributed limiter before scaling replicas.
+const BURST_BUCKETS = 1024;
 const buckets = new Map<string, { count: number; expires: number }>();
 export function consumeBurst(key: string, now = Date.now()): void {
 	for (const [id, bucket] of buckets) if (bucket.expires <= now) buckets.delete(id);
@@ -34,13 +35,42 @@ export function consumeBurst(key: string, now = Date.now()): void {
 	if (bucket) {
 		if (bucket.count >= 20) error(429, 'Too many requests. Try again in a minute.');
 		bucket.count++;
-	} else {
-		if (buckets.size >= 1024) error(503, 'The service is busy. Try again shortly.');
-		buckets.set(id, { count: 1, expires: now + 60_000 });
+		return;
 	}
+	// Evict the oldest bucket rather than refusing everyone: a full table once answered 503 for
+	// every new caller, so one attacker filling it took the whole deployment down.
+	if (buckets.size >= BURST_BUCKETS) {
+		const oldest = buckets.keys().next().value;
+		if (oldest !== undefined) buckets.delete(oldest);
+	}
+	buckets.set(id, { count: 1, expires: now + 60_000 });
 }
 
-export async function requireCapabilityAccess(event: RequestEvent): Promise<void> {
+/**
+ * Which capability a route is asking about.
+ *
+ * `byok` is the AI surface (chat, BYOK config): on a deployment without sign-in it may be used
+ * anonymously from this application's own origin, because the caller brings their own provider
+ * key and there is no account to protect. Every other surface — git, MCP apps, the MANEF bridge,
+ * remote tools, automations — reveals or mutates this machine, so it always needs an identity:
+ * an operator bearer token or a signed-in session. There is deliberately no global
+ * `ALLOW_ANONYMOUS_CAPABILITIES` switch: a deployment-wide flag is exactly the shape of the bug
+ * it would reintroduce, where one surface's allowance covered routes that never asked for it.
+ */
+export type CapabilitySurface = 'byok';
+
+/** `AUTH_ENABLED` is parsed once and strictly: anything else is operator error, not "off". */
+function authEnabled(value: string | undefined): boolean {
+	if (value === undefined || value === '' || value === 'false') return false;
+	if (value === 'true') return true;
+	error(503, 'AUTH_ENABLED must be true or false.');
+}
+
+export async function requireCapabilityAccess(
+	event: RequestEvent,
+	options: { surface?: CapabilitySurface } = {}
+): Promise<void> {
+	const enabled = authEnabled(env.AUTH_ENABLED);
 	if (event.request.method !== 'GET') requireAppOrigin(event.request, publicEnv.PUBLIC_SITE_URL);
 	const authorization = event.request.headers.get('authorization') ?? '';
 	const configured = env.CAPABILITY_ACCESS_TOKEN;
@@ -52,11 +82,17 @@ export async function requireCapabilityAccess(event: RequestEvent): Promise<void
 		consumeBurst(`operator:${configured}`);
 		return;
 	}
-	if (env.AUTH_ENABLED !== 'true' && !configured) {
-		// When auth is not enabled on this deployment, BYOK requests from this application's
-		// own origin are permitted without a sign-in session, burst-protected by client address.
-		const ip = (event.getClientAddress?.() ?? 'anonymous') || 'anonymous';
-		consumeBurst(`anon:${ip}`);
+	if (!enabled && !configured && options.surface === 'byok') {
+		// No sign-in and no operator token: the BYOK surface is open to this application's own
+		// origin only, burst-protected by client address. See `CapabilitySurface` above.
+		//
+		// A GET is the catalogue read (`/api/ai/config`), which costs a few hundred bytes and no
+		// upstream call, and the shell asks for it on every surface it opens. Counting it against
+		// the same 20/minute budget as a chat turn answered 429 after twenty screen switches.
+		if (event.request.method !== 'GET') {
+			const ip = (event.getClientAddress?.() ?? 'anonymous') || 'anonymous';
+			consumeBurst(`anon:${ip}`);
+		}
 		return;
 	}
 	const session = await readSession(event);

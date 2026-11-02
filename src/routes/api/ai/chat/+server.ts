@@ -27,7 +27,7 @@ function policy(source: Record<string, string | undefined>) {
 
 export const POST: RequestHandler = async (event) => {
 	if (env.AI_ENABLED !== 'true') error(404, 'AI chat is disabled.');
-	await requireCapabilityAccess(event);
+	await requireCapabilityAccess(event, { surface: 'byok' });
 	// A broken model catalog or platform flag is the operator's fault, not the caller's: answer
 	// the same 503 `/api/ai/config` returns instead of letting `parseChat` report it as a 400.
 	try {

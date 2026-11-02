@@ -68,7 +68,7 @@ test('capability access requires a session or configured operator token and same
 	await expect(requireCapabilityAccess(event())).resolves.toBeUndefined();
 });
 
-test('when auth is disabled and no operator token is set, anonymous same-origin access is permitted', async () => {
+test('anonymous access is scoped to the BYOK surface, never to every capability route', async () => {
 	state.env.AUTH_ENABLED = 'false';
 	const event = (origin = 'https://app.example') =>
 		({
@@ -78,10 +78,44 @@ test('when auth is disabled and no operator token is set, anonymous same-origin 
 			}),
 			getClientAddress: () => '127.0.0.1'
 		}) as unknown as RequestEvent;
-	await expect(requireCapabilityAccess(event())).resolves.toBeUndefined();
-	await expect(requireCapabilityAccess(event('https://evil.example'))).rejects.toMatchObject({
-		status: 403
+	// A surface that does not opt in (git, MCP apps, the MANEF bridge) needs an identity.
+	await expect(requireCapabilityAccess(event())).rejects.toMatchObject({ status: 401 });
+	// The BYOK surface still works without sign-in, but only from this application's origin.
+	await expect(requireCapabilityAccess(event(), { surface: 'byok' })).resolves.toBeUndefined();
+	await expect(
+		requireCapabilityAccess(event('https://evil.example'), { surface: 'byok' })
+	).rejects.toMatchObject({ status: 403 });
+});
+
+test('an operator token configured on a no-auth deployment closes the anonymous BYOK path', async () => {
+	state.env.AUTH_ENABLED = 'false';
+	state.env.CAPABILITY_ACCESS_TOKEN = 'x'.repeat(32);
+	const event = {
+		request: new Request('https://app.example/api', {
+			method: 'POST',
+			headers: { origin: 'https://app.example' }
+		}),
+		getClientAddress: () => '127.0.0.1'
+	} as unknown as RequestEvent;
+	await expect(requireCapabilityAccess(event, { surface: 'byok' })).rejects.toMatchObject({
+		status: 401
 	});
+});
+
+test('an AUTH_ENABLED value that is not exactly true or false is a 503, never a silent false', async () => {
+	const event = {
+		request: new Request('https://app.example/api', {
+			method: 'POST',
+			headers: { origin: 'https://app.example' }
+		}),
+		getClientAddress: () => '127.0.0.1'
+	} as unknown as RequestEvent;
+	for (const value of ['TRUE', '1', 'yes', 'true ', ' false']) {
+		state.env.AUTH_ENABLED = value;
+		await expect(requireCapabilityAccess(event, { surface: 'byok' })).rejects.toMatchObject({
+			status: 503
+		});
+	}
 });
 
 test('burst protection is isolated by identity and expires', () => {
@@ -166,21 +200,22 @@ test('a non-numeric content-length is rejected rather than coerced', async () =>
 	await expect(readJsonBody(request)).rejects.toMatchObject({ status: 413 });
 });
 
-test('the bucket table itself is capped, so unauthenticated keys cannot grow it forever', () => {
+test('a full bucket table evicts the oldest caller instead of refusing every new one', () => {
 	// The bucket table is module-global with no reset hook, so this test fills it to the ceiling
 	// rather than assuming an empty start: earlier tests in this file leave live buckets behind.
 	const now = Date.now();
-	let filled = 0;
-	for (; filled < 2000; filled++) {
+	for (let i = 0; i < 2000; i++) {
 		try {
-			consumeBurst(`flood-${filled}`, now);
+			consumeBurst(`flood-${i}`, now);
 		} catch {
-			break;
+			// A caller already spent by an earlier fill is expected; the point is that filling the
+			// table never throws for a brand-new key.
+			throw new Error('a new key must never be refused because the table is full');
 		}
 	}
-	expect(filled).toBeLessThanOrEqual(1024);
-	// Once full, a brand-new key is refused instead of evicting an attacker-chosen victim.
-	expect(() => consumeBurst('flood-overflow', now)).toThrow();
-	// Expiry reclaims the table, so the ceiling is per-minute rather than permanent.
+	// Overflow past the ceiling keeps admitting new callers by dropping the oldest bucket, so
+	// one attacker cannot take the limiter down for everyone else.
+	expect(() => consumeBurst('flood-after-ceiling', now)).not.toThrow();
+	// Expiry still reclaims the table, so the ceiling is per-minute rather than permanent.
 	expect(() => consumeBurst('flood-overflow', now + 60_000)).not.toThrow();
 });
