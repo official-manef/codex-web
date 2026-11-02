@@ -34,6 +34,11 @@ export interface StreamServerChatResult {
 	error: string | null;
 	/** True when the caller's own signal stopped the stream; the partial text is kept. */
 	aborted?: boolean;
+	/**
+	 * Tool activity seen on the wire, in arrival order. Forwarded so a caller can render or
+	 * persist it; nothing in this module acts on it.
+	 */
+	toolEvents?: Array<{ name: string; decision: string; text?: string }>;
 }
 
 /**
@@ -96,6 +101,11 @@ export async function streamServerChat(
 	let buffer = '';
 	let streamError: string | null = null;
 	let sawDone = false;
+	const toolEvents: Array<{ name: string; decision: string; text?: string }> = [];
+	// Only present when something was actually seen, so callers that never enable tools keep
+	// the exact result shape they had before.
+	const withTools = (result: StreamServerChatResult): StreamServerChatResult =>
+		toolEvents.length > 0 ? { ...result, toolEvents } : result;
 
 	function handleLine(line: string): void {
 		const trimmed = line.trim();
@@ -105,6 +115,11 @@ export async function streamServerChat(
 			if (event.type === 'text') {
 				accumulated += event.text;
 				onChunk(accumulated);
+			} else if (event.type === 'tool') {
+				// `type:'tool'` used to be dropped here, so tool activity never reached the view
+				// and nothing was ever saved. It is now forwarded; wiring it into Chat.svelte is
+				// still open.
+				toolEvents.push({ name: event.name, decision: event.decision, text: event.text });
 			} else if (event.type === 'error') {
 				streamError = event.message;
 			} else if (event.type === 'done') {
@@ -130,7 +145,7 @@ export async function streamServerChat(
 			const step = await Promise.race([reader.read(), aborted]);
 			if (step === 'aborted') {
 				await reader.cancel().catch(() => undefined);
-				return { text: accumulated, error: null, aborted: true };
+				return withTools({ text: accumulated, error: null, aborted: true });
 			}
 			if (step.done) break;
 			buffer += decoder.decode(step.value, { stream: true });
@@ -141,7 +156,7 @@ export async function streamServerChat(
 		}
 	} catch (error) {
 		// A caller-initiated stop is a stated outcome, not a crash: keep what arrived.
-		if (signal?.aborted) return { text: accumulated, error: null, aborted: true };
+		if (signal?.aborted) return withTools({ text: accumulated, error: null, aborted: true });
 		throw error;
 	} finally {
 		reader.releaseLock();
@@ -150,19 +165,19 @@ export async function streamServerChat(
 	// The last frame often has no trailing newline; it used to be silently dropped.
 	if (buffer) handleLine(buffer);
 
-	if (streamError) return { text: accumulated, error: streamError };
-	if (signal?.aborted) return { text: accumulated, error: null, aborted: true };
+	if (streamError) return withTools({ text: accumulated, error: streamError });
+	if (signal?.aborted) return withTools({ text: accumulated, error: null, aborted: true });
 	if (!sawDone) {
-		return {
+		return withTools({
 			text: accumulated,
 			error: 'The connection closed before the reply finished. Send the message again to retry.'
-		};
+		});
 	}
 
-	return {
+	return withTools({
 		text: accumulated,
 		error: null
-	};
+	});
 }
 
 export { cloudAvailable, cloudTurn };

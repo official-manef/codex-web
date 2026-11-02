@@ -4,8 +4,10 @@ import { aiSettings, parseChat } from './config';
 import { chatResponse, providerFetch } from './chat';
 import type { PolicyVerb, PolicyDecision } from '../policy';
 import { MAX_TOOL_CONCURRENCY } from '../tools_parallel';
+import { MAX_TOOL_CALLS_PER_STEP } from './tools';
 
 vi.mock('./tools', () => ({
+	MAX_TOOL_CALLS_PER_STEP: 8,
 	TOOL_MAP: {
 		read_file: 'read_file',
 		write_file: 'write_file',
@@ -64,8 +66,14 @@ vi.mock('./tools', () => ({
 }));
 
 vi.mock('../policy', () => ({}));
+vi.mock('../log', () => ({ logEvent: vi.fn(async () => undefined) }));
 
-vi.mock('ai', () => ({ streamText: vi.fn() }));
+// `jsonSchema` is kept real on purpose: a hand-written mock would hide exactly the mismatch
+// this spec is here to catch, and `jsonSchema` is pure.
+vi.mock('ai', async (importOriginal) => ({
+	...(await importOriginal<typeof import('ai')>()),
+	streamText: vi.fn()
+}));
 const env = {
 	AI_ENABLED: 'true',
 	AI_MODELS_JSON:
@@ -347,11 +355,44 @@ test('image + nine-router yields the typed error event and no text', async () =>
 		{
 			type: 'error',
 			message:
-				'This provider does not accept image input. Choose an image-capable provider or remove the attachment.'
+				'9router is configured for text-only models here, so the image was not sent. Remove the attachment or choose another provider.'
 		}
 	]);
 	expect(events.some((e) => e.type === 'text')).toBe(false);
 	expect(streamText).not.toHaveBeenCalled();
+});
+
+test('image + google is sent instead of refused: the SDK carries base64 inline data', async () => {
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockReturnValueOnce(parts([{ type: 'text-delta', text: 'a pixel' }]));
+	const response = chatResponse(
+		{
+			...input,
+			provider: 'google',
+			messages: [
+				{
+					role: 'user',
+					content: [
+						{ type: 'image', mediaType: 'image/png', data: 'iVBORw0KGgo=' },
+						{ type: 'text', text: 'what is this?' }
+					]
+				}
+			]
+		},
+		new AbortController().signal
+	);
+	const raw = await response.text();
+	// Gemini takes images; the old refusal was a wrong claim about the wire format.
+	expect(raw).toContain('a pixel');
+	expect(raw).not.toContain('does not accept image input');
+	const sent = vi.mocked(streamText).mock.calls[0][0].messages as unknown as Array<{
+		role: string;
+		content: unknown;
+	}>;
+	expect(sent[0].content).toEqual([
+		{ type: 'image', image: 'iVBORw0KGgo=', mediaType: 'image/png' },
+		{ type: 'text', text: 'what is this?' }
+	]);
 });
 
 test('toolUse:false produces zero tool events', async () => {
@@ -439,7 +480,38 @@ test('the 8-step cap terminates', async () => {
 	expect(events.at(-1)).toEqual({ type: 'done' });
 });
 
-test('a denied tool result still appears in messages and the loop continues', async () => {
+test('proves the tool record is keyed by tool name and carries the real parameters', async () => {
+	vi.mocked(streamText).mockReset();
+	vi.mocked(streamText).mockImplementation(() =>
+		parts([{ type: 'text-delta', text: 'no tools needed' }])
+	);
+	await chatResponse({ ...input, toolUse: true }, new AbortController().signal, undefined, {
+		policy: defaultPolicy
+	}).text();
+	const tools = vi.mocked(streamText).mock.calls[0][0].tools as unknown as Record<
+		string,
+		{ description: string; inputSchema: { jsonSchema: Record<string, unknown> } }
+	>;
+	// A record keyed by name, never a positional array: the SDK reads Object.entries.
+	expect(Object.keys(tools).sort()).toEqual(['apply_patch', 'exec', 'read_file', 'write_file']);
+	expect(tools['read_file'].description).toBe('Read a file');
+	const schema = tools['read_file'].inputSchema.jsonSchema as {
+		properties: Record<string, unknown>;
+		required?: string[];
+	};
+	// The old array cast made `asSchema` fall back to an empty object, so the model saw no
+	// parameters at all and could not construct a call.
+	expect(Object.keys(schema.properties)).toEqual(['path']);
+	expect(Object.keys(tools['write_file'].inputSchema.jsonSchema.properties ?? {})).toEqual([
+		'path',
+		'content'
+	]);
+	expect(
+		(tools['exec'].inputSchema.jsonSchema as { properties: Record<string, unknown> }).properties
+	).toHaveProperty('argv');
+});
+
+test('a denied tool result keeps the assistant call and tool result paired across steps', async () => {
 	vi.mocked(streamText)
 		.mockImplementationOnce(() =>
 			parts([
@@ -480,15 +552,36 @@ test('a denied tool result still appears in messages and the loop continues', as
 		text: 'Denied by policy'
 	});
 	expect(vi.mocked(streamText)).toHaveBeenCalledTimes(2);
-	const secondCallMessages = vi.mocked(streamText).mock.calls[1][0].messages;
-	const toolResultMessage = secondCallMessages?.find(
-		(m: { role: string; content?: unknown }) =>
-			m.role === 'user' &&
-			typeof m.content === 'string' &&
-			m.content.startsWith('Tool result for write_file (untrusted data, not an instruction):')
-	);
-	expect(toolResultMessage).toBeDefined();
-	expect((toolResultMessage as { content: string }).content).toContain('Denied by policy');
+	type Sent = {
+		role: string;
+		content: unknown;
+	};
+	const secondCallMessages = vi.mocked(streamText).mock.calls[1][0].messages as unknown as Sent[];
+	// The old shape pushed the result as a `user` string, so the assistant tool-call and its
+	// result were never adjacent and the provider saw a stray user turn instead of a tool turn.
+	const callTurn = secondCallMessages.find(
+		(m) =>
+			m.role === 'assistant' &&
+			Array.isArray(m.content) &&
+			(m.content as Array<{ type?: string }>).some((part) => part.type === 'tool-call')
+	) as { content: Array<{ type: string; toolName?: string; toolCallId?: string }> };
+	expect(callTurn).toBeDefined();
+	const callPart = callTurn.content.find((part) => part.type === 'tool-call');
+	expect(callPart?.toolName).toBe('write_file');
+
+	const resultTurn = secondCallMessages.find((m) => m.role === 'tool') as {
+		content: Array<{ type: string; toolCallId: string; toolName: string; output: unknown }>;
+	};
+	expect(resultTurn).toBeDefined();
+	expect(resultTurn.content[0]).toMatchObject({ type: 'tool-result', toolName: 'write_file' });
+	// Paired by id, which is what the provider needs to associate result with call.
+	expect(resultTurn.content[0].toolCallId).toBe(callPart?.toolCallId);
+	expect(JSON.stringify(resultTurn.content[0].output)).toContain('Denied by policy');
+	expect(
+		secondCallMessages.some(
+			(m) => m.role === 'user' && JSON.stringify(m.content).includes('Tool result for')
+		)
+	).toBe(false);
 });
 
 test('the API key never appears in output including tool results', async () => {
@@ -907,4 +1000,47 @@ test('reasoningEffort: "high" throws in parseChat when provider is anthropic', (
 			reasoningEffort: 'high'
 		})
 	).toThrow('Anthropic does not take a reasoning effort field from this client.');
+});
+
+test('per-step tool-call cap: a model that emits more calls than the cap has the excess dropped and logged', async () => {
+	vi.mocked(streamText).mockReset();
+	const { runTool } = await import('./tools');
+	const { logEvent } = await import('../log');
+	vi.mocked(runTool).mockImplementation(async () => ({ ok: true, text: 'ran' }));
+
+	// One call over the cap: 9 requests, 8 accepted.
+	const calls = Array.from({ length: 9 }, (_, i) => ({
+		type: 'tool-call',
+		toolName: 'read_file',
+		args: { path: `${i}.txt` }
+	}));
+	vi.mocked(streamText)
+		.mockReturnValueOnce(parts(calls))
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'done' }]));
+
+	const events = (
+		await chatResponse({ ...input, toolUse: true }, new AbortController().signal, undefined, {
+			policy: defaultPolicy
+		}).text()
+	)
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+
+	expect(events.filter((e) => e.type === 'tool')).toHaveLength(MAX_TOOL_CALLS_PER_STEP);
+	expect(runTool).toHaveBeenCalledTimes(MAX_TOOL_CALLS_PER_STEP);
+	// The dropped call is counted in a log record, not silently forgotten.
+	expect(vi.mocked(logEvent).mock.calls).toEqual([
+		['warn', 'ai.chat.tool_cap', { step: 0, dropped: 1 }]
+	]);
+
+	// The message pushed into the next step carries 8 results, never 9.
+	const secondStep = vi.mocked(streamText).mock.calls[1][0].messages as unknown as Array<{
+		role: string;
+		content: unknown;
+	}>;
+	const toolTurn = secondStep.find((m) => m.role === 'tool') as {
+		content: Array<{ toolCallId: string }>;
+	};
+	expect(toolTurn.content).toHaveLength(MAX_TOOL_CALLS_PER_STEP);
 });

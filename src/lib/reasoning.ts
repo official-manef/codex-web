@@ -1,4 +1,7 @@
-// This decides what to tell the user, not what to send; the route and the provider adapter are where it must actually be enforced, and only openai enforces it today.
+// Provider refusals below are a POLICY choice of this client, not limitations of the protocol or
+// the endpoint: the 9router endpoint is OpenAI-compatible and would accept the field, but its
+// approved catalog is not vetted for it, so it stays refused on purpose. Enforcing the policy
+// for openai happens in the route and provider adapter.
 
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
@@ -21,7 +24,9 @@ export function parseEffort(value: unknown): ReasoningEffort | null {
 const PROVIDER_REFUSALS: Record<string, string> = {
 	anthropic: 'Anthropic does not take a reasoning effort field from this client.',
 	google: 'Google does not take a reasoning effort field from this client.',
-	'nine-router': '9router does not take a reasoning effort field from this client.'
+	// Policy, not protocol: the endpoint is OpenAI-compatible and would accept `reasoningEffort`;
+	// its approved models are simply not cleared for it here.
+	'nine-router': '9router is configured without reasoning effort here (client policy).'
 };
 
 export function effortForProvider(

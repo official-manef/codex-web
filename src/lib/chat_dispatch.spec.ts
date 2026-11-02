@@ -218,6 +218,84 @@ describe('chat backend resolution and dispatch', () => {
 		expect(result.error).toBe('Quota exceeded for provider');
 	});
 
+	it('forwards tool frames from the stream instead of dropping them', async () => {
+		const encoder = new TextEncoder();
+		const payload =
+			[
+				JSON.stringify({ type: 'tool', name: 'read_file', decision: 'allow', text: 'contents' }),
+				JSON.stringify({ type: 'text', text: 'Read it.' }),
+				JSON.stringify({ type: 'tool', name: 'write_file', decision: 'deny' }),
+				JSON.stringify({ type: 'done' })
+			].join('\n') + '\n';
+		const fetcher = vi.fn().mockResolvedValue(
+			new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(encoder.encode(payload));
+						controller.close();
+					}
+				}),
+				{ status: 200 }
+			)
+		);
+
+		const result = await streamServerChat(
+			{
+				provider: 'openai',
+				model: 'gpt-4o',
+				apiKey: 'k',
+				messages: [{ role: 'user', content: 'hi' }],
+				toolUse: true
+			},
+			() => {},
+			undefined,
+			fetcher as unknown as typeof fetch
+		);
+
+		// Tool activity used to vanish here, so nothing could be shown or saved.
+		expect(result.toolEvents).toEqual([
+			{ name: 'read_file', decision: 'allow', text: 'contents' },
+			{ name: 'write_file', decision: 'deny', text: undefined }
+		]);
+		expect(result.text).toBe('Read it.');
+		expect(result.error).toBeNull();
+	});
+
+	it('omits toolEvents entirely when the stream had no tool frame', async () => {
+		const encoder = new TextEncoder();
+		const fetcher = vi.fn().mockResolvedValue(
+			new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(
+							encoder.encode(
+								JSON.stringify({ type: 'text', text: 'plain' }) +
+									'\n' +
+									JSON.stringify({ type: 'done' }) +
+									'\n'
+							)
+						);
+						controller.close();
+					}
+				}),
+				{ status: 200 }
+			)
+		);
+		const result = await streamServerChat(
+			{
+				provider: 'openai',
+				model: 'gpt-4o',
+				apiKey: 'k',
+				messages: [{ role: 'user', content: 'hi' }]
+			},
+			() => {},
+			undefined,
+			fetcher as unknown as typeof fetch
+		);
+		expect(result).not.toHaveProperty('toolEvents');
+		expect(result.text).toBe('plain');
+	});
+
 	it('falls back to stub and returns "No provider configured" when neither backend is available', async () => {
 		const backend = resolveChatBackend({
 			cloudAvailable: false,

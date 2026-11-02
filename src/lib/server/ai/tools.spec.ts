@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { PolicyDecision, PolicyVerb } from '../policy';
 import {
+	MAX_TOOL_CALLS_PER_STEP,
 	parseToolRequest,
 	runTool,
 	TOOL_MAP,
@@ -50,6 +51,13 @@ describe('TOOL_MAP and TOOL_SPECS', () => {
 			expect(Array.isArray(spec.parameters.required)).toBe(true);
 			expect(typeof spec.parameters.properties).toBe('object');
 		}
+	});
+
+	test('the per-step tool-call cap is a small positive ceiling, not a no-op', () => {
+		// Results are fed back into the next request, so the number must be a real bound.
+		expect(Number.isInteger(MAX_TOOL_CALLS_PER_STEP)).toBe(true);
+		expect(MAX_TOOL_CALLS_PER_STEP).toBeGreaterThan(0);
+		expect(MAX_TOOL_CALLS_PER_STEP).toBeLessThanOrEqual(16);
 	});
 });
 

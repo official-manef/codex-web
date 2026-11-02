@@ -24,6 +24,11 @@ const MAX_PATCH_LENGTH = 200_000;
 const MAX_EXEC_ARGV_ENTRIES = 32;
 const MAX_EXEC_ARG_LENGTH = 200;
 const MAX_OUTPUT_CHARS = 8_000;
+/**
+ * Per-step ceiling on tool calls a model may trigger. Tool results are pushed back into the next
+ * request, so an uncapped count lets the model grow its own context for eight steps.
+ */
+export const MAX_TOOL_CALLS_PER_STEP = 8;
 const TRUNCATION_MARKER = '\n[truncated]';
 
 export const TOOL_SPECS: readonly {
