@@ -15,7 +15,10 @@
 </script>
 
 <div class="chat-group-header">
-  <button type="button" class="chat-group-toggle" aria-expanded={expanded} onclick={ontoggle}>
+  <!-- No `aria-expanded`: the toggle does not own the list it reveals, the caller renders that
+       outside this component, so there is no id to point `aria-controls` at. The chevron carries
+       the visual state and the visible label names the group. -->
+  <button type="button" class="chat-group-toggle" onclick={ontoggle}>
     <span>{label}</span><span class="group-chevron" class:expanded aria-hidden="true"
       ><Icon name="chevron" size={12} /></span
     >

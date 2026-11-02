@@ -3,13 +3,18 @@
 @import 'shadcn-svelte/tailwind.css';
 @import '@fontsource-variable/inter';
 @import '../app-laya.css';
-/* The workspace shell lives outside src/, so Tailwind must scan it explicitly. */
+/* The slices live outside src/, so Tailwind must scan them explicitly. */
 @source '../../slices/workspace-shell';
+@source '../../slices/cloud';
+@source '../../slices/workspace-surface';
 @source '../lib';
 
 @custom-variant dark (&:is(.dark *));
 
+/* Light theme is the default and reachable: drop `.dark` from the root element and every token
+   below resolves here. Kept as one block so each token has exactly one light definition. */
 :root {
+	color-scheme: light;
 	--radius: 0.75rem;
 	--background: oklch(0.985 0 0);
 	--foreground: oklch(0.145 0 0);
@@ -28,33 +33,29 @@
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-	--app-touch-target: 2.75rem;
-	--app-topbar-height: 3.5rem;
-	--app-mobile-dock-height: 5rem;
-	--app-mobile-dock-clearance: calc(
-		var(--app-mobile-dock-height) + env(safe-area-inset-bottom, 0px) + 1rem
-	);
-	--app-feature-grid-compact-min: 15rem;
-	--app-feature-grid-comfortable-min: 18rem;
-	--app-feature-grid-wide-min: 22rem;
-	--app-rail-card-max: 18rem;
-	/* shell tokens, added alongside the existing shadcn tokens */
-	--shell-rail: oklch(0.24 0 0);
-	--shell-surface: oklch(0.2 0 0);
-	--shell-surface-raised: oklch(0.26 0 0);
-	--shell-border: oklch(0.3 0 0);
-	--shell-fg: oklch(0.94 0 0);
-	--shell-fg-muted: oklch(0.72 0 0);
-	--shell-accent: oklch(0.62 0.16 300);
-	--shell-accent-soft: oklch(0.62 0.16 300 / 0.14);
-	--shell-warn: oklch(0.75 0.13 60);
-	--shell-rail-width: 3.25rem;
-	--shell-sidebar-width: 15rem;
-	--shell-sidebar-width-narrow: 13.75rem;
-	--shell-titlebar-height: 2.6875rem;
+	/* 4.58:1 against the light page. */
+	--ring: oklch(0.556 0 0);
+	--chart-1: oklch(0.87 0 0);
+	--chart-2: oklch(0.556 0 0);
+	--chart-3: oklch(0.439 0 0);
+	--chart-4: oklch(0.371 0 0);
+	--chart-5: oklch(0.269 0 0);
+	--sidebar: oklch(0.985 0 0);
+	--sidebar-foreground: oklch(0.145 0 0);
+	--sidebar-primary: oklch(0.205 0 0);
+	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-accent: oklch(0.97 0 0);
+	--sidebar-accent-foreground: oklch(0.205 0 0);
+	--sidebar-border: oklch(0.922 0 0);
+	--sidebar-ring: oklch(0.556 0 0);
 }
-.dark {
+/* Dark exists once, here. `:root:has(.dark)` is in the selector list because bits-ui portals
+   dropdowns, popovers and dialogs onto `<body>` — outside the element that carries `.dark` — and
+   a portalled menu resolving the light palette above would paint itself white. Matching on the
+   root also keeps `html`'s own background dark, so overscroll does not flash light. A build
+   without `.dark` falls back to light everywhere. */
+:is(.dark, :root:has(.dark)) {
+	color-scheme: dark;
 	--background: oklch(0.145 0 0);
 	--foreground: oklch(0.985 0 0);
 	--card: oklch(0.205 0 0);
@@ -72,13 +73,26 @@
 	--destructive: oklch(0.704 0.191 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
+	/* 4.68:1 on `--color-panel-2`, 3.79:1 on the darkest surface a control sits on
+	   (`--color-composer` #353535). It is also drawn at full opacity, not `/50`. */
+	--ring: oklch(0.65 0 0);
+	--chart-1: oklch(0.87 0 0);
+	--chart-2: oklch(0.556 0 0);
+	--chart-3: oklch(0.439 0 0);
+	--chart-4: oklch(0.371 0 0);
+	--chart-5: oklch(0.269 0 0);
+	--sidebar: oklch(0.205 0 0);
+	--sidebar-foreground: oklch(0.985 0 0);
+	--sidebar-primary: oklch(0.488 0.243 264.376);
+	--sidebar-primary-foreground: oklch(0.985 0 0);
+	--sidebar-accent: oklch(0.269 0 0);
+	--sidebar-accent-foreground: oklch(0.985 0 0);
+	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-ring: oklch(0.65 0 0);
 }
+/* One theme block for the whole app. `inline` keeps the shadcn utilities pointing at the
+   custom properties, which is what lets `.dark` override them per element. */
 @theme inline {
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -97,11 +111,72 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Literal palette. These have no light/dark pair, so they are emitted once and read through
+   `var(--color-page)` style custom properties in the slices. Each value is one definition:
+   changing a surface means changing this line, not a second copy further down the file.
+   `static` because the slices read these from scoped `<style>` blocks, which Tailwind does not
+   scan for `var()` usage — without it the unused-looking ones would be pruned from `:root`
+   and every consumer would fall back to nothing. */
+@theme static {
+	/* Base radius is 0.75rem; controls step down from it, large surfaces step up. */
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
+	--radius-card: 6px;
+
+	--color-page: #181818;
+	--color-panel: #1b1b1b;
+	--color-panel-2: #262626;
+	--color-hover: #2c2c2c;
+	/* Selection fill on the rail: 3.06:1 against `--color-frame`, 4.51:1 for `--color-ink`
+	   text on top. Narrow band — a lighter fill passes the marker check and fails the text. */
+	--color-nav-active: #6b6b6b;
+	--color-tab-active: #292929;
+	/* Active tab outline: 3.11:1 against the tab it draws on. */
+	--color-tab-active-border: #747474;
+	--color-rail-separator: #333333;
+	/* Accent used for focus outlines and the send control: 4.05:1 on `--color-panel-2`,
+	   3.29:1 on `--color-composer`. `--color-ink` on top of it is 3.16:1. */
+	--color-execution: #966ee2;
+	--color-approval: #e4a16f;
+	/* Hover fill for the send control, which carries `--color-ink` text: 4.73:1. */
+	--color-execution-hover: #7a4ec9;
+	--color-composer: #353535;
+	--color-frame: #202020;
+
+	--color-ink: #ececec;
+	--color-ink-2: #b2b2b2;
+	--color-ink-3: #aaaaaa;
+
+	--color-line: #2b2b2b;
+	--color-line-2: #242424;
+	/* Boundary of an interactive control (`.field`). Decorative dividers, cards and dialog
+	   frames keep `--color-line`; this one clears 3:1 against the panel it sits on. */
+	--color-control-border: #7a7a7a;
+
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+	--font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, sans-serif;
 }
 @layer base {
-	* {
-		@apply border-border outline-ring/50;
-	}
 	html {
 		min-width: 100%;
 		background: var(--background);
@@ -111,7 +186,7 @@
 		margin: 0;
 		min-width: 100%;
 		min-height: 100dvh;
-		font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+		font-family: var(--font-sans);
 	}
 	button,
 	a,
@@ -121,109 +196,6 @@
 }
 
 @layer components {
-	.app-topbar {
-		position: sticky;
-		top: 0;
-		z-index: 30;
-		display: flex;
-		min-height: calc(var(--app-topbar-height) + env(safe-area-inset-top, 0px));
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		border-bottom: 1px solid var(--border);
-		background: color-mix(in oklab, var(--background) 94%, transparent);
-		padding: env(safe-area-inset-top, 0px) 1rem 0;
-		backdrop-filter: blur(12px);
-	}
-
-	.app-breadcrumb {
-		min-width: 0;
-		flex: 1;
-	}
-
-	.app-breadcrumb ol {
-		display: flex;
-		min-width: 0;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.875rem;
-	}
-
-	.app-breadcrumb li {
-		min-width: 0;
-	}
-	.app-breadcrumb [aria-current='page'] {
-		font-weight: 600;
-		color: var(--foreground);
-	}
-
-	.app-workspace-trigger {
-		display: inline-flex;
-		min-height: var(--app-touch-target);
-		max-width: 11rem;
-		align-items: center;
-		gap: 0.5rem;
-		border-radius: var(--radius-lg);
-		padding-inline: 0.625rem;
-		color: var(--muted-foreground);
-	}
-
-	.app-workspace-trigger:hover {
-		background: var(--muted);
-		color: var(--foreground);
-	}
-
-	.app-content-scroll {
-		width: 100%;
-		min-width: 0;
-		min-height: 0;
-		flex: 1;
-		overflow-x: hidden;
-		overflow-y: auto;
-		overscroll-behavior-y: contain;
-		scroll-snap-type: y proximity;
-		-webkit-overflow-scrolling: touch;
-		padding: 1rem 1rem var(--app-mobile-dock-clearance);
-		scrollbar-width: none;
-	}
-
-	.app-content-scroll::-webkit-scrollbar,
-	.app-horizontal-rail::-webkit-scrollbar,
-	.app-segmented-control::-webkit-scrollbar,
-	.app-mobile-dock::-webkit-scrollbar {
-		display: none;
-	}
-
-	.app-feature-grid {
-		--app-feature-grid-min: var(--app-feature-grid-comfortable-min);
-		display: grid;
-		min-width: 0;
-		gap: 1rem;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--app-feature-grid-min)), 1fr));
-	}
-
-	.app-feature-grid[data-density='compact'] {
-		--app-feature-grid-min: var(--app-feature-grid-compact-min);
-	}
-	.app-feature-grid[data-density='wide'] {
-		--app-feature-grid-min: var(--app-feature-grid-wide-min);
-	}
-
-	.app-horizontal-rail {
-		display: flex;
-		min-width: 0;
-		gap: 0.75rem;
-		overflow-x: auto;
-		scroll-snap-type: x mandatory;
-		overscroll-behavior-x: contain;
-		scrollbar-width: none;
-	}
-
-	.app-horizontal-rail > * {
-		flex: 0 0 min(78vw, var(--app-rail-card-max));
-		scroll-snap-align: start;
-	}
-
 	.app-segmented-control {
 		display: grid;
 		grid-auto-flow: column;
@@ -238,8 +210,12 @@
 		scrollbar-width: none;
 	}
 
+	.app-segmented-control::-webkit-scrollbar {
+		display: none;
+	}
+
 	.app-segmented-control > button {
-		min-height: var(--app-touch-target);
+		min-height: 2.75rem;
 		border-radius: var(--radius-lg);
 		padding-inline: 0.875rem;
 		font-size: 0.875rem;
@@ -252,14 +228,6 @@
 		background: var(--card);
 		color: var(--foreground);
 		box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 10%, transparent);
-	}
-
-	.app-viewport-snap-section {
-		min-width: 0;
-	}
-	.app-viewport-snap-section[data-snap-ready='true'] {
-		scroll-snap-align: start;
-		scroll-margin-top: calc(var(--app-topbar-height) + 1rem);
 	}
 
 	.app-signal-banner {
@@ -282,7 +250,7 @@
 
 	.app-disclosure-card > summary {
 		display: flex;
-		min-height: var(--app-touch-target);
+		min-height: 2.75rem;
 		cursor: pointer;
 		list-style: none;
 		align-items: center;
@@ -298,22 +266,6 @@
 	}
 	.app-disclosure-card[open] > summary svg {
 		transform: rotate(180deg);
-	}
-
-	.app-mobile-dock {
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: minmax(4.75rem, 1fr);
-		height: calc(var(--app-mobile-dock-height) + env(safe-area-inset-bottom, 0px));
-		overflow-x: auto;
-		overscroll-behavior-x: contain;
-		scroll-snap-type: x proximity;
-		scrollbar-width: none;
-		padding: 0.25rem 0.5rem env(safe-area-inset-bottom, 0px);
-	}
-
-	.app-mobile-dock > * {
-		scroll-snap-align: start;
 	}
 }
 
@@ -340,126 +292,6 @@
 	}
 }
 
-@media (min-width: 48rem) {
-	.app-horizontal-rail[data-desktop-grid='true'] {
-		display: grid;
-		grid-template-columns: repeat(
-			auto-fit,
-			minmax(min(100%, var(--app-feature-grid-compact-min)), 1fr)
-		);
-		overflow: visible;
-		scroll-snap-type: none;
-	}
-	.app-horizontal-rail[data-desktop-grid='true'] > * {
-		min-width: 0;
-	}
-}
-
-@media (min-width: 64rem) {
-	.app-topbar {
-		padding-inline: 1.75rem;
-	}
-	.app-content-scroll {
-		padding: 1.5rem 1.75rem 2rem;
-	}
-}
-
-/* ---- shell layout ---- */
-
-.shell-root {
-	display: grid;
-	grid-template-columns: var(--shell-rail-width) 1fr;
-	grid-template-rows: var(--shell-titlebar-height) 1fr;
-	height: 100dvh;
-	overflow: hidden;
-	background: var(--shell-surface);
-	color: var(--shell-fg);
-}
-
-.shell-rail {
-	grid-row: 1 / -1;
-	grid-column: 1;
-	border-right: 1px solid var(--shell-border);
-	background: var(--shell-rail);
-	display: flex;
-	flex-direction: column;
-}
-
-.shell-titlebar {
-	grid-row: 1;
-	grid-column: 2;
-	border-bottom: 1px solid var(--shell-border);
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding-inline: 0.75rem;
-}
-
-.shell-body {
-	grid-row: 2;
-	grid-column: 2;
-	display: grid;
-	grid-template-columns: var(--shell-sidebar-width) 1fr;
-	min-height: 0;
-}
-
-.shell-sidebar {
-	min-height: 0;
-	overflow: hidden auto;
-	border-right: 1px solid var(--shell-border);
-	background: var(--shell-surface);
-}
-
-.shell-primary {
-	min-width: 0;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-
-.shell-fg-muted {
-	color: var(--shell-fg-muted);
-}
-
-@media (max-width: 649px) {
-	.shell-root {
-		grid-template-columns: 45px 1fr;
-	}
-	.shell-body {
-		grid-template-columns: 1fr;
-		position: relative;
-	}
-	.shell-sidebar[data-mode='drawer_open'] {
-		position: absolute;
-		inset-block: 0;
-		inset-inline-start: 0;
-		width: min(calc(100vw - 55px), 22rem);
-		z-index: 20;
-		background: var(--shell-surface-raised);
-		display: block;
-	}
-	.shell-sidebar:not([data-mode='drawer_open']) {
-		display: none;
-	}
-}
-@media (min-width: 650px) {
-	.shell-root {
-		grid-template-columns: 52px 1fr;
-	}
-	.shell-sidebar {
-		width: var(--shell-sidebar-width-narrow);
-	}
-}
-@media (min-width: 850px) {
-	.shell-sidebar {
-		width: 220px;
-	}
-}
-@media (min-width: 1101px) {
-	.shell-sidebar {
-		width: 240px;
-	}
-}
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
@@ -481,171 +313,24 @@
 	}
 }
 
-/* ── workspace shell (ported from the Laya template) ──────────────────────────
-   Token block + element/base/control rules the copied shell slice expects.
-   Shell components own their own scoped <style>; this file supplies the
-   semantic variables and the shared element defaults. */
-@theme {
-	--color-page: #181818;
-	--color-panel: #1b1b1b;
-	--color-panel-2: #262626;
-	--color-hover: #2c2c2c;
-	--color-nav-active: #303030;
-	--color-tab-active: #292929;
-	--color-tab-active-border: #414141;
-	--color-rail-separator: #333333;
-	--color-execution: #8050ce;
-	--color-approval: #e4a16f;
-	--color-execution-hover: #9569db;
-	--color-composer: #353535;
-	--color-frame: #202020;
-
-	--color-ink: #ececec;
-	--color-ink-2: #b2b2b2;
-	--color-ink-3: #aaaaaa;
-
-	--color-line: #2b2b2b;
-	--color-line-2: #242424;
-
-	--radius-card: 6px;
-
-	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-
-	--font-sans: 'Segoe UI', 'Inter Variable', Arial, sans-serif;
-
-	--color-sidebar-ring: var(--sidebar-ring);
-
-	--color-sidebar-border: var(--sidebar-border);
-
-	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-
-	--color-sidebar-accent: var(--sidebar-accent);
-
-	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-
-	--color-sidebar-primary: var(--sidebar-primary);
-
-	--color-sidebar-foreground: var(--sidebar-foreground);
-
-	--color-sidebar: var(--sidebar);
-
-	--color-chart-5: var(--chart-5);
-
-	--color-chart-4: var(--chart-4);
-
-	--color-chart-3: var(--chart-3);
-
-	--color-chart-2: var(--chart-2);
-
-	--color-chart-1: var(--chart-1);
-
-	--color-ring: var(--ring);
-
-	--color-input: var(--input);
-
-	--color-border: var(--border);
-
-	--color-destructive: var(--destructive);
-
-	--color-accent-foreground: var(--accent-foreground);
-
-	--color-accent: var(--accent);
-
-	--color-muted-foreground: var(--muted-foreground);
-
-	--color-muted: var(--muted);
-
-	--color-secondary-foreground: var(--secondary-foreground);
-
-	--color-secondary: var(--secondary);
-
-	--color-primary-foreground: var(--primary-foreground);
-
-	--color-primary: var(--primary);
-
-	--color-popover-foreground: var(--popover-foreground);
-
-	--color-popover: var(--popover);
-
-	--color-card-foreground: var(--card-foreground);
-
-	--color-card: var(--card);
-
-	--color-foreground: var(--foreground);
-
-	--color-background: var(--background);
-
-	--radius-sm: calc(var(--radius) * 0.6);
-
-	--radius-md: calc(var(--radius) * 0.8);
-
-	--radius-lg: var(--radius);
-
-	--radius-xl: calc(var(--radius) * 1.4);
-
-	--radius-2xl: calc(var(--radius) * 1.8);
-
-	--radius-3xl: calc(var(--radius) * 2.2);
-
-	--radius-4xl: calc(var(--radius) * 2.6);
-}
-
-:root {
-	color-scheme: dark;
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.922 0 0);
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
-	--chart-1: oklch(0.87 0 0);
-	--chart-2: oklch(0.556 0 0);
-	--chart-3: oklch(0.439 0 0);
-	--chart-4: oklch(0.371 0 0);
-	--chart-5: oklch(0.269 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
-}
 html,
 body {
 	height: 100%;
 	overflow: hidden;
 	background: var(--color-page);
 	color: var(--color-ink);
-	font-family:
-		Inter,
-		-apple-system,
-		BlinkMacSystemFont,
-		'Segoe UI',
-		system-ui,
-		sans-serif;
+	font-family: var(--font-sans);
 	font-size: 13px;
 	line-height: 1.5;
 	-webkit-font-smoothing: antialiased;
 }
 
 @layer base {
+	/* One border default for the whole app. Everything that draws a box edge and does not set
+	   its own border colour lands on `--color-line`, the decorative divider value. */
 	* {
 		border-color: var(--color-line);
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 
 	a {
@@ -693,12 +378,6 @@ body {
 	::-webkit-scrollbar-thumb:hover {
 		background: #383838;
 	}
-	body {
-		@apply bg-background text-foreground;
-	}
-	html {
-		@apply font-sans;
-	}
 }
 
 @layer components {
@@ -706,7 +385,7 @@ body {
 		width: 100%;
 		background: var(--color-panel-2);
 		color: var(--color-ink);
-		border: 1px solid var(--color-line);
+		border: 1px solid var(--color-control-border);
 		border-radius: var(--radius-card);
 		padding: 8px 10px;
 		font-size: 12px;

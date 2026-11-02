@@ -199,8 +199,16 @@
     outputExpanded = false;
     focusedPane = focusedPane === "chat" ? "output" : "chat";
     await tick();
-    if (focusedPane === "chat") focusChatComposer();
-    else document.getElementById(`output-tab-${layout.output}`)?.focus();
+    if (focusedPane === "chat") {
+      // The chat region can still be `display: none` (stacked mode with the output filling the
+      // pane), and focusing a hidden node drops the user on `<body>`. Same fallback as the skip
+      // link: reopen chat instead of focusing nothing.
+      if (chatRegionVisible) focusChatComposer();
+      else void go("chat");
+      return;
+    }
+    const tab = document.getElementById(`output-tab-${layout.output}`);
+    (tab ?? document.getElementById("workspace"))?.focus({ preventScroll: true });
   }
   function stepTab(direction: -1 | 1) {
     if (!openTabs.length) return;
@@ -617,6 +625,17 @@
     if (!view?.loadScreen) throw new Error("Unknown workspace view");
     return (await view.loadScreen()).default;
   }
+  /**
+   * The panel a tab controls, or `undefined` when no such node is mounted. Chat panels live in the
+   * settings window and a screen without a loader has no panel at all; pointing `aria-controls`
+   * at a missing id is worse than omitting it.
+   */
+  function panelIdFor(id: OutputId): string | undefined {
+    const mounted =
+      (!!WorkspaceLauncher && id === launcher.id && TOOLS.includes(id)) ||
+      (hasFeatureScreen(id) && openTabs.includes(id));
+    return mounted ? `output-panel-${id}` : undefined;
+  }
   let layout = $state<WorkspaceLayout<OutputRoute>>({
     output: null,
     lastOutput: null,
@@ -650,14 +669,14 @@
   let trail = $state<NavigationTrail>({ entries: ["chat"], index: 0 });
   let focusedPane = $state<"chat" | "output">("chat");
   /**
-   * A dialog opened from a menubar item outlives the item that opened it, so the trigger has to be
-   * remembered while the menu is still on screen; otherwise bits-ui restores focus into a detached
-   * item and it lands on `<body>`.
+   * A dialog opened from a menubar item or the rail user menu outlives the item that opened it,
+   * so the trigger has to be remembered while the menu is still on screen; otherwise bits-ui
+   * restores focus into a detached item and it lands on `<body>`.
    */
   let overlayReturnFocus: HTMLElement | null = null;
   function rememberMenuTrigger() {
     const trigger = document.querySelector<HTMLElement>(
-      ".workspace-menubar-trigger[data-state='open']",
+      "[data-state='open'].workspace-menubar-trigger, [data-state='open'].user-menu-trigger",
     );
     if (trigger) overlayReturnFocus = trigger;
   }
@@ -690,6 +709,12 @@
   let viewportWidth = $state(0);
   let paneWidth = $state(0);
   let visited = $state<OutputId[]>([]);
+  /**
+   * A view mounts on first visit and stays mounted while its tab is open. `visited` is the
+   * seen-set; intersecting it with the tab strip is what unmounts a closed panel, so
+   * `aria-labelledby="output-tab-<id>"` can never point at a removed tab.
+   */
+  const mountedPanels = $derived(visited.filter((id) => openTabs.includes(id)));
   let backends = $state<any[]>([]);
   let backend = $state("");
   let chatBackend = $state("");
@@ -847,6 +872,10 @@
     openTabs = state.tabs;
     keptTabs = state.kept;
   }
+  /**
+   * `visited` is the seen-set; `mountedPanels` intersects it with the tab strip, so a closed tab
+   * unmounts its panel and no `aria-labelledby="output-tab-<id>"` can outlive its tab.
+   */
   function remember(previous: OutputId | null = null) {
     const output = layout.output === "chat" ? null : layout.output;
     if (output && !visited.includes(output)) visited = [...visited, output];
@@ -894,6 +923,7 @@
   const regions = $derived(visibleRegions(!!layout.output, split.mode === "stacked", focusedPane));
   /** True when the chat region is on screen; `display: none` there makes `.focus()` a no-op. */
   const chatRegionVisible = $derived(regions.chat && !(outputExpanded && !!layout.output));
+  const outputRegionVisible = $derived(regions.output || (outputExpanded && !!layout.output));
   async function go(id: OutputRoute, track = true) {
     resourceRequest++;
     resourceNotice = "";
@@ -929,7 +959,7 @@
       keepOutputTab({ tabs: openTabs, kept: keptTabs }, id, CANVAS_TOOLS, launcher.id ?? null),
     );
   }
-  function addTab() {
+  async function addTab() {
     if (!launcher.id || !CANVAS_TOOLS.includes(launcher.id)) return;
     applyTabs(
       newOutputTab(
@@ -939,7 +969,9 @@
         launcher.id,
       ),
     );
-    go(launcher.id);
+    await go(launcher.id);
+    await tick();
+    document.getElementById(`output-tab-${launcher.id}`)?.focus({ preventScroll: true });
   }
   function historyStep(direction: -1 | 1) {
     trail = stepRoute(trail, direction);
@@ -970,8 +1002,9 @@
       id,
       CANVAS_TOOLS,
     );
-    openTabs = result.tabs;
-    keptTabs = keptTabs.filter((item) => result.tabs.includes(item));
+    applyTabs({ tabs: result.tabs, kept: keptTabs.filter((item) => result.tabs.includes(item)) });
+    // Also drop the id from the seen-set so a closed view is not remembered forever.
+    if (visited.includes(id)) visited = visited.filter((item) => item !== id);
     layout = {
       ...layout,
       lastOutput: lastOutputAfterClose(
@@ -994,6 +1027,13 @@
     if (event.key === "Delete") {
       event.preventDefault();
       closeTab(id);
+      return;
+    }
+    // Keep/close are pointer-only buttons inside the tablist; these two shortcuts are the
+    // keyboard route to the same actions without adding tab stops.
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      keepTab(id);
       return;
     }
     const next =
@@ -1287,8 +1327,8 @@
             tabindex="-1"
             role="region"
             aria-label={labels.chatAndNavigation}
-            style:display={regions.chat && !(outputExpanded && layout.output) ? "block" : "none"}
-            inert={!regions.chat || (outputExpanded && !!layout.output)}
+            hidden={!chatRegionVisible}
+            inert={!chatRegionVisible}
           >
             <Chat
               {approval}
@@ -1364,8 +1404,7 @@
             tabindex="-1"
             aria-label={meta?.label ?? labels.outputWorkspace}
             inert={menuOpen}
-            hidden={!layout.output}
-            style:display={regions.output || (outputExpanded && layout.output) ? "flex" : "none"}
+            hidden={!outputRegionVisible}
           >
             <div class="output-tabbar">
               <div class="output-tabs" role="tablist" aria-label={labels.openOutputTabs}>
@@ -1384,9 +1423,7 @@
                       role="tab"
                       id={`output-tab-${id}`}
                       aria-selected={layout.output === id}
-                      aria-controls={chatPanels.some((route) => route.id === id)
-                        ? "chat-output-panel"
-                        : `output-panel-${id}`}
+                      aria-controls={panelIdFor(id)}
                       tabindex={layout.output === id ? 0 : -1}
                       title={`${item?.label ?? id} · ${keptTabs.includes(id) ? labels.keptTab : labels.workingTabDescription}`}
                       onclick={() => go(id)}
@@ -1398,16 +1435,19 @@
                       />{#if outputOrigin(id)}<span class="output-origin-dot" aria-hidden="true"
                         ></span>{/if}<span>{item?.label ?? id}</span>
                     </button>
+                    <!-- The tab itself is the one tab stop in the tablist; these act on it and
+                         must not add two more. Pointer users click them, keyboard users get
+                         Delete (close) and Shift+Enter (keep) on the focused tab. -->
                     {#if !keptTabs.includes(id) && id !== launcher.id}<button
                         class="keep-tab"
-                        tabindex={layout.output === id ? 0 : -1}
+                        tabindex="-1"
                         aria-label={labels.keepTab.replace("{label}", item?.label ?? id)}
                         title={labels.keepTabDescription}
                         onclick={() => keepTab(id)}><Icon name="pin" size={12} /></button
                       >{/if}
                     <button
                       class="close-tab"
-                      tabindex={layout.output === id ? 0 : -1}
+                      tabindex="-1"
                       aria-label={labels.closeTab.replace("{label}", item?.label ?? id)}
                       onclick={() => closeTab(id)}><Icon name="x" size={12} /></button
                     >
@@ -1516,7 +1556,6 @@
                       : (OUTPUTS.find((row) => row.id === launcher.id)?.label ?? labels.workspace)}
                     hidden={layout.output !== launcher.id}
                     inert={layout.output !== launcher.id}
-                    style:display={layout.output === launcher.id ? "flex" : "none"}
                   >
                     <WorkspaceLauncher
                       outputs={OUTPUTS.filter((row) => !isSettings(row.id))}
@@ -1528,13 +1567,12 @@
                       onOpen={go}
                     />
                   </div>{/if}
-                {#each visited as id (id)}{#if hasFeatureScreen(id)}
+                {#each mountedPanels as id (id)}{#if hasFeatureScreen(id)}
                     <div
                       id={`output-panel-${id}`}
                       role="tabpanel"
                       aria-labelledby={`output-tab-${id}`}
                       class="output-view"
-                      style:display={layout.output === id ? "flex" : "none"}
                       hidden={layout.output !== id}
                       inert={layout.output !== id}
                     >
@@ -1880,8 +1918,6 @@
     flex-direction: column;
     align-items: center;
     gap: 7px;
-  }
-  .rail-bottom {
     margin-top: auto;
   }
   .desktop-area {
@@ -2021,10 +2057,13 @@
   .desktop-disconnected button {
     margin-left: auto;
   }
+  /* Stacked mode shows one region at a time (`visibleRegions`), so there is one track: the
+     two-row 330px/280px ladder that used to be here was dead — a later duplicate overrode it,
+     and two tracks would leave an empty row anyway. */
   .desktop-workbench.stacked {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(330px, 1fr) minmax(280px, 0.9fr);
-    overflow-y: auto;
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
   }
   .stacked .desktop-output {
     border-top: 1px solid var(--color-line);
@@ -2182,10 +2221,6 @@
   .compact-view-switch button[aria-pressed="true"] {
     background: var(--color-hover);
     color: var(--color-ink);
-  }
-  .desktop-workbench.stacked {
-    grid-template-rows: minmax(0, 1fr);
-    overflow: hidden;
   }
   .desktop-workbench.stacked .desktop-chat,
   .desktop-workbench.stacked .desktop-output {

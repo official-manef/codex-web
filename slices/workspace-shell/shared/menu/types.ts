@@ -11,7 +11,7 @@ export type WorkspaceMenuItem = {
   /** Optional keyboard binding, installed explicitly with registerMenuShortcuts. */
   binding?: WorkspaceMenuBinding;
   disabled?: boolean;
-  /** Explanation for a capability or command, exposed as a native tooltip. */
+  /** Explanation for a capability or command, rendered under the label. */
   description?: string;
   children?: readonly WorkspaceMenuItem[];
   onSelect?: () => void;

@@ -14,10 +14,12 @@
         <DropdownMenu.SubTrigger
           class="workspace-menu-item"
           disabled={item.disabled}
-          title={item.description}
         >
           {#if item.icon}<Icon name={item.icon} size={15} />{/if}
-          <span class="menu-label">{item.label}</span>
+          <span class="menu-text">
+            <span class="menu-label">{item.label}</span>
+            {#if item.description}<span class="menu-hint">{item.description}</span>{/if}
+          </span>
           {#if item.shortcut}<kbd>{item.shortcut}</kbd>{/if}
           <span class="submenu-chevron" aria-hidden="true"><Icon name="chevron" size={13} /></span>
         </DropdownMenu.SubTrigger>
@@ -37,11 +39,13 @@
         class="workspace-menu-item"
         data-destructive={item.destructive || undefined}
         disabled={item.disabled || !item.onSelect}
-        title={item.description}
         onSelect={item.onSelect}
       >
         {#if item.icon}<Icon name={item.icon} size={15} />{/if}
-        <span class="menu-label">{item.label}</span>
+        <span class="menu-text">
+          <span class="menu-label">{item.label}</span>
+          {#if item.description}<span class="menu-hint">{item.description}</span>{/if}
+        </span>
         {#if item.shortcut}<kbd>{item.shortcut}</kbd>{/if}
       </DropdownMenu.Item>
     {/if}
@@ -94,9 +98,23 @@
     margin: 4px 0;
     background: var(--color-line);
   }
-  .menu-label {
+  .menu-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     flex: 1;
     min-width: 0;
+  }
+  .menu-label {
+    min-width: 0;
+  }
+  /* A reason shown inline, so it is read by keyboard and screen reader alike instead of
+     hiding behind a hover tooltip. */
+  .menu-hint {
+    color: var(--color-ink-3);
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: normal;
   }
   kbd {
     color: var(--color-ink-2);

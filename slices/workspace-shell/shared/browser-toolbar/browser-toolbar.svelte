@@ -15,7 +15,7 @@
   }
 </script>
 
-<div class="browser-toolbar" role="toolbar" aria-label="Browser controls">
+<div class="browser-toolbar" role="group" aria-label="Browser controls">
   {#if config.back}<button
       type="button"
       aria-label={config.back.label}

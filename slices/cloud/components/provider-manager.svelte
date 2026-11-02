@@ -416,7 +416,7 @@
 	.providers-error {
 		margin: 0;
 		font-size: 12px;
-		color: var(--color-approval);
+		color: var(--color-destructive);
 	}
 	.providers-ok {
 		margin: 0;

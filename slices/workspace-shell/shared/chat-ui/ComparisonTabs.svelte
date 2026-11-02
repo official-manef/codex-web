@@ -23,7 +23,7 @@
   } = $props();
 </script>
 
-<div class="comparison-tabs" role="toolbar" aria-label="Comparison panels">
+<div class="comparison-tabs" role="group" aria-label="Comparison panels">
   <div class="comparison-tab-scroll">
     {#each items as item, index (item.id)}<div
         class="comparison-subtab"
@@ -31,7 +31,7 @@
       >
         <button
           aria-label={`Focus comparison ${index + 1}`}
-          aria-current={active === index ? "true" : undefined}
+          aria-pressed={active === index}
           {disabled}
           onclick={() => onfocus(index)}
           ><span class="dot" aria-hidden="true"></span><span>{item.label}</span></button
@@ -95,7 +95,7 @@
     background: var(--candidate-color, var(--color-ink-2));
     flex: none;
   }
-  button[aria-current="true"] {
+  button[aria-pressed="true"] {
     background: var(--color-hover);
     border-radius: 7px;
   }

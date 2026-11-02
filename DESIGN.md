@@ -21,7 +21,7 @@ or replace a working layout just to make it look newly generated.
 | Colors, dimensions, radii and shell layout         | `src/routes/layout.css`                                  |
 | Feature labels, icons, descriptions and navigation | `slices/app-shell/registry.ts` and each slice definition |
 | Accessible base controls                           | `src/lib/components/ui/`                                 |
-| Reusable app layout and interaction                | `src/lib/components/app-ui/`                             |
+| Reusable app layout and interaction                | `slices/workspace-shell/shared/`                         |
 | Product screens and copy specific to a task        | `slices/<slug>/`                                         |
 
 Do not create a parallel theme, asset URL list or menu array inside a screen. Keep
@@ -59,16 +59,22 @@ These are examples, not strings to copy into states that do not support the clai
 ## Existing visual baseline
 
 Semantic tokens such as `--background`, `--foreground`, `--primary`, `--muted`,
-`--destructive`, `--border` and `--ring` have light/dark definitions in `layout.css`.
-Use their Tailwind utilities instead of local color literals. The current base radius
-is `0.75rem`; control and layout radii derive from it. UI text uses the configured
-sans-serif stack, with monospace reserved for code or technical values.
+`--destructive`, `--border` and `--ring` have one light definition in `:root` and one
+dark definition in `:is(.dark, :root:has(.dark))` in `layout.css`; the second selector is
+there because bits-ui portals menus and dialogs onto `<body>`, outside `.dark`. Use their
+Tailwind utilities instead of local color literals. The current base radius is `0.75rem`;
+control and layout radii derive from it. UI text uses the configured sans-serif stack
+(`--font-sans`, loaded as Inter Variable), with monospace reserved for code or technical
+values.
 
-Shell dimensions also come from tokens: `--app-touch-target`, `--app-topbar-height`,
-`--app-mobile-dock-height`, grid minimum widths and rail card width. Change these tokens
-when changing the shared rhythm, rather than patching every consuming component.
-Dark tokens exist; verify the selected product's theme behavior rather than assuming
-a theme preference is already persisted.
+The literal palette (`--color-page`, `--color-panel`, `--color-ink`, `--color-line`, …) is
+declared once in a `@theme static` block, so the values survive Tailwind's pruning for the
+scoped `<style>` blocks that read them. `--color-line` is for decorative dividers; the
+boundary of an interactive control uses `--color-control-border` because a divider that
+reads on `--color-panel` does not clear 3:1 on `--color-panel-2`. Interactive states have
+the same rule: a focus ring, a field border, an active-tab outline and a selected-marker
+fill must each clear 3:1 against the surface they are drawn on, and any text placed on a
+state fill must clear 4.5:1. Check the pair, not the token name.
 
 Keep the existing font and Lucide icon family unless the brand or usability task calls
 for a change. Do not add fonts, icon packs, images or animation libraries for novelty.
