@@ -12,6 +12,8 @@ import { requireUser } from './_shared/auth';
 
 const MAX_SESSIONS = 50;
 const MAX_MESSAGES = 200;
+/** Bounded drain rounds when deleting a session's messages. */
+const DELETE_ROUNDS = 20;
 
 const session = v.object({
 	_id: v.id('sessions'),
@@ -82,11 +84,17 @@ export const deleteSession = mutation({
 		const owner = await requireUser(ctx);
 		const row = await ctx.db.get('sessions', args.id);
 		if (!row || row.owner !== owner) return false;
-		const messages = await ctx.db
-			.query('messages')
-			.withIndex('by_session_at', (q) => q.eq('sessionId', args.id))
-			.take(MAX_MESSAGES);
-		for (const item of messages) await ctx.db.delete('messages', item._id);
+		// Drain every page: a single `take(MAX_MESSAGES)` left messages past the 200th behind,
+		// and they were then unreachable — the session row they were read through was gone.
+		// ponytail: raise DELETE_ROUNDS if a session can hold more than 4 000 messages.
+		for (let round = 0; round < DELETE_ROUNDS; round++) {
+			const messages = await ctx.db
+				.query('messages')
+				.withIndex('by_session_at', (q) => q.eq('sessionId', args.id))
+				.take(MAX_MESSAGES);
+			if (!messages.length) break;
+			for (const item of messages) await ctx.db.delete('messages', item._id);
+		}
 		await ctx.db.delete('sessions', args.id);
 		return true;
 	}
