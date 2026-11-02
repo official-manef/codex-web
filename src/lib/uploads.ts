@@ -9,6 +9,27 @@ export type AcceptedImage = {
 export const MAX_IMAGE_BYTES = 4_194_304;
 export const MAX_IMAGES_PER_TURN = 2;
 
+/**
+ * Wire limit for `POST /api/ai/chat`, derived so the documented image budget is reachable.
+ *
+ * Base64 turns 4 MiB into ceil(4_194_304 / 3) * 4 = 5_592_408 characters, so the two images a
+ * turn may carry are 11_184_816 characters of JSON before any envelope. The extra 256 KiB is
+ * more than the whole text budget `parseChat` enforces (32 000 characters of messages, 2 000 of
+ * memory, plus keys and message scaffolding), so every body the schema can accept fits.
+ *
+ * `readJsonBody` buffers the whole body, so this is also the per-request memory ceiling. Measured
+ * on this host for a body at the limit (11 185 067 bytes, two 4 MB images): read phase +37 MB
+ * RSS (11 MB of stream chunks plus a 22 MB UTF-16 string), `JSON.parse` another +12 MB in 13 ms,
+ * peak ~48 MB RSS. Stated rather than removed: `requireCapabilityAccess` runs before this read,
+ * so only a credentialed caller can allocate it. What does NOT bound it: the burst limiter counts
+ * request starts per minute, not bodies in flight, so N concurrent credentialed requests cost
+ * N × 48 MB. Stream-parsing JSON would save ~12 MB of the 48 and cost a hand-written parser;
+ * a per-identity in-flight counter is the cheaper guard if this ever faces traffic that matters.
+ * Numbers and method: docs/parity-checklist-2026-11-02.md §3.2.
+ */
+export const MAX_CHAT_BODY_BYTES =
+	MAX_IMAGES_PER_TURN * Math.ceil(MAX_IMAGE_BYTES / 3) * 4 + 262_144;
+
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -95,6 +116,12 @@ export function sniffMediaType(base64: string): 'image/png' | 'image/jpeg' | 'im
 	return null;
 }
 
+/** Decoded byte count of a base64 payload, without allocating the bytes. */
+export function decodedBytes(base64: string): number {
+	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+	return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
 /**
  * Validates and accepts a single base64 image against size, magic bytes, declared media type, and name.
  */
@@ -107,8 +134,7 @@ export function acceptImage(
 		return { error: 'That is not base64 data.' };
 	}
 
-	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-	const bytes = Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+	const bytes = decodedBytes(base64);
 	if (bytes > MAX_IMAGE_BYTES) {
 		return { error: 'That image is larger than 4 MB.' };
 	}

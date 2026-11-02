@@ -46,35 +46,40 @@ validation · **R** response shape · **U** upstream failure / timeout.
 
 ### `POST /api/ai/chat`
 
-| Case                                                                                            | Kind | Status               |
-| ----------------------------------------------------------------------------------------------- | ---- | -------------------- |
-| Only `POST` exported                                                                            | M    | —                    |
-| `AI_ENABLED` unset / `false` / `True` / `1` / `yes`                                             | D    | 404                  |
-| Disabled answer precedes authorization                                                          | D    | 404                  |
-| Enabled, no credential                                                                          | A    | 401                  |
-| Near-miss credentials: trailing char, truncated, missing scheme, lowercase scheme               | A    | 401                  |
-| Valid credential, foreign `Origin`                                                              | A    | 403                  |
-| Valid credential, no `Origin` at all                                                            | A    | 403                  |
-| Malformed JSON                                                                                  | I    | 400                  |
-| Non-JSON media type                                                                             | I    | 415                  |
-| Missing body                                                                                    | I    | 400                  |
-| Invalid UTF-8 bytes                                                                             | I    | 400                  |
-| Oversized via declared `content-length`                                                         | I    | 413                  |
-| Oversized via actual bytes                                                                      | I    | 413                  |
-| Missing / empty / wrong-typed fields, 17 messages, 2001-char memory (10 shapes)                 | I    | 400                  |
-| Unapproved model, unknown provider                                                              | I    | 400                  |
-| Caller-supplied `baseURL` rejected, value not echoed                                            | I    | 400                  |
-| Last message is not `user`                                                                      | I    | 400                  |
-| Image above 64 KiB body cap                                                                     | I    | 413 (see defect 2)   |
-| Image inside the cap starts a turn                                                              | R    | 200                  |
-| Unsupported image media type                                                                    | I    | 400                  |
-| Missing `AI_MODELS_JSON`                                                                        | I    | 503 (was 400, fixed) |
-| Malformed `AI_MODELS_JSON`                                                                      | I    | 503 (was 400, fixed) |
-| Success: `application/x-ndjson`, `no-store`, `X-Accel-Buffering: no`, lines `{text}` → `{done}` | R    | 200                  |
-| Provider error event → fixed `{type:"error",message}` line, no hang, no 5xx                     | U    | 200 + error event    |
-| Provider error body carries no key and no upstream host                                         | U    | —                    |
-| Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event    |
-| Log records counts and outcome only, never message text or key                                  | R    | —                    |
+| Case                                                                                            | Kind | Status                                     |
+| ----------------------------------------------------------------------------------------------- | ---- | ------------------------------------------ |
+| Only `POST` exported                                                                            | M    | —                                          |
+| `AI_ENABLED` unset / `false` / `True` / `1` / `yes`                                             | D    | 404                                        |
+| Disabled answer precedes authorization                                                          | D    | 404                                        |
+| Enabled, no credential                                                                          | A    | 401                                        |
+| Near-miss credentials: trailing char, truncated, missing scheme, lowercase scheme               | A    | 401                                        |
+| Valid credential, foreign `Origin`                                                              | A    | 403                                        |
+| Valid credential, no `Origin` at all                                                            | A    | 403                                        |
+| Malformed JSON                                                                                  | I    | 400                                        |
+| Non-JSON media type                                                                             | I    | 415                                        |
+| Missing body                                                                                    | I    | 400                                        |
+| Invalid UTF-8 bytes                                                                             | I    | 400                                        |
+| Oversized via declared `content-length`                                                         | I    | 413                                        |
+| Oversized via actual bytes                                                                      | I    | 413                                        |
+| Missing / empty / wrong-typed fields, 17 messages, 2001-char memory (10 shapes)                 | I    | 400                                        |
+| Unapproved model, unknown provider                                                              | I    | 400                                        |
+| Caller-supplied `baseURL` rejected, value not echoed                                            | I    | 400                                        |
+| Last message is not `user`                                                                      | I    | 400                                        |
+| Image above 64 KiB but inside 4 MiB, accepted (was 413 — defect 2, fixed)                       | R    | 200                                        |
+| Image of exactly 4 MiB accepted                                                                 | R    | 200                                        |
+| Image one byte over 4 MiB                                                                       | I    | 413, "Each image must be 4 MB or smaller." |
+| Body over `MAX_CHAT_BODY_BYTES`, refused during the read                                        | I    | 413, stream cancelled                      |
+| Declared `content-length` over the cap, refused before any byte is read                         | I    | 413                                        |
+| Three small images                                                                              | I    | 400, "At most 2 images per turn."          |
+| Image inside the cap starts a turn                                                              | R    | 200                                        |
+| Unsupported image media type                                                                    | I    | 400                                        |
+| Missing `AI_MODELS_JSON`                                                                        | I    | 503 (was 400, fixed)                       |
+| Malformed `AI_MODELS_JSON`                                                                      | I    | 503 (was 400, fixed)                       |
+| Success: `application/x-ndjson`, `no-store`, `X-Accel-Buffering: no`, lines `{text}` → `{done}` | R    | 200                                        |
+| Provider error event → fixed `{type:"error",message}` line, no hang, no 5xx                     | U    | 200 + error event                          |
+| Provider error body carries no key and no upstream host                                         | U    | —                                          |
+| Vision-less provider + image → typed error, provider never called                               | U    | 200 + error event                          |
+| Log records counts and outcome only, never message text or key                                  | R    | —                                          |
 
 ### `POST /api/mcp/server`
 
@@ -222,26 +227,31 @@ Fixed in both routes: the environment is validated separately, before the body, 
 Not a security finding — no leak in either direction — but it is a lying status code, which is
 the kind of thing this suite exists to stop.
 
-### 2. Reported — the documented 4 MB image budget is unreachable (64 KiB body cap)
+### 2. Fixed — the documented 4 MB image budget was unreachable (64 KiB body cap)
 
 `docs/parity-checklist-2026-11-02.md` §3.2 promises `/api/ai/chat` accepts "2 images, 4 MB each,
-`image/png|jpeg|webp`". `readJsonBody` defaults to **65 536 bytes** and the chat route does not
-raise it, so the schema that permits 2 × 4 MB can never be reached: a single realistic
-screenshot is `413 The request is too large.` Verified both ways — 8 KiB of base64 passes and
-reaches `streamText`; 100 KiB is `413`.
+`image/png|jpeg|webp`". `readJsonBody` defaulted to **65 536 bytes** and the chat route did not
+raise it, so the schema that permits 2 × 4 MB could never be reached: a single realistic
+screenshot was `413 The request is too large.` Verified both ways — 8 KiB of base64 passed and
+reached `streamText`; 100 KiB was `413`.
 
-Not fixed here, because the fix is a product decision with a real cost: raising the cap to
-~11 MB (2 × 4 MB after base64 overhead) means every chat request may buffer that much in
-memory, and the route currently has no streaming body parser. Pinned as current behaviour in
-`an image larger than 64 KiB is refused by the shared body cap before the schema runs`, so the
-day someone raises the cap that test fails and forces a deliberate update. Two options for
-whoever owns it:
+**Fixed by raising the chat route's cap to the documented budget, not by lowering the promise.**
+`src/lib/uploads.ts` now derives `MAX_CHAT_BODY_BYTES` from `MAX_IMAGE_BYTES` and
+`MAX_IMAGES_PER_TURN`: `2 × ceil(4 194 304 / 3) × 4 + 262 144 = 11 446 960 bytes`. The 256 KiB
+slack covers the whole text budget plus envelope. The default stays 64 KiB for every other route;
+`/api/ai/chat` is the only caller that passes a second argument, because it is the only one that
+carries images. `src/lib/server/ai/config.ts` imports the constants from `src/lib/uploads.ts`, so
+the zod schema and the doc can no longer drift apart. A decoded image one byte over 4 MiB is now
+`413 Each image must be 4 MB or smaller.` — it used to be answered with the per-turn count, which
+sent the caller to delete the wrong thing.
 
-- raise the chat route's cap explicitly (`readJsonBody(event.request, 12_000_000)`) and accept
-  the memory cost, or
-- correct the doc and the schema to the real budget (64 KiB total, so roughly 48 KiB of image).
+The memory cost was accepted knowingly rather than hidden: measured **~48 MB RSS peak** per
+request at the ceiling (+37 MB read, +12 MB parse in 13 ms). What bounds it is the credential
+check running before the read and the 20-per-minute burst limiter. Full numbers and the
+stream-parsing trade-off: `docs/parity-checklist-2026-11-02.md` §3.2.
 
-The first is honest to the product; the second is honest to the code. Either one closes it.
+Pinned by `src/routes/api/ai/chat/budget.spec.ts` (7 tests), including the "just over" case and a
+50 MB body that must be refused _during_ the read rather than after parsing.
 
 ## Gaps — what could not be covered, and why
 

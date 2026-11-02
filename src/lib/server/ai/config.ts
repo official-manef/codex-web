@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AiProvider, ChatMessage } from './contracts';
 import { textOf } from './contracts';
+import { decodedBytes, MAX_IMAGE_BYTES, MAX_IMAGES_PER_TURN } from '$lib/uploads';
 import type { IntegrationEnv } from '../integrations/config';
 
 const modelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/);
@@ -22,11 +23,6 @@ const keySchema = z
 
 const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
 
-function decodedBase64Size(data: string): number {
-	const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
-	return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
-}
-
 const textPartSchema = z
 	.object({
 		type: z.literal('text'),
@@ -41,7 +37,7 @@ const imagePartSchema = z
 		data: z
 			.string()
 			.regex(base64Regex)
-			.refine((data) => decodedBase64Size(data) <= 4 * 1024 * 1024, {
+			.refine((data) => decodedBytes(data) <= MAX_IMAGE_BYTES, {
 				message: 'Image decoded size exceeds 4 MB'
 			})
 	})
@@ -85,10 +81,10 @@ const chatSchema = z
 				}
 			}
 		}
-		if (imageCount > 2) {
+		if (imageCount > MAX_IMAGES_PER_TURN) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: 'At most 2 image parts per request'
+				message: `At most ${MAX_IMAGES_PER_TURN} image parts per request`
 			});
 		}
 	});

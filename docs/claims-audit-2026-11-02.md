@@ -146,7 +146,7 @@ against the identifiers the code actually reads.
 | Chat bounded to 16 msgs / 32k chars / 8k per user msg | `ai-mcp.md`                | verified | `src/lib/server/ai/config.ts:52,74,142`                                                    |
 | 60-second AI deadline, no retries                     | `architecture.md`          | verified | `src/lib/server/ai/chat.ts:67`                                                             |
 | Tool loop bounded to 8 steps                          | `parity-checklist` §6      | verified | `src/lib/server/ai/chat.ts:162`                                                            |
-| Images: at most 2 per request, 4 MiB each             | `parity-checklist` §6      | verified | `config.ts:88`, `:44`                                                                      |
+| Images: at most 2 per request, 4 MiB each             | `parity-checklist` §6      | verified | `uploads.ts:9-10`; enforced in `config.ts:40,84`; body cap derived at `uploads.ts:30`      |
 | Automations: 20 cap, 3 failures, 15-min floor         | `parity-checklist` §6      | verified | `src/lib/automations.ts:1-6`                                                               |
 | Memories: 50 cap, 400 chars                           | `auth.md`                  | verified | `src/lib/memories.ts:26-27`; the Convex table enforces the same                            |
 | Policy gate covers 9 verbs, deny by default           | `parity-checklist` §6      | verified | `POLICY_VERBS` = 9                                                                         |

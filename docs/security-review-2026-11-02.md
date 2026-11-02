@@ -165,10 +165,18 @@ Checked:
   `https://api.openai.com@evil.example` both fail closed. Asserted in `chat.spec.ts:23-35`,
   including that `fetch` is never called on rejection. `nine-router` is pinned to its own host
   in the same table for the same reason: an OpenAI key cannot be sent to the router.
-- **Size limits**: body ≤ 64 KiB at the reader (`readJsonBody` default), ≤16 messages, 8 000
-  chars per user message, 32 000 per assistant message, 32 000 total, final message must be
-  `user`. Output is capped at 32 000 characters mid-stream and 4 096 output tokens upstream.
-  `parseChat` runs before any provider object is constructed.
+- **Size limits**: the shared reader defaults to 64 KiB; `/api/ai/chat` raises it to
+  `MAX_CHAT_BODY_BYTES` (11 446 960 bytes ≈ 10.9 MiB) because it is the only route that carries
+  images — two 4 MiB images are 5 592 408 base64 characters each. That body is buffered, so the
+  measured cost is **~48 MB RSS peak** per request at the ceiling (+37 MB read, +12 MB
+  `JSON.parse` in 13 ms). Not bounded by the burst limiter — that counts request starts, not
+  bodies in flight — but bounded in practice by the credential check running before the read:
+  only a credentialed caller can allocate, and N concurrent requests cost N × 48 MB. A
+  per-identity in-flight counter is the cheap guard if this ever faces traffic that matters.
+  Stream-parsing would save ~12 MB and add a hand-written parser; not worth it here.
+  Beyond the body: ≤16 messages, 8 000 chars per user message, 32 000 per assistant message,
+  32 000 total, final message must be `user`. Output is capped at 32 000 characters mid-stream and
+  4 096 output tokens upstream. `parseChat` runs before any provider object is constructed.
 - **Key in the response**: the stream is scrubbed for the key with a carry-over buffer that
   holds back the last `apiKey.length - 1` characters, so a key split across two deltas is never
   emitted in halves. The `error` event is a fixed string, and `onError: () => {}` discards the
@@ -202,8 +210,8 @@ Checked:
 - **Response handling**: `redirect: 'error'`, a declared-length check and a post-read byte
   check against 64 KiB, JSON parse required. A foreign listener on the loopback port cannot
   hand back HTML that gets relayed.
-- `POST` bodies go through the same 64 KiB `readJsonBody`; only `content-type: application/json`
-  is accepted.
+- `POST` bodies go through the same 64 KiB `readJsonBody` default; only `content-type: application/json`
+  is accepted. The one route that raises that default is `/api/ai/chat`, for the reason above.
 
 The bridge holds no credential and adds no principal, which is what makes "it authenticates
 nobody" acceptable here: it cannot be used to reach anything the caller could not already reach

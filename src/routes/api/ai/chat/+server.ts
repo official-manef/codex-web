@@ -6,7 +6,7 @@ import { chatResponse } from '$lib/server/ai/chat';
 import { defaultPolicy, parsePolicy } from '$lib/server/policy';
 import { logEvent } from '$lib/server/log';
 import { bridgeAvailable, createBridgeClient } from '$lib/server/bridge';
-import { acceptImage, MAX_IMAGES_PER_TURN } from '$lib/uploads';
+import { acceptImage, MAX_CHAT_BODY_BYTES, MAX_IMAGES_PER_TURN } from '$lib/uploads';
 import type { RequestHandler } from './$types';
 
 /**
@@ -36,22 +36,23 @@ export const POST: RequestHandler = async (event) => {
 		await logEvent('warn', 'ai.chat', { outcome: 'invalid-configuration' });
 		error(503, 'Assistant setup is incomplete. Check the private server configuration.');
 	}
-	const body = await readJsonBody(event.request);
+	const body = await readJsonBody(event.request, MAX_CHAT_BODY_BYTES);
 	let input: ReturnType<typeof parseChat>;
 	try {
 		input = parseChat(env, body);
 	} catch (err: unknown) {
 		await logEvent('warn', 'ai.chat', { outcome: 'invalid-request' });
-		if (
-			typeof err === 'object' &&
-			err !== null &&
-			'issues' in err &&
-			Array.isArray((err as { issues: Array<{ message?: string }> }).issues) &&
-			(err as { issues: Array<{ message?: string }> }).issues.some((i) =>
-				i.message?.includes('image')
-			)
-		) {
-			error(400, `At most ${MAX_IMAGES_PER_TURN} images per turn.`);
+		const issues =
+			typeof err === 'object' && err !== null && 'issues' in err
+				? (err as { issues?: Array<{ message?: string }> }).issues
+				: undefined;
+		if (Array.isArray(issues)) {
+			// An oversized image and too many images are different faults with different remedies;
+			// answering both with the per-turn count sends the caller to delete the wrong thing.
+			if (issues.some((i) => i.message?.includes('exceeds 4 MB')))
+				error(413, 'Each image must be 4 MB or smaller.');
+			if (issues.some((i) => i.message?.includes('image')))
+				error(400, `At most ${MAX_IMAGES_PER_TURN} images per turn.`);
 		}
 		error(400, 'Check the approved provider/model, key and conversation limits.');
 	}

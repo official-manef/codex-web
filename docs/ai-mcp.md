@@ -97,9 +97,13 @@ Each request allows at most 16 messages and 32,000 total characters, with 8,000 
 per user message. Replies stop at 4,096 output tokens or 32,000 characters, with a
 60-second deadline and no automatic retries. An approved model must support these
 settings. Browser cancellation aborts the upstream request but cannot undo consumed
-provider usage. JSON bodies also have a 64 KiB wire limit, which can be reached sooner
-with multibyte text. Streaming errors are generic; the supplied key is redacted even if
-an upstream response echoes it across text chunks. See the AI SDK's
+provider usage. JSON bodies have a 64 KiB wire limit on every route except `/api/ai/chat`,
+which accepts up to 11,446,960 bytes so that the documented two-images-at-4-MB budget is
+reachable (base64 inflates 4/3, so two 4 MB images are ~11 MB of JSON). That is the only
+route that buffers megabytes, and the cost is ~48 MB of RSS per request at the ceiling; see
+`docs/parity-checklist-2026-11-02.md` §3.2 for the measurement. The 64 KiB limit can be
+reached sooner with multibyte text. Streaming errors are generic; the supplied key is redacted
+even if an upstream response echoes it across text chunks. See the AI SDK's
 [streaming API](https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text) and
 [error handling](https://ai-sdk.dev/docs/ai-sdk-core/error-handling).
 
