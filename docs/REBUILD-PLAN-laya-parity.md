@@ -9,8 +9,10 @@ from the target UI/UX. Do not delete them; mark them superseded when the rebuild
 
 ## 1. Decision
 
-- Repository and product name stay: `rahmanef63/codex-clone-placeholder`, package name
-  `codex-clone-placeholder`, generic identity. **Do not rename anything.**
+- Repository and product name: **`rahmanef63/codex-web`**, package name `codex-web`. The old
+  name `codex-clone-placeholder` is retired; GitHub keeps a 301 redirect from it, and the
+  sibling repo `rahmanef63/codex-desktop` is unchanged. Everything below that says "template"
+  refers to the shared Laya workspace shell, not to a name.
 - The _contents_ are rebuilt to match `rahmanef63/laya-npu`'s workspace UI/UX, because the
   owner wants one shared template: Laya keeps building product features on its side, and the
   template pulls the UI/UX back from Laya so both stay aligned.

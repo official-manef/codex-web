@@ -20,16 +20,16 @@ Read in this order:
 
 ## Repository facts
 
-| Item            | Value                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| Repo            | `official-manef/codex-clone-placeholder` (fork of `rahmanef63/codex-clone-placeholder`)   |
-| Base template   | `rahmanef63/template-svelte-convex-starter` @ `eead6b5`                                   |
-| Package manager | Bun — `bun.lock` only; `package.json` engines `>=1.4.2 <2`, `packageManager` `bun@1.4.2`  |
-| Stack           | Svelte 5.57, SvelteKit 2.70, Tailwind 4.3, shadcn-svelte 1.5, TypeScript 6.0, Convex 1.45 |
-| Feature alias   | `$features` → `./slices`                                                                  |
-| Entry route     | `/` renders the workspace shell directly; there is no `/workspace` route                  |
-| Production      | https://ai.manef.dev                                                                      |
-| Vercel project  | `manef-console` in team `anti-nrml` (`prj_r770qRs42bfDtH1a3ylbTNfRgJoE`)                  |
+| Item            | Value                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------- |
+| Repo            | `official-manef/codex-clone-placeholder` (fork of `rahmanef63/codex-web`, formerly `codex-clone-placeholder`) |
+| Base template   | `rahmanef63/template-svelte-convex-starter` @ `eead6b5`                                                       |
+| Package manager | Bun — `bun.lock` only; `package.json` engines `>=1.4.2 <2`, `packageManager` `bun@1.4.2`                      |
+| Stack           | Svelte 5.57, SvelteKit 2.70, Tailwind 4.3, shadcn-svelte 1.5, TypeScript 6.0, Convex 1.45                     |
+| Feature alias   | `$features` → `./slices`                                                                                      |
+| Entry route     | `/` renders the workspace shell directly; there is no `/workspace` route                                      |
+| Production      | https://ai.manef.dev                                                                                          |
+| Vercel project  | `manef-console` in team `anti-nrml` (`prj_r770qRs42bfDtH1a3ylbTNfRgJoE`)                                      |
 
 `ai.manef.dev` is the address for this fork. It is a CNAME to Vercel with the Cloudflare
 proxy disabled, because Let's Encrypt needs the request to reach Vercel directly. The
@@ -59,8 +59,8 @@ bunx vercel deploy --prod --yes --scope anti-nrml
 ## Cloud environment setup
 
 ```bash
-git clone git@github.com:rahmanef63/codex-clone-placeholder.git
-cd codex-clone-placeholder
+git clone git@github.com:rahmanef63/codex-web.git
+cd codex-web
 bun install --frozen-lockfile
 bun run check          # baseline must be green before any change
 bun run dev            # http://localhost:5173

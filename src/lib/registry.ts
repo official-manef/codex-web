@@ -36,7 +36,7 @@ export const PROJECT = {
 	description: 'Svelte workspace shell with a consumer-owned chat surface and lazy views.',
 	portal: '',
 	author: '',
-	repo: 'https://github.com/rahmanef63/codex-clone-placeholder',
+	repo: 'https://github.com/rahmanef63/codex-web',
 	collaborators: ['rahmanef63']
 } as const;
 
