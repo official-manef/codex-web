@@ -116,6 +116,16 @@ export function sniffMediaType(base64: string): 'image/png' | 'image/jpeg' | 'im
 	return null;
 }
 
+/**
+ * The two shapes `atob` refuses and the size formula mis-measures: an unpadded length of 1 mod 4,
+ * and a padded length that is not a multiple of 4. Both decode to nothing, so intake must refuse
+ * them rather than accept a size claim the data cannot honour.
+ */
+export function isDecodableBase64(base64: string): boolean {
+	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+	return padding ? base64.length % 4 === 0 : base64.length % 4 !== 1;
+}
+
 /** Decoded byte count of a base64 payload, without allocating the bytes. */
 export function decodedBytes(base64: string): number {
 	const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -134,6 +144,13 @@ export function acceptImage(
 		return { error: 'That is not base64 data.' };
 	}
 
+	// Two shapes `atob` refuses and the byte formula mis-measures:
+	//  - unpadded length 1 mod 4 (`iVBORw0KGgoAA`) reports 9 bytes but decodes to nothing;
+	//  - padded length not a multiple of 4 (`AAAA=`) reports 3 bytes but also decodes to nothing.
+	// Both used to pass intake and then fail anywhere the data was really decoded.
+	if (!isDecodableBase64(base64)) {
+		return { error: 'That is not base64 data.' };
+	}
 	const bytes = decodedBytes(base64);
 	if (bytes > MAX_IMAGE_BYTES) {
 		return { error: 'That image is larger than 4 MB.' };

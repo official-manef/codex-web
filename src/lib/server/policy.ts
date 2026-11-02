@@ -58,7 +58,9 @@ export function parsePolicy(value: unknown): Record<PolicyVerb, PolicyDecision> 
 	}
 	const entries = value as Record<string, unknown>;
 	for (const verb of POLICY_VERBS) {
-		const candidate = entries[verb];
+		// Own properties only: an inherited `exec: 'allow'` on the passed object must not become
+		// a policy, because "missing entry" has to mean deny.
+		const candidate = Object.hasOwn(entries, verb) ? entries[verb] : undefined;
 		if (isPolicyDecision(candidate)) {
 			policy[verb] = candidate;
 		}

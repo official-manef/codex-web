@@ -56,9 +56,17 @@ describe('policy server model', () => {
 		expect(Object.keys(parsed).sort()).toEqual([...POLICY_VERBS].sort());
 	});
 
+	test('a decision inherited through the prototype is not a policy', () => {
+		// Fuzz regression: `Object.create({ exec: 'allow' })` used to grant exec, because a
+		// missing own entry must mean deny. Nothing but an own property may set a verb.
+		expect(parsePolicy(Object.create({ exec: 'allow', mcp_app: 'allow' }))).toEqual(
+			defaultPolicy()
+		);
+		expect(parsePolicy(Object.create(null))).toEqual(defaultPolicy());
+	});
+
 	test('null, undefined, array, string, and number all yield default without throwing', () => {
 		const empty = defaultPolicy();
-
 		expect(parsePolicy(null)).toEqual(empty);
 		expect(parsePolicy(undefined)).toEqual(empty);
 		expect(parsePolicy([])).toEqual(empty);

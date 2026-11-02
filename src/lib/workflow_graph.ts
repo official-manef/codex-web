@@ -28,6 +28,9 @@ export function parseWorkflow(text: string): WorkflowSpec | null {
 }
 
 export function flowEdges(steps: WorkflowStep[]): FlowEdge[] {
+  // Membership by Set, not `steps.some`: the per-edge scan made a 20 000-step spec take
+  // 1.3 s of blocking work on the main thread for a spec the canvas re-derives on every edit.
+  const ids = new Set(steps.map((step) => step.id));
   return steps
     .flatMap((step, index) =>
       step.type === "branch"
@@ -37,7 +40,7 @@ export function flowEdges(steps: WorkflowStep[]): FlowEdge[] {
           ]
         : [{ from: step.id, to: steps[index + 1]?.id ?? "end", label: "" }],
     )
-    .filter((edge) => edge.to === "end" || steps.some((step) => step.id === edge.to));
+    .filter((edge) => edge.to === "end" || ids.has(edge.to));
 }
 
 export function newStep(
@@ -89,11 +92,21 @@ export function newStep(
 }
 
 export function stepDependents(steps: WorkflowStep[], id: string): string[] {
-  function refers(value: any): boolean {
-    if (Array.isArray(value)) return value.some(refers);
+  // `seen` makes the walk terminate on a self-referencing object. Parsed JSON is a tree, but
+  // this is exported and callers build steps in memory; a cycle used to throw RangeError.
+  // `depth` caps the walk: `parseWorkflow` accepts JSON nested past 5 000 levels, which the
+  // recursive scan turned into "Maximum call stack size exceeded" on the canvas. Nothing at
+  // that depth is a live `$step` reference, so stopping is a refusal, not a lost edge.
+  const seen = new WeakSet<object>();
+  const MAX_DEPTH = 64;
+  function refers(value: any, depth = 0): boolean {
+    if (depth > MAX_DEPTH) return false;
+    if (Array.isArray(value)) return value.some((item) => refers(item, depth + 1));
     if (!value || typeof value !== "object") return false;
+    if (seen.has(value)) return false;
+    seen.add(value);
     if (value.$step === id || value.step === id) return true;
-    return Object.values(value).some(refers);
+    return Object.values(value).some((item) => refers(item, depth + 1));
   }
   return steps
     .filter((step) => step.id !== id && (step.then === id || step.else === id || refers(step)))
