@@ -24,7 +24,12 @@
   import { api, get, post, postAudio } from "#lib/http.js";
   import { projectStore } from "#lib/projects.js";
   import { memoryStore } from "#lib/memories.js";
-  import { saveProviderKey, clearProviderKey, hasProviderKey } from "#lib/byok_key.js";
+  import {
+    saveProviderKey,
+    clearProviderKey,
+    hasProviderKey,
+    readProviderKey,
+  } from "#lib/byok_key.js";
   import {
     resolveChatBackend,
     streamServerChat,
@@ -39,7 +44,6 @@
   import { Pencil, Trash2 } from "@lucide/svelte";
   import { clearSessionDrafts, pruneSessionDrafts, readDraft, saveDraft } from "#lib/drafts.js";
   import { readActiveSession, saveActiveSession } from "#lib/active_session.js";
-  import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -722,8 +726,11 @@
     return () => clearTimeout(timer);
   });
   function rememberSession(id: string) {
+    // `localStorage.setItem` wrote the id bare, so every other versioned key in this app migrated
+    // and this one did not: a build that later changed the shape had no version to read. The
+    // pointer now goes through the same envelope as the rest (`#lib/active_session`).
     try {
-      localStorage.setItem("laya-session", id);
+      saveActiveSession(id);
     } catch {}
   }
   function stamp(value: any) {
@@ -834,14 +841,20 @@
     pruneSessionDrafts(sessions.map((item: any) => String(item.id)));
     // A full quota used to be entirely silent: the turn appeared saved, then vanished on the
     // next reload. The store reports the failed write and the view says it out loud.
-    storageWarning =
-      d.storage?.persisted === false
-        ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
-        : (d.storage?.dropped ?? 0) > 0
-          ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
-              d.storage.dropped === 1 ? " was" : "s were"
-            } dropped when this browser ran out of room.`
-          : "";
+    // Order matters: a newer payload makes every write refuse, so `persisted === false` is the
+    // symptom there and reporting it as a full quota sends the reader hunting for space that is
+    // not the problem.
+    storageWarning = d.storage?.newer
+      ? `This browser holds chats saved by a newer version of the app (format ${d.storage.newer}). They are left untouched and are not shown here, and this build will not overwrite them; update the app to open them.`
+      : d.storage?.quarantined
+        ? "The saved chat list could not be read, so it was left untouched and a copy was kept. Nothing was overwritten; new chats start from here."
+        : d.storage?.persisted === false
+          ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
+          : (d.storage?.dropped ?? 0) > 0
+            ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
+                d.storage.dropped === 1 ? " was" : "s were"
+              } dropped when this browser ran out of room.`
+            : "";
   }
   function applySession(d: any) {
     clearVoice();
@@ -2466,10 +2479,12 @@
       event.preventDefault();
       closeSessionDrawer();
     } else if (event.key === "Tab") {
+      const sidebar = document.querySelector(".session-sidebar");
+      if (!sidebar) return;
       const items = Array.from(
-        document
-          .querySelector(".session-sidebar")!
-          .querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), a[href]"),
+        sidebar.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input:not(:disabled), a[href]",
+        ),
       ).filter((item) => item.getClientRects().length);
       const first = items[0],
         last = items.at(-1);
@@ -2551,6 +2566,8 @@
 >
   {#if navigationOpen}<button
       class="session-scrim"
+      type="button"
+      tabindex="-1"
       aria-label="Close session drawer"
       onclick={closeSessionDrawer}
     ></button>{/if}
@@ -2591,15 +2608,19 @@
       </div>{/if}
     <nav class="session-list" aria-label="Saved conversations">
       <button
+        id="pinned-group-heading"
         class="session-group-heading"
         aria-expanded={pinsOpen}
+        aria-controls="pinned-session-group"
         onclick={() => (pinsOpen = !pinsOpen)}>Pinned<Icon name="chevron" size={12} /></button
       >
-      {#if pinsOpen}{#each visibleSessions.filter( (item) => pinnedIds.includes(item.id) ) as item}{@render sessionRow(
-            item,
-          )}{/each}{#if !pinnedIds.length && !sessionSearch}<p class="session-empty">
+      <div id="pinned-session-group" class="session-group">
+        {#if pinsOpen}{#each visibleSessions.filter( (item) => pinnedIds.includes(item.id) ) as item}{@render sessionRow(
+              item,
+            )}{/each}{/if}{#if pinsOpen && !pinnedIds.length && !sessionSearch}<p class="session-empty">
             Pin a chat to keep it here.
-          </p>{/if}{/if}
+          </p>{/if}
+      </div>
       <ChatGroupHeader
         label={uiConfig.recentsLabel}
         expanded={recentsOpen}
@@ -3427,14 +3448,14 @@
     position: fixed;
     inset: 0;
     background: rgb(0 0 0 / 0.45);
-    z-index: 120;
+    z-index: 118;
   }
   :global(.chat-summary-dialog) {
     position: fixed;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    z-index: 121;
+    z-index: 119;
     width: min(400px, calc(100vw - 32px));
     max-height: 85vh;
     overflow: auto;
@@ -3776,6 +3797,10 @@
     gap: 0;
     overflow: auto;
     padding-top: 0;
+  }
+  /* Wrapper exists only to give `aria-controls` a target; layout stays the parent flex list. */
+  .session-group {
+    display: contents;
   }
   .reference-chat .session-group-heading {
     display: flex;
