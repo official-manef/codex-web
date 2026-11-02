@@ -132,6 +132,32 @@ describe('connect', () => {
 		const rows = await t.run(async (ctx) => await ctx.db.query('modelCreds').collect());
 		expect(rows[0].label).toHaveLength(80);
 	});
+
+	test('a new provider stops at the 32-key write cap, but reconnecting still works', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		// `listProviders` only reads the first 32 rows, so a 33rd was written and then hidden.
+		await t.run(async (ctx) => {
+			for (let i = 0; i < 32; i++)
+				await ctx.db.insert('modelCreds', {
+					owner: ALICE.tokenIdentifier,
+					provider: `p${i}`,
+					kind: 'api_key',
+					ciphertext: 'x',
+					updatedAt: 0
+				});
+		});
+		await expect(asAlice.action(api.credentials.connect, cred)).rejects.toThrow(/Maximum 32/);
+		expect(await t.run(async (ctx) => (await ctx.db.query('modelCreds').collect()).length)).toBe(
+			32
+		);
+
+		// A replacement is not an addition: no new row, so the cap must not block it.
+		await asAlice.action(api.credentials.connect, { provider: 'p0', apiKey: 'sk-rotated99999' });
+		expect(await t.run(async (ctx) => (await ctx.db.query('modelCreds').collect()).length)).toBe(
+			32
+		);
+	});
 });
 
 describe('reads are owner-scoped', () => {

@@ -28,10 +28,14 @@ export function cleanName(value: unknown): string | null {
 	return name;
 }
 
+const projectFile = v.object({ path: v.string(), bytes: v.number() });
+
 const project = v.object({
 	_id: v.id('projects'),
 	name: v.string(),
 	instructions: v.optional(v.string()),
+	/** Labels only. Returned by every read: the view renders `p.files` without a second query. */
+	files: v.optional(v.array(projectFile)),
 	createdAt: v.number()
 });
 
@@ -45,10 +49,11 @@ export const list = query({
 			.withIndex('by_owner', (q) => q.eq('owner', owner))
 			.order('desc')
 			.take(MAX_PROJECTS);
-		return rows.map(({ _id, name, instructions, createdAt }) => ({
+		return rows.map(({ _id, name, instructions, files, createdAt }) => ({
 			_id,
 			name,
 			...(instructions !== undefined ? { instructions } : {}),
+			...(files !== undefined ? { files } : {}),
 			createdAt
 		}));
 	}
@@ -144,6 +149,9 @@ export const assign = mutation({
 		if (!args.sessionId.trim()) {
 			fail('invalid_request', 'Session ID cannot be empty.');
 		}
+		if (args.sessionId.length > MAX_SESSION_ID_CHARS) {
+			fail('invalid_request', `Session ID cannot exceed ${MAX_SESSION_ID_CHARS} characters.`);
+		}
 		if (args.projectId !== null) {
 			const projectRow = await ctx.db.get('projects', args.projectId);
 			if (!projectRow || projectRow.owner !== owner) {
@@ -173,6 +181,7 @@ export const ofSession = query({
 	returns: v.union(project, v.null()),
 	handler: async (ctx, args) => {
 		const owner = await requireUser(ctx);
+		if (args.sessionId.length > MAX_SESSION_ID_CHARS) return null;
 		const rows = await ctx.db
 			.query('projectChats')
 			.withIndex('by_owner_session', (q) => q.eq('owner', owner).eq('sessionId', args.sessionId))
@@ -184,12 +193,15 @@ export const ofSession = query({
 			_id: projectRow._id,
 			name: projectRow.name,
 			...(projectRow.instructions !== undefined ? { instructions: projectRow.instructions } : {}),
+			...(projectRow.files !== undefined ? { files: projectRow.files } : {}),
 			createdAt: projectRow.createdAt
 		};
 	}
 });
 
 const MAX_PROJECT_FILES = 20;
+/** A session id is an opaque reference; the client's own ids are short. Bound it like one. */
+const MAX_SESSION_ID_CHARS = 200;
 
 /** A relative label, never a filesystem path: nothing reads it from disk. */
 function cleanProjectPath(value: unknown): string | null {
@@ -210,7 +222,7 @@ export const setDetail = mutation({
 	args: {
 		id: v.id('projects'),
 		instructions: v.optional(v.string()),
-		files: v.optional(v.array(v.object({ path: v.string(), bytes: v.number() })))
+		files: v.optional(v.array(projectFile))
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {

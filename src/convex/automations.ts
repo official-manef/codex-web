@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { internalMutation, internalQuery, mutation, query } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
 import { fail, requireUser } from './_shared/auth';
 import {
 	INTERVALS,
@@ -121,16 +121,31 @@ export const remove = mutation({
 	}
 });
 
-export const due = internalQuery({
+/**
+ * Automations due for the signed-in owner, newest deadline first.
+ *
+ * Public, not internal: the dry-run route is a SvelteKit handler, and a `ConvexHttpClient`
+ * cannot reach an internal function at all — the previous version cast an internal reference to
+ * a public one, which type-checked and then failed at every call. Identity comes from the
+ * caller's own session, so this stays owner-scoped and this route can never read another
+ * tenant's prompts.
+ *
+ * ponytail: a cross-owner drain (a cron, not a request) needs its own operator-authenticated
+ * entry point; this one deliberately cannot see past one owner.
+ */
+export const due = query({
 	args: {
 		now: v.optional(v.number())
 	},
 	returns: v.array(automationDoc),
 	handler: async (ctx, args) => {
+		const owner = await requireUser(ctx);
 		const now = args.now ?? Date.now();
 		return await ctx.db
 			.query('automations')
-			.withIndex('by_due', (q) => q.eq('enabled', true).lte('nextRunAt', now))
+			.withIndex('by_owner_due', (q) =>
+				q.eq('owner', owner).eq('enabled', true).lte('nextRunAt', now)
+			)
 			.take(MAX_AUTOMATIONS);
 	}
 });

@@ -81,11 +81,36 @@ export function isBuiltin(slug: string): boolean {
 	return Object.hasOwn(PROVIDERS, slug);
 }
 
-/** Public shape for a "connect a provider" picker. No secrets, no endpoints beyond docs. */
+/**
+ * Public shape for a "connect a provider" picker. No secrets, no endpoints beyond docs.
+ *
+ * The single copy of this map: `chat.providers` (the client-facing action) calls it, so the
+ * slug list cannot drift between the registry and the client.
+ */
 export function providerCatalog() {
 	return Object.entries(PROVIDERS).map(([slug, entry]) => ({
 		slug,
 		protocol: entry.protocol,
 		docsUrl: entry.docsUrl
 	}));
+}
+
+/**
+ * A `fetch` that cannot be redirected, cannot leave HTTPS, and (when `origin` is given) cannot
+ * leave that origin.
+ *
+ * A custom endpoint is user-supplied, so its origin cannot be pinned the way a built-in
+ * provider's can (`src/lib/server/ai/chat.ts` pins both). What it CAN pin is the behaviour:
+ * with `redirect: 'error'` a 30x cannot carry the user's key to a third host, and the scheme
+ * check refuses a plaintext downgrade even for a row stored before that rule existed.
+ */
+export function pinnedFetch(origin?: string): typeof fetch {
+	return (input, init) => {
+		const url = new URL(input instanceof Request ? input.url : String(input));
+		if (url.protocol !== 'https:' || url.username || url.password)
+			throw new Error('Provider request escaped its HTTPS endpoint');
+		if (origin !== undefined && url.origin !== origin)
+			throw new Error('Provider request escaped its fixed endpoint');
+		return fetch(input, { ...init, redirect: 'error' });
+	};
 }

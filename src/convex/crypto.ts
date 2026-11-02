@@ -7,6 +7,13 @@
  *
  * Web Crypto is available in the Convex runtime, so this runs in actions only (mutations are
  * deterministic and must not use getRandomValues).
+ *
+ * Binding the ciphertext to its row (GCM `additionalData: owner|provider`) is NOT done here.
+ * It would need a versioned envelope and a dual-path decrypt, because every existing
+ * `modelCreds`/`mcpConnections` row was sealed without AAD and would otherwise be unreadable.
+ * Two of the four call sites also live in `mcp.ts`, outside this change. Until that migration
+ * exists, an attacker who can write the database can swap one row's ciphertext for another's
+ * and the key would still decrypt — the deployment's write access is the boundary today.
  */
 const enc = new TextEncoder();
 const dec = new TextDecoder();

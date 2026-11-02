@@ -103,15 +103,23 @@ export const clear = mutation({
 	}
 });
 
+/**
+ * Mark memories as used. Internal only, so identity is not on the request: the caller passes the
+ * owner it already resolved, and a row belonging to anyone else is skipped rather than patched.
+ *
+ * Ceiling: the caller is trusted to pass its own owner (a `chat.send` style action). A row id
+ * alone is not authority, which is the bug this check closes.
+ */
 export const touch = internalMutation({
-	args: { ids: v.array(v.id('memories')) },
+	args: { owner: v.string(), ids: v.array(v.id('memories')) },
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const targetIds = args.ids.slice(0, MAX_MEMORIES);
 		const now = Date.now();
 		for (const id of targetIds) {
 			const row = await ctx.db.get('memories', id);
-			if (row) {
+			// Owner mismatch is a silent skip: an internal caller has no user to report to.
+			if (row && row.owner === args.owner) {
 				await ctx.db.patch('memories', id, { usedAt: now });
 			}
 		}

@@ -234,15 +234,33 @@ describe('automations: due query', () => {
 		);
 
 		// At t = 2000: only idPast is due (1000 <= 2000, enabled)
-		const dueAt2000 = await t.query(internal.automations.due, { now: 2000 });
+		const asAlice = t.withIdentity(ALICE);
+		const dueAt2000 = await asAlice.query(api.automations.due, { now: 2000 });
 		expect(dueAt2000.map((d) => d._id)).toEqual([idPast]);
 
 		// At t = 6000: idPast (1000 <= 6000) and idFuture (5000 <= 6000) are due; idDisabled is excluded
-		const dueAt6000 = await t.query(internal.automations.due, { now: 6000 });
+		const dueAt6000 = await asAlice.query(api.automations.due, { now: 6000 });
 		const idsAt6000 = dueAt6000.map((d) => d._id);
 		expect(idsAt6000).toContain(idPast);
 		expect(idsAt6000).toContain(idFuture);
 		expect(idsAt6000).not.toContain(idDisabled);
+	});
+
+	test('due is owner-scoped: another owner sees none of them', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		await asAlice.mutation(api.automations.create, { prompt: 'Alice job', intervalMinutes: 15 });
+		const later = Date.now() + 20 * 60_000;
+
+		// The dry-run route reaches this query as the signed-in user, so an index shared across
+		// owners would leak every tenant's prompts. Bob must get an empty set, not Alice's row.
+		expect(await t.withIdentity(BOB).query(api.automations.due, { now: later })).toEqual([]);
+		expect((await asAlice.query(api.automations.due, { now: later })).length).toBe(1);
+	});
+
+	test('due refuses an anonymous caller', async () => {
+		const t = convexTest(schema, modules);
+		await expect(t.query(api.automations.due, { now: Date.now() })).rejects.toThrow(/sign in/i);
 	});
 });
 

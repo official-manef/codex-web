@@ -7,7 +7,7 @@
 import { convexTest } from 'convex-test';
 import { describe, expect, test } from 'vitest';
 import schema from './schema';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 
 const modules = import.meta.glob('./**/*.ts');
 const ALICE = { subject: 'alice', tokenIdentifier: 'https://issuer|alice' };
@@ -82,6 +82,37 @@ describe('sessions', () => {
 		await expect(
 			t.mutation(api.threads.createSession, { title: 'x', model: 'm', engine: 'cloud' })
 		).rejects.toThrow();
+	});
+
+	test(`createSession stops at the 50-session write cap`, async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		// The same ceiling `listSessions` reads with: past it the rows were written but never
+		// shown, so the cap has to be enforced on the write path too.
+		await t.run(async (ctx) => {
+			for (let i = 0; i < 50; i++)
+				await ctx.db.insert('sessions', {
+					owner: ALICE.tokenIdentifier,
+					title: `s${i}`,
+					model: 'm',
+					engine: 'cloud',
+					at: i
+				});
+		});
+		await expect(
+			asAlice.mutation(api.threads.createSession, {
+				title: 'overflow',
+				model: 'm',
+				engine: 'cloud'
+			})
+		).rejects.toThrow(/Maximum 50/);
+		expect(await t.run(async (ctx) => await ctx.db.query('sessions').collect())).toHaveLength(50);
+		// A different owner is unaffected by Alice's quota.
+		await t.withIdentity(BOB).mutation(api.threads.createSession, {
+			title: 'bob',
+			model: 'm',
+			engine: 'cloud'
+		});
 	});
 });
 
@@ -205,6 +236,20 @@ describe('messages', () => {
 		const messages = await asAlice.query(api.threads.listMessages, { sessionId: id });
 		expect(messages.map((message) => message.content)).toEqual(['one', 'two', 'three']);
 	});
+
+	test('an empty or whitespace-only turn is refused, not stored as a blank bubble', async () => {
+		const { t, asAlice, id } = await withSession();
+		for (const content of ['', '   ', '\n\t '])
+			await expect(
+				asAlice.mutation(api.threads.appendMessage, {
+					sessionId: id,
+					role: 'user',
+					content,
+					source: 'cloud'
+				})
+			).rejects.toThrow(/cannot be empty/);
+		expect(await t.run(async (ctx) => await ctx.db.query('messages').collect())).toEqual([]);
+	});
 });
 
 describe('usage summary', () => {
@@ -261,6 +306,39 @@ describe('usage summary', () => {
 			errors: 0
 		});
 	});
+
+	test('log prunes usage rows past the retention window instead of appending forever', async () => {
+		const t = convexTest(schema, modules);
+		const owner = ALICE.tokenIdentifier;
+		// 60 rows from 40 days ago: all past the 30-day window.
+		await t.run(async (ctx) => {
+			for (let i = 0; i < 60; i++)
+				await ctx.db.insert('usage', {
+					owner,
+					provider: 'openai',
+					model: 'gpt-a',
+					promptTokens: 1,
+					completionTokens: 1,
+					status: 'ok',
+					at: Date.now() - 40 * 24 * 60 * 60 * 1000
+				});
+		});
+
+		await t.mutation(internal.threads.log, {
+			owner,
+			provider: 'openai',
+			model: 'gpt-a',
+			promptTokens: 1,
+			completionTokens: 1,
+			status: 'ok'
+		});
+
+		// One batch (50) of stale rows is reclaimed per write, so the table is bounded and the
+		// fresh row survives.
+		const rows = await t.run(async (ctx) => await ctx.db.query('usage').collect());
+		expect(rows).toHaveLength(11);
+		expect(rows.some((row) => row.at > Date.now() - 60_000)).toBe(true);
+	});
 });
 
 describe('decisions', () => {
@@ -301,18 +379,51 @@ describe('decisions', () => {
 		const asAlice = t.withIdentity(ALICE);
 		const cases: Array<[Partial<typeof decision>, string]> = [
 			[{ stateTokens: 10_000 }, 'truncates silently'],
+			// A count is a whole, non-negative number: -1 and 0.5 used to slip past the upper
+			// bound only.
+			[{ stateTokens: -1 }, 'non-negative whole number'],
+			[{ stateTokens: 0.5 }, 'non-negative whole number'],
+			[{ stateTokens: Number.NaN }, 'non-negative whole number'],
 			[{ answerCount: 0 }, 'between 1'],
 			[{ answerCount: 999 }, 'between 1'],
+			[{ answerCount: 1.5 }, 'between 1'],
 			[{ probability: -0.1 }, 'between 0 and 1'],
 			[{ probability: 1.1 }, 'between 0 and 1'],
 			[{ probability: Number.NaN }, 'between 0 and 1'],
-			[{ question: 'pregunta é' }, 'ASCII']
+			[{ question: 'pregunta é' }, 'ASCII'],
+			// The choice reaches the model on the next turn, so it is held to the ASCII rule too.
+			[{ choice: '' }, '1 to 120'],
+			[{ choice: '   ' }, '1 to 120'],
+			[{ choice: 'x'.repeat(121) }, '1 to 120'],
+			[{ choice: 'pilihan é' }, 'ASCII']
 		];
 		for (const [patch, message] of cases)
 			await expect(
 				asAlice.mutation(api.decisions.record, { ...decision, ...patch })
 			).rejects.toThrow(message);
 		expect(await t.run(async (ctx) => await ctx.db.query('decisions').collect())).toEqual([]);
+	});
+
+	test('record stops at the 200-decision write cap', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		// The same ceiling `listForSession` reads with: past it the rows were written but never
+		// shown, so the cap has to be enforced on the write path too.
+		await t.run(async (ctx) => {
+			for (let i = 0; i < 200; i++)
+				await ctx.db.insert('decisions', {
+					owner: ALICE.tokenIdentifier,
+					kind: 'choice',
+					question: 'q',
+					choice: 'a',
+					probability: 0.5,
+					engine: 'npu',
+					at: i
+				});
+		});
+		await expect(asAlice.mutation(api.decisions.record, decision)).rejects.toThrow(/Maximum 200/);
+		// A different owner is unaffected by Alice's quota.
+		await t.withIdentity(BOB).mutation(api.decisions.record, decision);
 	});
 
 	test('the probability bounds are inclusive', async () => {

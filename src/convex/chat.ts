@@ -8,7 +8,7 @@ import { action } from './_generated/server';
 import { internal } from './_generated/api';
 import { fail, requireUser } from './_shared/auth';
 import { decryptSecret } from './crypto';
-import { isBuiltin, PROVIDERS } from './providers';
+import { isBuiltin, pinnedFetch, providerCatalog, PROVIDERS } from './providers';
 
 /**
  * BYOK chat. The model call runs with the signed-in user's OWN key, decrypted inside this
@@ -104,6 +104,16 @@ export const send = action({
 		const baseURL = entry ? entry.baseUrl : row.endpoint;
 		if (!baseURL) fail('unsupported', `No endpoint is configured for ${provider}.`);
 
+		// A built-in provider's protocol comes from the registry, never from the stored row: for a
+		// built-in slug `protocol` is caller-supplied noise on `connect` and must not pick the wire
+		// format. Only a custom provider has no registry entry to ask.
+		const protocol = entry ? entry.protocol : row.protocol === 'anthropic' ? 'anthropic' : 'openai';
+
+		// Neither path may be redirected: a 30x would hand the decrypted key to another host, and
+		// `generateText` follows redirects by default. A built-in is additionally pinned to its
+		// registry origin; a custom endpoint is user-supplied, so only HTTPS is pinned there.
+		const providerFetch = entry ? pinnedFetch(new URL(entry.baseUrl).origin) : pinnedFetch();
+
 		const messages = args.decisionNote
 			? [
 					{
@@ -116,9 +126,9 @@ export const send = action({
 
 		try {
 			const result =
-				entry?.protocol === 'anthropic' || row.protocol === 'anthropic'
+				protocol === 'anthropic'
 					? await generateText({
-							model: createAnthropic({ apiKey, baseURL })(model),
+							model: createAnthropic({ apiKey, baseURL, fetch: providerFetch })(model),
 							messages,
 							maxOutputTokens: MAX_OUTPUT_TOKENS,
 							maxRetries: 0,
@@ -126,7 +136,7 @@ export const send = action({
 							telemetry: { isEnabled: false }
 						})
 					: await generateText({
-							model: createOpenAI({ apiKey, baseURL })(model),
+							model: createOpenAI({ apiKey, baseURL, fetch: providerFetch })(model),
 							messages,
 							maxOutputTokens: MAX_OUTPUT_TOKENS,
 							maxRetries: 0,
@@ -164,12 +174,5 @@ export const send = action({
 export const providers = action({
 	args: {},
 	returns: v.array(v.object({ slug: v.string(), protocol: v.string(), docsUrl: v.string() })),
-	handler: async () => {
-		const rows = Object.entries(PROVIDERS).map(([slug, entry]) => ({
-			slug,
-			protocol: entry.protocol,
-			docsUrl: entry.docsUrl
-		}));
-		return rows;
-	}
+	handler: async () => providerCatalog()
 });

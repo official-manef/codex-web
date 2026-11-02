@@ -74,8 +74,8 @@ export default defineSchema({
 		engine: v.string(),
 		at: v.number()
 	})
-		.index('by_owner_at', ['owner', 'at'])
-		.index('by_owner_title', ['owner', 'title']),
+		// `by_owner_title` was removed: no query ever selected a session by title.
+		.index('by_owner_at', ['owner', 'at']),
 
 	messages: defineTable({
 		owner: v.string(),
@@ -86,8 +86,9 @@ export default defineSchema({
 		source: v.string(),
 		at: v.number()
 	})
-		.index('by_session_at', ['sessionId', 'at'])
-		.index('by_owner', ['owner']),
+		// `by_owner` was removed here: every message read goes through the session id, and the
+		// owner is checked on the parent row. An index nobody queries only costs write time.
+		.index('by_session_at', ['sessionId', 'at']),
 
 	// ── decision model (Jev) ─────────────────────────────────────────────────────────────
 	// Passive log of decisions a *device* ran. The template never runs the model server-side;
@@ -174,5 +175,7 @@ export default defineSchema({
 		lastRunAt: v.optional(v.number())
 	})
 		.index('by_owner', ['owner'])
-		.index('by_due', ['enabled', 'nextRunAt'])
+		// The owner-scoped due read: `by_due` alone had no owner field, so `due` could not be
+		// both indexed and owner-scoped. Field order matches the query.
+		.index('by_owner_due', ['owner', 'enabled', 'nextRunAt'])
 });

@@ -170,6 +170,7 @@ describe('ownership audit: enumerated, not hand-checked', () => {
 		// `requireUser` from one handler and the handler itself would both keep this file green.
 		expect(paths).toEqual([
 			'automations.create',
+			'automations.due',
 			'automations.list',
 			'automations.remove',
 			'automations.setEnabled',
@@ -264,6 +265,47 @@ describe('ownership audit: enumerated, not hand-checked', () => {
 
 		expect(accepted, `answered an anonymous caller: ${accepted.join(', ')}`).toEqual([]);
 		expect(wrongError, `refused, but not by identity: ${wrongError.join(' | ')}`).toEqual([]);
+	});
+});
+
+describe('index audit: every declared index has a query', () => {
+	/**
+	 * Pinned, because an unused index is a write cost with no read benefit. Adding one must be a
+	 * deliberate edit here — which is also how `by_owner_title`, `messages.by_owner` and
+	 * `decisions.by_owner_at` were found and removed.
+	 */
+	test('the declared index set is exactly the one the queries use', () => {
+		// Read straight off the schema object: `_tables` is not queryable in `convex-test`, and
+		// the schema is the authority anyway.
+		const tables = (schema as unknown as { tables: Record<string, { indexes: unknown[] }> }).tables;
+		const declared = Object.entries(tables)
+			.flatMap(([name, table]) =>
+				(table.indexes as Array<{ indexDescriptor: string; fields: string[] }>).map(
+					(index) => `${name}.${index.indexDescriptor}(${index.fields.join(',')})`
+				)
+			)
+			.sort();
+		expect(declared).toEqual([
+			'automations.by_owner(owner)',
+			'automations.by_owner_due(owner,enabled,nextRunAt)',
+			'decisions.by_owner_at(owner,at)',
+			'decisions.by_session(sessionId,at)',
+			'devices.by_owner(owner)',
+			'mcpApprovals.by_owner(owner)',
+			'mcpApprovals.by_owner_token(owner,tokenHash)',
+			'mcpConnections.by_owner(owner)',
+			'mcpConnections.by_owner_alias(owner,alias)',
+			'memories.by_owner(owner)',
+			'messages.by_session_at(sessionId,at)',
+			'modelCreds.by_owner(owner)',
+			'modelCreds.by_owner_provider(owner,provider)',
+			'projectChats.by_owner(owner)',
+			'projectChats.by_owner_session(owner,sessionId)',
+			'projectChats.by_project(projectId)',
+			'projects.by_owner(owner)',
+			'sessions.by_owner_at(owner,at)',
+			'usage.by_owner_at(owner,at)'
+		]);
 	});
 });
 

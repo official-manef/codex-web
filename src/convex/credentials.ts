@@ -169,8 +169,17 @@ export const store = internalMutation({
 			updatedAt: Date.now()
 		};
 		if (existing) await ctx.db.patch('modelCreds', existing._id, patch);
-		else
+		else {
+			// A replacement is not an addition. Without this, `listProviders` read only the first
+			// MAX_PROVIDERS rows while the table accepted every new slug.
+			const rows = await ctx.db
+				.query('modelCreds')
+				.withIndex('by_owner', (q) => q.eq('owner', args.owner))
+				.take(MAX_PROVIDERS);
+			if (rows.length >= MAX_PROVIDERS)
+				fail('quota_exceeded', `Maximum ${MAX_PROVIDERS} provider keys reached.`);
 			await ctx.db.insert('modelCreds', { owner: args.owner, provider: args.provider, ...patch });
+		}
 		return null;
 	}
 });

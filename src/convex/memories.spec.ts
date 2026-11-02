@@ -198,6 +198,53 @@ describe('project assignment and deletion', () => {
 	});
 });
 
+describe('project detail round-trip', () => {
+	test('create -> setDetail({files}) -> list returns the file labels', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+
+		const id = await asAlice.mutation(api.projects.create, {
+			name: 'Docs',
+			instructions: 'Be brief.'
+		});
+		const files = [
+			{ path: 'src/index.ts', bytes: 120 },
+			{ path: 'docs/README.md', bytes: 40 }
+		];
+		await asAlice.mutation(api.projects.setDetail, { id, instructions: 'Be brief.', files });
+
+		// The view reads `p.files` off the list row and never issues a second query, so a list
+		// that drops the field shows an empty file list forever.
+		const [project] = await asAlice.query(api.projects.list, {});
+		expect(project.files).toEqual(files);
+		expect(project.instructions).toBe('Be brief.');
+
+		// ofSession is the other projection of the same row and must agree with list.
+		await asAlice.mutation(api.projects.assign, { projectId: id, sessionId: 's-1' });
+		expect((await asAlice.query(api.projects.ofSession, { sessionId: 's-1' }))?.files).toEqual(
+			files
+		);
+	});
+
+	test('a project with no detail omits files rather than returning null', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		await asAlice.mutation(api.projects.create, { name: 'Bare' });
+		const [project] = await asAlice.query(api.projects.list, {});
+		expect(project).not.toHaveProperty('files');
+	});
+
+	test('sessionId is bounded, so an oversized reference is refused', async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		const id = await asAlice.mutation(api.projects.create, { name: 'P' });
+		await expect(
+			asAlice.mutation(api.projects.assign, { projectId: id, sessionId: 's'.repeat(201) })
+		).rejects.toThrow('200');
+		expect(await t.run(async (ctx) => await ctx.db.query('projectChats').collect())).toEqual([]);
+	});
+});
+
 describe('touch internal mutation', () => {
 	test('touch caps at 50 ids', async () => {
 		const t = convexTest(schema, modules);
@@ -216,7 +263,7 @@ describe('touch internal mutation', () => {
 
 		expect(ids).toHaveLength(55);
 
-		await t.mutation(internal.memories.touch, { ids });
+		await t.mutation(internal.memories.touch, { owner: ALICE.tokenIdentifier, ids });
 
 		await t.run(async (ctx) => {
 			for (let i = 0; i < 50; i++) {
@@ -229,5 +276,24 @@ describe('touch internal mutation', () => {
 				expect(row?.usedAt).toBeUndefined();
 			}
 		});
+	});
+
+	test("touch never marks another owner's memory as used", async () => {
+		const t = convexTest(schema, modules);
+		const asAlice = t.withIdentity(ALICE);
+		const asBob = t.withIdentity(BOB);
+		const aliceId = await asAlice.mutation(api.memories.add, { text: 'Alice note' });
+		const bobId = await asBob.mutation(api.memories.add, { text: 'Bob note' });
+
+		// A raw id is not authority: before the owner check, whoever held the id could stamp
+		// usedAt on a stranger's note, which is a write across the tenant boundary.
+		await t.mutation(internal.memories.touch, {
+			owner: BOB.tokenIdentifier,
+			ids: [aliceId, bobId]
+		});
+
+		const rows = await t.run(async (ctx) => await ctx.db.query('memories').collect());
+		expect(rows.find((row) => row._id === aliceId)?.usedAt).toBeUndefined();
+		expect(rows.find((row) => row._id === bobId)?.usedAt).toEqual(expect.any(Number));
 	});
 });

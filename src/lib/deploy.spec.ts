@@ -16,7 +16,7 @@ test('deployment checks reject wrong keys before any command runs', () => {
 		});
 		expect(result.status === 0).toBe(allowed);
 		if (allowed) {
-			expect(result.stdout.split('\n')[0]).toBe('bun run verify');
+			expect(result.stdout.split('\n')[0]).toBe('bash bin/gate');
 			expect(result.stdout).toContain('--cmd-url-env-var-name PUBLIC_CONVEX_URL');
 		} else expect(result.stdout).toBe('');
 		expect(result.stdout + result.stderr).not.toContain('example');

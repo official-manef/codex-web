@@ -3,7 +3,16 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { MAX_RUNS_PER_DRAIN } from '$lib/automations_runner';
 import { POST } from './+server';
 
-const { privateEnv, publicEnv, mockQuery, mockMutation, accessMock, logMock } = vi.hoisted(() => ({
+const {
+	privateEnv,
+	publicEnv,
+	mockQuery,
+	mockMutation,
+	accessMock,
+	logMock,
+	sessionMock,
+	clientAuth
+} = vi.hoisted(() => ({
 	privateEnv: {} as Record<string, string>,
 	publicEnv: {
 		PUBLIC_SITE_URL: 'https://app.example.com',
@@ -16,7 +25,13 @@ const { privateEnv, publicEnv, mockQuery, mockMutation, accessMock, logMock } = 
 	},
 	logMock: {
 		logEvent: vi.fn()
-	}
+	},
+	sessionMock: {
+		authConfiguration: vi.fn(),
+		getConvexToken: vi.fn()
+	},
+	/** Tokens handed to the Convex client; the identity the read runs as. */
+	clientAuth: { tokens: [] as string[] }
 }));
 
 vi.mock('$env/dynamic/private', () => ({ env: privateEnv }));
@@ -27,10 +42,17 @@ vi.mock('$lib/server/access', () => ({
 vi.mock('$lib/server/log', () => ({
 	logEvent: logMock.logEvent
 }));
+vi.mock('$lib/server/auth/session', () => ({
+	authConfiguration: sessionMock.authConfiguration,
+	getConvexToken: sessionMock.getConvexToken
+}));
 vi.mock('convex/browser', () => {
 	class FakeConvexHttpClient {
 		query = mockQuery;
 		mutation = mockMutation;
+		setAuth = (token: string) => {
+			clientAuth.tokens.push(token);
+		};
 	}
 	return {
 		ConvexHttpClient: FakeConvexHttpClient
@@ -62,6 +84,11 @@ describe('/api/automations/run POST', () => {
 		});
 		accessMock.requireCapabilityAccess.mockReset().mockResolvedValue(undefined);
 		logMock.logEvent.mockReset().mockResolvedValue(undefined);
+		// Signed-in by default: the route previews one owner's automations, so without a token
+		// it is allowed to read nothing.
+		sessionMock.authConfiguration.mockReset().mockReturnValue({ enabled: true });
+		sessionMock.getConvexToken.mockReset().mockResolvedValue('test-id-token');
+		clientAuth.tokens.length = 0;
 		mockQuery.mockReset().mockResolvedValue([]);
 		mockMutation.mockReset().mockResolvedValue(null);
 	});
@@ -327,5 +354,32 @@ describe('/api/automations/run POST', () => {
 		expect(body.wouldRun).toBe(0);
 		expect(body.decisions).toEqual([]);
 		expect(mockMutation).not.toHaveBeenCalled();
+	});
+
+	test('the Convex client is given the caller identity, not left anonymous', async () => {
+		mockQuery.mockResolvedValueOnce([]);
+		const res = await POST(makePostEvent());
+		expect(res.status).toBe(200);
+		// `setAuth` is what makes the public `automations.due` handler see an owner. Without it
+		// the query would be refused and every preview would read as zero.
+		expect(clientAuth.tokens).toContain('test-id-token');
+	});
+
+	test('without a session token the route reads nothing instead of reading everyone', async () => {
+		sessionMock.getConvexToken.mockResolvedValueOnce(null);
+
+		const res = await POST(makePostEvent());
+		const body = await res.json();
+		expect(body.considered).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
+	});
+
+	test('when auth is disabled on the deployment there is no owner, so no read', async () => {
+		sessionMock.authConfiguration.mockReturnValueOnce({ enabled: false });
+
+		const res = await POST(makePostEvent());
+		const body = await res.json();
+		expect(body.considered).toBe(0);
+		expect(mockQuery).not.toHaveBeenCalled();
 	});
 });

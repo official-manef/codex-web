@@ -1,6 +1,6 @@
 import { v } from 'convex/values';
 import { internalMutation, mutation, query } from './_generated/server';
-import { requireUser } from './_shared/auth';
+import { fail, requireUser } from './_shared/auth';
 
 /**
  * Chat persistence and usage counters.
@@ -12,6 +12,10 @@ import { requireUser } from './_shared/auth';
 
 const MAX_SESSIONS = 50;
 const MAX_MESSAGES = 200;
+/** Usage history is kept for a rolling window, then pruned by the writer itself. */
+const USAGE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+/** How many stale usage rows one write is allowed to remove. */
+const USAGE_PRUNE_BATCH = 50;
 /** Bounded drain rounds when deleting a session's messages. */
 const DELETE_ROUNDS = 20;
 
@@ -52,6 +56,14 @@ export const createSession = mutation({
 	handler: async (ctx, args) => {
 		const owner = await requireUser(ctx);
 		const title = args.title.trim().slice(0, 120) || 'New chat';
+		// The read bound is not a write bound: without this check `listSessions` silently hid
+		// every session past the 50th while the table kept growing.
+		const existing = await ctx.db
+			.query('sessions')
+			.withIndex('by_owner_at', (q) => q.eq('owner', owner))
+			.take(MAX_SESSIONS);
+		if (existing.length >= MAX_SESSIONS)
+			fail('quota_exceeded', `Maximum ${MAX_SESSIONS} saved chats reached. Delete one first.`);
 		return await ctx.db.insert('sessions', {
 			owner,
 			title,
@@ -136,6 +148,9 @@ export const appendMessage = mutation({
 		const owner = await requireUser(ctx);
 		const parent = await ctx.db.get('sessions', args.sessionId);
 		if (!parent || parent.owner !== owner) throw new Error('That chat is not available.');
+		// An empty turn is a blank bubble that no reader can act on; reject it at the boundary
+		// instead of storing it (it used to be stored as `''` after the slice).
+		if (!args.content.trim()) fail('invalid_request', 'A message cannot be empty.');
 		const content = args.content.slice(0, 32_000);
 		const id = await ctx.db.insert('messages', {
 			owner,
@@ -163,7 +178,17 @@ export const log = internalMutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await ctx.db.insert('usage', { ...args, at: Date.now() });
+		// Append-only before this: the usage table grew without bound. Prune rows past the
+		// retention window on each write, using the indexed order so the read stays bounded.
+		// ponytail: time-based retention only; add a row cap if one owner logs more than
+		// USAGE_PRUNE_BATCH rows a day.
+		const now = Date.now();
+		const stale = await ctx.db
+			.query('usage')
+			.withIndex('by_owner_at', (q) => q.eq('owner', args.owner).lt('at', now - USAGE_RETENTION_MS))
+			.take(USAGE_PRUNE_BATCH);
+		for (const row of stale) await ctx.db.delete('usage', row._id);
+		await ctx.db.insert('usage', { ...args, at: now });
 		return null;
 	}
 });
