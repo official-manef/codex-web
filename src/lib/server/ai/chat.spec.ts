@@ -114,6 +114,20 @@ test('AI is off without config and rejects unapproved models, endpoints and over
 	expect(aiSettings({})).toEqual({ enabled: false, providers: [] });
 	expect(() => parseChat({}, input)).toThrow('disabled');
 	expect(parseChat(env, input).model).toBe('approved-model');
+	// Slash is part of a real model id on the 9router catalog (`cx/gpt-6.1-sol`). Rejecting it
+	// made every namespaced model unusable, which is where most of the working catalog lives.
+	expect(
+		parseChat(
+			{ AI_ENABLED: 'true', AI_MODELS_JSON: '{"nine-router":["cx/gpt-6.1-sol"]}' },
+			{ ...input, provider: 'nine-router', model: 'cx/gpt-6.1-sol' }
+		).model
+	).toBe('cx/gpt-6.1-sol');
+	expect(() =>
+		parseChat(
+			{ AI_ENABLED: 'true', AI_MODELS_JSON: '{"nine-router":["cx/gpt-6.1-sol"]}' },
+			{ ...input, provider: 'nine-router', model: 'cx/../escape' }
+		)
+	).toThrow();
 	expect(() => parseChat(env, { ...input, model: 'unapproved' })).toThrow('not approved');
 	expect(() => parseChat(env, { ...input, baseURL: 'https://elsewhere.example' })).toThrow();
 	expect(() =>

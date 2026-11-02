@@ -5,7 +5,7 @@ import { decodedBytes, MAX_IMAGE_BYTES, MAX_IMAGES_PER_TURN } from '$lib/uploads
 import type { IntegrationEnv } from '../integrations/config';
 import { EFFORTS, effortForProvider, type ReasoningEffort } from '../../reasoning';
 
-const modelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/);
+const modelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/);
 const modelsSchema = z
 	.object({
 		openai: z.array(modelName).max(20).default([]),
