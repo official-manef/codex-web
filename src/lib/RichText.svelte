@@ -117,7 +117,7 @@
     margin: 0.85em 0;
     overflow-x: auto;
     border: 1px solid var(--color-line);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     padding: 14px 16px;
     background: var(--color-panel);
     white-space: pre;

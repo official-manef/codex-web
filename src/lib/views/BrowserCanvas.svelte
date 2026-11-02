@@ -528,6 +528,12 @@
   :global(.browser-menu-item[data-highlighted]) {
     background: var(--color-hover);
   }
+  /* Same keyboard indicator as `.workspace-menu-item`; this menu is a separate implementation
+     and never got the outline fix, so ArrowDown moved focus invisibly. */
+  :global(.browser-menu-item:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: -2px;
+  }
   :global(.browser-menu-item[data-disabled]) {
     opacity: 0.45;
   }
@@ -592,7 +598,7 @@
     padding: 4px 6px;
     background: var(--color-hover);
     border: 1px solid var(--color-line);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     text-align: center;
   }
   .device-toolbar select {
@@ -602,7 +608,7 @@
     background: var(--color-frame);
     color: var(--color-ink);
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
   }
   .device-toolbar .icon-button {
     padding: 4px;

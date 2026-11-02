@@ -52,7 +52,7 @@
   }
   button[aria-pressed="true"] {
     background: var(--color-hover);
-    border-color: var(--color-line-strong);
+    border-color: var(--color-line);
     color: var(--color-ink);
   }
   button:disabled {

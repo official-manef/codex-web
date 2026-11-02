@@ -382,7 +382,7 @@
   .delete[open] {
     border: 1px solid var(--color-line);
     padding: 6px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
   }
   .comparison,
   .replay {
@@ -395,7 +395,7 @@
     padding: 12px;
     border: 1px solid #715b36;
     color: #f2d6a3;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     margin-bottom: 12px;
   }
   .error {

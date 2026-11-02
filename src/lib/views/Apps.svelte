@@ -800,7 +800,7 @@
     max-height: 150px;
     padding: 12px;
     background: var(--color-panel-2);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -843,7 +843,7 @@
   }
   input[type="file"]::file-selector-button {
     border: 1px solid var(--color-line);
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     padding: 10px 12px;
     margin-right: 12px;
     cursor: pointer;

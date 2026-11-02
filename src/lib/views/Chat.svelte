@@ -35,7 +35,7 @@
   import Recorder from "#lib/Recorder.svelte";
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
   import { Pencil, Trash2 } from "@lucide/svelte";
-  import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
+  import { clearSessionDrafts, pruneSessionDrafts, readDraft, saveDraft } from "#lib/drafts.js";
   import { readActiveSession, saveActiveSession } from "#lib/active_session.js";
   import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
@@ -715,9 +715,9 @@
     return () => clearTimeout(timer);
   });
   function rememberSession(id: string) {
-    // `localStorage` under a version envelope: a bare id from an older build is migrated once,
-    // and a payload from a newer build is left alone instead of being replaced by this id.
-    saveActiveSession(id);
+    try {
+      localStorage.setItem("laya-session", id);
+    } catch {}
   }
   function stamp(value: any) {
     if (!value) return "";
@@ -821,21 +821,20 @@
   async function refreshSessions() {
     const d = checked(await api.sessions());
     sessions = d.sessions ?? [];
+    // Every per-chat draft key is written once and used to survive its chat forever: 30
+    // create/delete cycles left 30 `chat-mode:` entries behind. The session list is the only
+    // point where the live ids are known, so the sweep runs here.
+    pruneSessionDrafts(sessions.map((item: any) => String(item.id)));
     // A full quota used to be entirely silent: the turn appeared saved, then vanished on the
-    // next reload. The store reports the failed write and the view says it out loud. A payload
-    // this build cannot read outranks both: writing is refused *because* of it, so the quota
-    // message would be a lie.
-    storageWarning = d.storage?.newer
-      ? `This browser holds a chat list written by a newer version of the app (format ${d.storage.newer}). Nothing was changed or deleted; update the app to see those chats.`
-      : d.storage?.quarantined
-        ? `Part of the stored chat list could not be read, so it was copied to ${d.storage.quarantined} instead of being deleted. Readable chats were kept.`
-        : d.storage?.persisted === false
-          ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
-          : (d.storage?.dropped ?? 0) > 0
-            ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
-                d.storage.dropped === 1 ? " was" : "s were"
-              } dropped when this browser ran out of room.`
-            : "";
+    // next reload. The store reports the failed write and the view says it out loud.
+    storageWarning =
+      d.storage?.persisted === false
+        ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
+        : (d.storage?.dropped ?? 0) > 0
+          ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
+              d.storage.dropped === 1 ? " was" : "s were"
+            } dropped when this browser ran out of room.`
+          : "";
   }
   function applySession(d: any) {
     clearVoice();
@@ -1560,7 +1559,7 @@
       if (action === "clear") session = checked(await api.sessionClear(id)).session;
       else {
         checked(await api.sessionDelete(id));
-        clearDraft(`chat:${id}`);
+        clearSessionDrafts(id);
         clearVoice();
         draft = "";
         attachments = [];
@@ -2373,8 +2372,8 @@
 
 <Dialog.Root bind:open={contextSummaryOpen}
   ><Dialog.Portal
-    ><Dialog.Overlay class="dialog-overlay chat-summary-overlay" /><Dialog.Content
-      class="dialog-shell chat-context-summary chat-summary-dialog"
+    ><Dialog.Overlay class="chat-summary-overlay" /><Dialog.Content
+      class="chat-context-summary chat-summary-dialog"
       onCloseAutoFocus={(event) => {
         event.preventDefault();
         void tick().then(() =>
@@ -3232,22 +3231,11 @@
               label="Model"
               bind:value={modelId}
               options={modelOptions}
-              disabled={busy || !!operation || !modelOptions.length}
+              disabled={busy || !!operation}
             />
           </div>
-          {#if !catalogue}
-            <p class="inspector-note" role="status">
-              Reading this build's model catalogue. The model and device selectors stay empty until
-              it answers.
-            </p>
-          {:else if modelOptions.length === 0}
-            <p class="inspector-note" role="status">
-              The catalogue answered with no model rows. No model is installed here, so there is
-              nothing to select; <a class="underline" href="#models">Models &amp; downloads</a> is
-              where one would come from.
-            </p>
-          {/if}
-          <ModelCapabilities capabilities={model?.capabilities} />          <div class="inspector-field">
+          <ModelCapabilities capabilities={model?.capabilities} />
+          <div class="inspector-field">
             <span>Device</span><AppSelect
               label="Chat device"
               value={device}
@@ -3386,13 +3374,24 @@
     margin: 5px 0;
   }
   :global(.chat-summary-overlay) {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 0.45);
     z-index: 120;
   }
   :global(.chat-summary-dialog) {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     z-index: 121;
     width: min(400px, calc(100vw - 32px));
     max-height: 85vh;
+    overflow: auto;
     padding: 20px;
+    border: 1px solid var(--color-line);
+    border-radius: 12px;
+    background: var(--color-panel);
   }
 
   .shared-chat-panel {
@@ -3695,7 +3694,7 @@
   }
   .reference-chat .session-sidebar {
     padding: 10px 10px 16px;
-    background: var(--color-panel);
+    background: var(--color-nav, var(--color-panel));
   }
   .reference-chat .workspace-navigation {
     padding: 0;
@@ -3867,8 +3866,8 @@
     height: 122px;
     padding: 8px;
     border-radius: 7px;
-    background: var(--color-panel);
-    border: 1px solid var(--color-line);
+    background: var(--color-nav, var(--color-panel));
+    border: 1px solid var(--color-line-strong);
     overflow: hidden;
   }
   .reference-chat .composer-attachments > div > span {

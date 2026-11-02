@@ -366,7 +366,7 @@
 	.providers-field input,
 	.providers-field select {
 		border: 1px solid var(--color-line);
-		border-radius: 6px;
+		border-radius: var(--radius-card);
 		background: var(--color-panel-2);
 		padding: 7px 10px;
 		font: inherit;
@@ -400,7 +400,7 @@
 	.providers-actions button,
 	.providers-list button {
 		border: 1px solid var(--color-line);
-		border-radius: 6px;
+		border-radius: var(--radius-card);
 		padding: 6px 12px;
 		font-size: 12px;
 		color: var(--color-ink);

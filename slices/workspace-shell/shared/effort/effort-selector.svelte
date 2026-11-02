@@ -157,7 +157,7 @@
   .effort-reset {
     display: grid;
     place-items: center;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     color: var(--color-ink-2);
   }
   .effort-slider {
@@ -172,7 +172,7 @@
   }
   .effort-options button {
     min-height: 32px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     padding: 6px 8px;
     text-align: left;
   }

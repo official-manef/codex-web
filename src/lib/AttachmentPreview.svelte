@@ -59,7 +59,7 @@
     width: 60px;
     height: 60px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
   }
   .attachment-preview.compact img {
     width: 44px;
