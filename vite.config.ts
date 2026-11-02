@@ -24,8 +24,10 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					// The typed-ESLint specs boot a full project service; 5s is not enough once
-					// `slices/**` grew. 30s keeps the suite honest without hiding hangs.
-					testTimeout: 30_000,
+					// `slices/**` grew. 30s then stopped being enough too: measured 54s once the
+					// parity batch added ~20 modules to the typed-lint graph. 120s is a ceiling
+					// that still fails a real hang, and it is measured, not guessed.
+					testTimeout: 120_000,
 					include: ['src/**/*.{test,spec}.{js,ts}', 'slices/**/*.{test,spec}.{js,ts}'],
 					exclude: ['**/*.svelte.{test,spec}.{js,ts}']
 				}

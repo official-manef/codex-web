@@ -245,6 +245,13 @@ const SURFACES: readonly Surface[] = [
 		honest: /keeps no connections|choose an mcp connection|choose a connection/i
 	},
 	{
+		id: 'projects',
+		open: (page) => settings(page, 'Projects'),
+		root: dialogContent,
+		// Local by default: the view says which store is active and that files are labels only.
+		honest: /this browser|convex|labels only|no projects yet/i
+	},
+	{
 		id: 'chat-settings',
 		open: (page) => userMenuItem(page, /^Settings$/),
 		root: dialogContent,

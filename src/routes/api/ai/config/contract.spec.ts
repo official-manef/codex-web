@@ -200,14 +200,22 @@ describe('response shape', () => {
 		expect(response.headers.get('cache-control')).toBe('no-store');
 		const text = await response.text();
 		const body = JSON.parse(text) as {
-			ai: { enabled: boolean; providers: { id: string; label: string; models: string[] }[] };
+			ai: {
+				enabled: boolean;
+				providers: { id: string; label: string; models: string[]; efforts?: string[] }[];
+			};
 			mcp: { enabled: boolean; servers: { alias: string }[] };
 		};
 		expect(Object.keys(body).sort()).toEqual(['ai', 'mcp']);
 		expect(body.ai.enabled).toBe(true);
 		expect(body.ai.providers).toEqual([
-			{ id: 'openai', label: 'OpenAI', models: ['gpt-test'] },
-			{ id: 'anthropic', label: 'Anthropic', models: ['claude-test'] }
+			{
+				id: 'openai',
+				label: 'OpenAI',
+				models: ['gpt-test'],
+				efforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
+			},
+			{ id: 'anthropic', label: 'Anthropic', models: ['claude-test'], efforts: [] }
 		]);
 		expect(body.mcp).toEqual({ enabled: true, servers: [{ alias: 'ok' }] });
 		// Consumers rely on aliases only: the endpoint and any key must never travel.

@@ -144,6 +144,9 @@ export default defineSchema({
 		owner: v.string(),
 		name: v.string(), // ≤ 60 chars
 		instructions: v.optional(v.string()), // ≤ 2000 chars
+		// Labels only: a relative path and a byte count. Nothing reads this from disk, and it is
+		// never a permission — `src/lib/projects_extra.ts` says so where a reader will look.
+		files: v.optional(v.array(v.object({ path: v.string(), bytes: v.number() }))),
 		createdAt: v.number()
 	}).index('by_owner', ['owner']),
 

@@ -214,6 +214,16 @@ export const SECTIONS = [
 		group: 'Settings & help',
 		navigationRole: 'settings',
 		loadScreen: () => import('#lib/views/McpApps.svelte')
+	},
+	{
+		id: 'projects',
+		label: 'Projects',
+		icon: 'folder',
+		group: 'Settings & help',
+		navigationRole: 'settings',
+		// Instructions and file labels per project. Local by default, Convex when signed in.
+		// Never a permission, never a filesystem read.
+		loadScreen: () => import('#lib/views/Projects.svelte')
 	}
 ] as const;
 

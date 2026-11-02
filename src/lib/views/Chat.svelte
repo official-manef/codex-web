@@ -31,6 +31,7 @@
     cloudAvailable,
     cloudTurn,
   } from "#lib/chat_dispatch.js";
+  import { isImageAttachment, readImageFile, toWireImages } from "#lib/chat_images.js";
   import type { AiProvider, ChatMessage } from "$lib/server/ai/contracts";
   import Recorder from "#lib/Recorder.svelte";
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
@@ -343,6 +344,7 @@
   let toolApproval = $state<any>(null);
   let toolResult = $state<any>(null);
   let attachments = $state<any[]>([]);
+  let attachedImagesCount = $derived(attachments.filter(isImageAttachment).length);
   // Branch drafts reuse saved files. Detaching one must not delete the source file.
   const unsavedUploads = new Set<string>();
   let pendingAttachments = $state<any[]>([]);
@@ -1098,7 +1100,7 @@
             notice = "Upload finished for another chat; choose the file again in the current chat.";
             break;
           }
-          attachments = [...attachments, uploaded];
+          attachments = [...attachments, { ...uploaded, file }];
           unsavedUploads.add(uploaded.id);
         } catch (e: any) {
           failures.push(`${file.name}: ${e.message}`);
@@ -1254,6 +1256,29 @@
     attachments = [];
     await scrollEnd(true);
 
+    const imagePayloads: { attachment: any; base64: string }[] = [];
+    const imageErrors: string[] = [];
+    for (const a of pendingAttachments) {
+      if (!isImageAttachment(a)) continue;
+      if (a.file) {
+        const res = await readImageFile(a.file);
+        if ("error" in res) {
+          imageErrors.push(res.error);
+        } else {
+          imagePayloads.push({ attachment: a, base64: res.base64 });
+        }
+      } else {
+        imageErrors.push("Could not read image file.");
+      }
+    }
+    const { images, errors: wireErrors } = toWireImages(imagePayloads);
+    if (wireErrors.length) imageErrors.push(...wireErrors);
+    if (imageErrors.length) error = imageErrors.join(" ");
+
+    const userContent = images.length
+      ? [{ type: "text" as const, text: content }, ...images]
+      : content;
+
     const history: ChatMessage[] = (session?.turns ?? []).flatMap((t: any) => [
       { role: "user" as const, content: t.content },
       ...(t.replies ?? [])
@@ -1263,7 +1288,7 @@
           content: r.text,
         })),
     ]);
-    const messages: ChatMessage[] = [...history, { role: "user" as const, content }];
+    const messages: ChatMessage[] = [...history, { role: "user" as const, content: userContent }];
 
     const providerEntry =
       serverAiConfig?.providers.find((entry) => entry.id === serverProvider) ??
@@ -3148,6 +3173,13 @@
           <h3 class="mt-6">Model & device</h3>
           {#if serverAiAvailable()}<section class="inspector-section">
               <h4>Bring your own key</h4>
+              {#if attachedImagesCount > 0}
+                <p class="inspector-note">
+                  {attachedImagesCount === 1
+                    ? "1 image will be attached to the next turn."
+                    : `${attachedImagesCount} images will be attached to the next turn.`}
+                </p>
+              {/if}
               <p class="inspector-note">
                 Sent with each turn to this server, which relays it to the provider. Held in this
                 tab's memory only — never written to storage, never logged, gone when the tab

@@ -4,6 +4,7 @@ import { requireCapabilityAccess } from '$lib/server/access';
 import { aiSettings } from '$lib/server/ai/config';
 import { mcpConnections } from '$lib/server/mcp/config';
 import { logEvent } from '$lib/server/log';
+import { EFFORTS, effortForProvider } from '$lib/reasoning';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async (event) => {
@@ -20,7 +21,13 @@ export const GET: RequestHandler = async (event) => {
 		});
 		return json(
 			{
-				ai,
+				ai: {
+					...ai,
+					providers: ai.providers.map((provider) => ({
+						...provider,
+						efforts: EFFORTS.filter((effort) => effortForProvider(provider.id, effort).accepted)
+					}))
+				},
 				mcp: {
 					enabled: env.MCP_CLIENT_ENABLED === 'true',
 					servers: servers.map(({ alias }) => ({ alias }))

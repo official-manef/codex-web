@@ -3,6 +3,7 @@ import { streamText } from 'ai';
 import { aiSettings, parseChat } from './config';
 import { chatResponse, providerFetch } from './chat';
 import type { PolicyVerb, PolicyDecision } from '../policy';
+import { MAX_TOOL_CONCURRENCY } from '../tools_parallel';
 
 vi.mock('./tools', () => ({
 	TOOL_MAP: {
@@ -716,4 +717,160 @@ test('an abort that arrives before a tool step starts stops the loop', async () 
 	}).text();
 	expect(steps).toBeLessThan(8);
 	expect(raw).toContain('"type":"error"');
+});
+
+test('parallel tool calls: emits tool events in request order even when second worker resolves first', async () => {
+	vi.mocked(streamText).mockReset();
+	const { runTool } = await import('./tools');
+	vi.mocked(runTool).mockImplementation(async (request) => {
+		if (request.name === 'read_file') {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			return { ok: true, text: 'read done' };
+		}
+		if (request.name === 'write_file') {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			return { ok: true, text: 'write done' };
+		}
+		return { ok: true, text: 'default' };
+	});
+
+	vi.mocked(streamText)
+		.mockReturnValueOnce(
+			parts([
+				{ type: 'tool-call', toolName: 'read_file', args: { path: 'a.txt' } },
+				{ type: 'tool-call', toolName: 'write_file', args: { path: 'b.txt' } }
+			])
+		)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'finished' }]));
+
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{ policy: defaultPolicy }
+	).text();
+
+	const events = raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	const toolEvents = events.filter((e) => e.type === 'tool');
+	expect(toolEvents).toHaveLength(2);
+	expect(toolEvents[0]).toMatchObject({ name: 'read_file', text: 'read done' });
+	expect(toolEvents[1]).toMatchObject({ name: 'write_file', text: 'write done' });
+	expect(runTool).toHaveBeenCalledTimes(2);
+});
+
+test('parallel tool calls: sibling resolution continues when one call rejects, redacting key in errors', async () => {
+	vi.mocked(streamText).mockReset();
+	const { runTool } = await import('./tools');
+	vi.mocked(runTool).mockImplementation(async (request) => {
+		if (request.name === 'read_file') {
+			throw new Error(`disk failure with key ${input.apiKey}`);
+		}
+		return { ok: true, text: `write success with key ${input.apiKey}` };
+	});
+
+	vi.mocked(streamText)
+		.mockReturnValueOnce(
+			parts([
+				{ type: 'tool-call', toolName: 'read_file', args: { path: 'a.txt' } },
+				{ type: 'tool-call', toolName: 'write_file', args: { path: 'b.txt' } }
+			])
+		)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'all done' }]));
+
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{ policy: defaultPolicy }
+	).text();
+
+	const events = raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	const toolEvents = events.filter((e) => e.type === 'tool');
+	expect(toolEvents).toHaveLength(2);
+	expect(toolEvents[0]).toMatchObject({
+		name: 'read_file',
+		text: 'disk failure with key [redacted]'
+	});
+	expect(toolEvents[1]).toMatchObject({
+		name: 'write_file',
+		text: 'write success with key [redacted]'
+	});
+	expect(raw).not.toContain(input.apiKey);
+	expect(events.at(-1)).toEqual({ type: 'done' });
+});
+
+test('parallel tool calls: single call still produces exactly one event', async () => {
+	vi.mocked(streamText).mockReset();
+	const { runTool } = await import('./tools');
+	vi.mocked(runTool).mockResolvedValueOnce({ ok: true, text: 'single output' });
+
+	vi.mocked(streamText)
+		.mockReturnValueOnce(
+			parts([{ type: 'tool-call', toolName: 'read_file', args: { path: 'single.txt' } }])
+		)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'finished' }]));
+
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{ policy: defaultPolicy }
+	).text();
+
+	const events = raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	const toolEvents = events.filter((e) => e.type === 'tool');
+	expect(toolEvents).toHaveLength(1);
+	expect(toolEvents[0]).toMatchObject({ name: 'read_file', text: 'single output' });
+});
+
+test('parallel tool calls: concurrency is bounded by MAX_TOOL_CONCURRENCY', async () => {
+	vi.mocked(streamText).mockReset();
+	const { runTool } = await import('./tools');
+	let inFlight = 0;
+	let maxInFlight = 0;
+
+	vi.mocked(runTool).mockImplementation(async () => {
+		inFlight++;
+		maxInFlight = Math.max(maxInFlight, inFlight);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		inFlight--;
+		return { ok: true, text: 'done' };
+	});
+
+	vi.mocked(streamText)
+		.mockReturnValueOnce(
+			parts([
+				{ type: 'tool-call', toolName: 'read_file', args: { path: '1.txt' } },
+				{ type: 'tool-call', toolName: 'read_file', args: { path: '2.txt' } },
+				{ type: 'tool-call', toolName: 'read_file', args: { path: '3.txt' } },
+				{ type: 'tool-call', toolName: 'read_file', args: { path: '4.txt' } },
+				{ type: 'tool-call', toolName: 'read_file', args: { path: '5.txt' } }
+			])
+		)
+		.mockReturnValueOnce(parts([{ type: 'text-delta', text: 'all finished' }]));
+
+	const raw = await chatResponse(
+		{ ...input, toolUse: true },
+		new AbortController().signal,
+		undefined,
+		{ policy: defaultPolicy }
+	).text();
+
+	const events = raw
+		.trim()
+		.split('\n')
+		.map((line) => JSON.parse(line));
+	const toolEvents = events.filter((e) => e.type === 'tool');
+	expect(toolEvents).toHaveLength(5);
+	expect(maxInFlight).toBe(MAX_TOOL_CONCURRENCY);
+	expect(maxInFlight).toBeLessThanOrEqual(MAX_TOOL_CONCURRENCY);
 });

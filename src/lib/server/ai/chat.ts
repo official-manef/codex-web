@@ -6,6 +6,7 @@ import type { ChatEvent, ChatContent } from './contracts';
 import { imagesOf, textOf } from './contracts';
 import type { parseChat } from './config';
 import type { PolicyVerb, PolicyDecision } from '../policy';
+import { runBounded, MAX_TOOL_CONCURRENCY } from '../tools_parallel';
 import {
 	TOOL_SPECS,
 	parseToolRequest,
@@ -240,28 +241,40 @@ export function chatResponse(
 							pending = '';
 						}
 
-						for (const request of toolCalls) {
+						const toolDeps: ToolDeps = {
+							exec: deps!.tools?.exec ?? (async () => ({ code: 1, stdout: '' })),
+							readFile: deps!.tools?.readFile ?? (async () => ''),
+							writeFile: deps!.tools?.writeFile ?? (async () => {}),
+							applyPatch: (deps!.tools as { applyPatch?: ToolDeps['applyPatch'] } | undefined)
+								?.applyPatch,
+							policy: deps!.policy
+						};
+
+						const { results } = await runBounded(
+							toolCalls,
+							MAX_TOOL_CONCURRENCY,
+							async (request) => {
+								let outcome: ToolOutcome;
+								try {
+									outcome = await runTool(request, toolDeps);
+								} catch (err) {
+									outcome = { ok: false, error: err instanceof Error ? err.message : String(err) };
+								}
+								const rawText = outcome.ok ? outcome.text : outcome.error;
+								return rawText.split(input.apiKey).join('[redacted]');
+							}
+						);
+
+						for (let i = 0; i < toolCalls.length; i++) {
+							const request = toolCalls[i];
 							// The policy is keyed by verb, not by tool name — asking for
 							// `policy['read_file']` happens to work, but `apply_patch` would silently
 							// read `undefined` and fall to deny for the wrong reason. TOOL_MAP is the
 							// single translation.
 							const verb = TOOL_MAP[request.name];
 							const decision = deps!.policy[verb] ?? 'deny';
-							const toolDeps: ToolDeps = {
-								exec: deps!.tools?.exec ?? (async () => ({ code: 1, stdout: '' })),
-								readFile: deps!.tools?.readFile ?? (async () => ''),
-								writeFile: deps!.tools?.writeFile ?? (async () => {}),
-								applyPatch: (deps!.tools as { applyPatch?: ToolDeps['applyPatch'] } | undefined)
-									?.applyPatch,
-								policy: deps!.policy
-							};
-							let outcome: ToolOutcome;
-							try {
-								outcome = await runTool(request, toolDeps);
-							} catch (err) {
-								outcome = { ok: false, error: err instanceof Error ? err.message : String(err) };
-							}
-							const rawText = outcome.ok ? outcome.text : outcome.error;
+							const rawText =
+								typeof results[i] === 'string' ? (results[i] as string) : 'Tool failed';
 							const toolText = rawText.split(input.apiKey).join('[redacted]');
 							send({
 								type: 'tool',
