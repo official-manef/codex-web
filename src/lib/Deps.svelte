@@ -87,7 +87,7 @@
 
 <div class="deps">
   <div class="deps-head">
-    <button class="deps-toggle" onclick={() => (open = !open)} aria-expanded={open}>
+    <button class="deps-toggle" onclick={() => (open = !open)} aria-expanded={open} aria-controls="deps-panel">
       <span class="deps-dot" class:ok={missing.length === 0 && !st?.stub} class:warn={!st?.stub && missing.length > 0}></span>
       <span>
         {#if !st}
@@ -116,54 +116,56 @@
 
   {#if msg}<p class="deps-msg">{msg}</p>{/if}
 
-  {#if open && st}
-    {#if st.stub}
-      <p class="deps-sub">
-        No server or Python runtime is configured. This browser build answers every request from a stub in the page.
-      </p>
-    {:else}
-      <p class="deps-sub">
-        Python {st.python}. These are Python packages the app needs; models are separate and live
-        under your home folder. Packages install into this interpreter:
-        <code class="mono">{st.interpreter}</code>
-      </p>
-
-      <div class="deps-list">
-        {#each st.packages as p}
-          <div class="deps-row" class:absent={!p.present}>
-            <span class="deps-mark" class:ok={p.present} class:warn={!p.present}>
-              {p.present ? "ok" : "!"}
-            </span>
-            <div class="deps-body">
-              <div class="deps-name">
-                <code class="mono">{p.name}</code>
-                {#if p.version}<span class="deps-ver">{p.version}</span>{/if}
-                {#if p.bulk}<span class="deps-tag">large, opt-in</span>{/if}
-              </div>
-              <p class="deps-why">{p.why}</p>
-              <p class="deps-meta">
-                needs it: {p.needed_by.join(", ")} · {p.size_mb} MB
-              </p>
-            </div>
-            {#if !p.present && !p.bulk}
-              <button class="btn h-6 !text-[10.5px]" onclick={() => install([p.name])} disabled={busy}
-                >Install</button
-              >
-            {/if}
-          </div>
-        {/each}
-      </div>
-
-      {#if heavy.length > 0}
-        <p class="deps-note">
-          {heavy.length} larger package{heavy.length === 1 ? "" : "s"} not installed ({heavy
-            .map((p) => p.name)
-            .join(", ")}). Features listed above need these packages. Use their Install buttons to
-          download them.
+  <div id="deps-panel">
+    {#if open && st}
+      {#if st.stub}
+        <p class="deps-sub">
+          No server or Python runtime is configured. This browser build answers every request from a stub in the page.
         </p>
+      {:else}
+        <p class="deps-sub">
+          Python {st.python}. These are Python packages the app needs; models are separate and live
+          under your home folder. Packages install into this interpreter:
+          <code class="mono">{st.interpreter}</code>
+        </p>
+
+        <div class="deps-list">
+          {#each st.packages as p}
+            <div class="deps-row" class:absent={!p.present}>
+              <span class="deps-mark" class:ok={p.present} class:warn={!p.present}>
+                {p.present ? "ok" : "!"}
+              </span>
+              <div class="deps-body">
+                <div class="deps-name">
+                  <code class="mono">{p.name}</code>
+                  {#if p.version}<span class="deps-ver">{p.version}</span>{/if}
+                  {#if p.bulk}<span class="deps-tag">large, opt-in</span>{/if}
+                </div>
+                <p class="deps-why">{p.why}</p>
+                <p class="deps-meta">
+                  needs it: {p.needed_by.join(", ")} · {p.size_mb} MB
+                </p>
+              </div>
+              {#if !p.present && !p.bulk}
+                <button class="btn h-6 !text-[10.5px]" onclick={() => install([p.name])} disabled={busy}
+                  >Install</button
+                >
+              {/if}
+            </div>
+          {/each}
+        </div>
+
+        {#if heavy.length > 0}
+          <p class="deps-note">
+            {heavy.length} larger package{heavy.length === 1 ? "" : "s"} not installed ({heavy
+              .map((p) => p.name)
+              .join(", ")}). Features listed above need these packages. Use their Install buttons to
+            download them.
+          </p>
+        {/if}
       {/if}
     {/if}
-  {/if}
+  </div>
 </div>
 
 <style>
