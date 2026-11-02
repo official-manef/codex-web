@@ -1,45 +1,60 @@
 /**
- * The SvelteKit BYOK route needs a provider key in the request body, so the key has to exist
- * in the tab while a turn is streaming. It is held here, in module scope, and nowhere else:
+ * Where a provider key comes from on the SvelteKit chat path, and the only place that writes it.
  *
- * - not `localStorage` — it would outlive the tab, and the docs promise it does not;
- * - not `sessionStorage` — a reload is not a reason to keep a credential around;
- * - never in a URL, never logged, never in a Convex write.
+ * A key belongs to the tab that typed it. `sessionStorage` dies with the tab, is never shared with
+ * another tab, and survives a reload — which the chat needs, because a reload mid-stream must keep
+ * streaming with the same key rather than losing the credential and ending the turn as an error.
+ * `localStorage` is not an option: a key left there survives the tab and the sign-out and is
+ * readable by any script on this origin forever. The chat screen used to fall back to it, so a key
+ * persisted by an older build was silently picked up and sent.
  *
- * The ceiling is honest: any script running in this tab can read a module variable. The
- * exposure window is bounded to the tab's lifetime and to the user pasting the key, which is
- * the smallest window this route allows. Users who want the key to leave the browser should
- * store it through the Convex path (`src/convex/credentials.ts`) instead.
+ * There used to be two modules: this one held the key in a variable, `byok_input.ts` read a draft
+ * from `sessionStorage`, and `Chat.svelte` saved through the first and read through the second.
+ * Nothing ever wrote the draft, so the key a user pasted was never the key that got sent, and every
+ * server turn failed with "holds no key for this tab". One module, one store, one direction.
  *
- * Contract (failures are silent and read as "no key"):
- *   read()        -> string  (empty when absent or not the shape the server accepts)
- *   save(value)   -> boolean (false when the value would be rejected by `parseChat`)
- *   clear()       -> void
- *   present()     -> boolean (never returns the value; for UI state only)
+ * Contract: never reads `localStorage`, never puts the key in a URL, never logs it, returns "" when
+ * absent. The storage ceiling is honest: any script in this tab can read it.
  */
+import { readDraft, saveDraft } from '#lib/drafts.js';
 
-// Same alphabet as `keySchema` in `src/lib/server/ai/config.ts`: printable, no spaces. Keeping
-// the client check identical means the route is never called with a body it must reject.
+export const PROVIDER_KEY_DRAFT = 'byok-key';
+
+// Same alphabet as `keySchema` in `src/lib/server/ai/config.ts`: printable, no spaces. Keeping the
+// client check identical means the route is never called with a body it must reject.
 const KEY_PATTERN = /^[!-~]{8,4096}$/;
 
-let key = '';
-
+/** The key typed into this tab, or an empty string. Tab-scoped storage only. */
 export function readProviderKey(): string {
-	return key;
+	try {
+		const value = readDraft<unknown>(PROVIDER_KEY_DRAFT, '');
+		return typeof value === 'string' && KEY_PATTERN.test(value) ? value : '';
+	} catch {
+		return '';
+	}
 }
 
+/** Stores the key for this tab. Returns false when the value would be rejected by `parseChat`. */
 export function saveProviderKey(value: unknown): boolean {
 	if (typeof value !== 'string') return false;
 	const trimmed = value.trim();
 	if (!KEY_PATTERN.test(trimmed)) return false;
-	key = trimmed;
+	try {
+		saveDraft(PROVIDER_KEY_DRAFT, trimmed);
+	} catch {
+		return false;
+	}
 	return true;
 }
 
 export function clearProviderKey(): void {
-	key = '';
+	try {
+		saveDraft(PROVIDER_KEY_DRAFT, '');
+	} catch {
+		// Storage is unavailable; there is nothing held to clear.
+	}
 }
 
 export function hasProviderKey(): boolean {
-	return key.length > 0;
+	return readProviderKey().length > 0;
 }
