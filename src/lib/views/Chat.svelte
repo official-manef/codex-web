@@ -36,6 +36,7 @@
   import MicrophoneSelect from "#lib/MicrophoneSelect.svelte";
   import { Pencil, Trash2 } from "@lucide/svelte";
   import { clearDraft, readDraft, saveDraft } from "#lib/drafts.js";
+  import { readActiveSession, saveActiveSession } from "#lib/active_session.js";
   import { readProviderKey } from "#lib/byok_input.js";
   import AttachmentPreview from "#lib/AttachmentPreview.svelte";
   import AppSelect from "#lib/AppSelect.svelte";
@@ -714,9 +715,9 @@
     return () => clearTimeout(timer);
   });
   function rememberSession(id: string) {
-    try {
-      localStorage.setItem("laya-session", id);
-    } catch {}
+    // `localStorage` under a version envelope: a bare id from an older build is migrated once,
+    // and a payload from a newer build is left alone instead of being replaced by this id.
+    saveActiveSession(id);
   }
   function stamp(value: any) {
     if (!value) return "";
@@ -821,15 +822,20 @@
     const d = checked(await api.sessions());
     sessions = d.sessions ?? [];
     // A full quota used to be entirely silent: the turn appeared saved, then vanished on the
-    // next reload. The store reports the failed write and the view says it out loud.
-    storageWarning =
-      d.storage?.persisted === false
-        ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
-        : (d.storage?.dropped ?? 0) > 0
-          ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
-              d.storage.dropped === 1 ? " was" : "s were"
-            } dropped when this browser ran out of room.`
-          : "";
+    // next reload. The store reports the failed write and the view says it out loud. A payload
+    // this build cannot read outranks both: writing is refused *because* of it, so the quota
+    // message would be a lie.
+    storageWarning = d.storage?.newer
+      ? `This browser holds a chat list written by a newer version of the app (format ${d.storage.newer}). Nothing was changed or deleted; update the app to see those chats.`
+      : d.storage?.quarantined
+        ? `Part of the stored chat list could not be read, so it was copied to ${d.storage.quarantined} instead of being deleted. Readable chats were kept.`
+        : d.storage?.persisted === false
+          ? "This chat is open but could not be saved: this browser's storage is full or blocked. Copy anything you need before closing the tab; clearing old chats makes room."
+          : (d.storage?.dropped ?? 0) > 0
+            ? `Only the newest ${sessions.length} chats are saved. ${d.storage.dropped} older chat${
+                d.storage.dropped === 1 ? " was" : "s were"
+              } dropped when this browser ran out of room.`
+            : "";
   }
   function applySession(d: any) {
     clearVoice();
@@ -970,7 +976,7 @@
       ]);
       let saved = "";
       try {
-        saved = localStorage.getItem("laya-session") ?? "";
+        saved = readActiveSession();
       } catch {}
       if (isCompare) ensureComparisonTargets();
       if (sessions.length)

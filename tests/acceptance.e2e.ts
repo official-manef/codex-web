@@ -331,7 +331,9 @@ test.describe('workspace acceptance', () => {
 		expect(
 			await page.evaluate(() => {
 				const raw = window.localStorage.getItem('workspace-template:tools-v1');
-				return raw ? (JSON.parse(raw) as { enabled: string[] }).enabled.includes('files') : false;
+				if (!raw) return false;
+				const stored = JSON.parse(raw) as { version: number; value: string[] };
+				return stored.version === 1 && stored.value.includes('files');
 			})
 		).toBe(true);
 
