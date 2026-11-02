@@ -42,9 +42,11 @@ preview. That deployment belongs to the upstream repository, not this fork, and 
 also moved past the `/workspace` route family. Treat it as reference only.
 
 The shell owns navigation through state, so `/`, `/capabilities` and `/settings` are not
-routes. `bun run test:e2e` no longer has `tests/workspace.e2e.ts` or `tests/acceptance.e2e.ts`
-to run; those were removed with the route family in `6ed1f3e`. See
-[progress.md](progress.md) for the corrected acceptance status.
+routes. `6ed1f3e` removed the route family together with `tests/workspace.e2e.ts` and
+`tests/acceptance.e2e.ts`. **`tests/acceptance.e2e.ts` came back in `5cdf2a9`** with 14
+criteria against the current shell; `tests/workspace.e2e.ts` is still gone and nothing
+re-points it. See [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md) for the per-criterion
+verdict, which is not "all covered".
 
 Vercel deploys here come from the CLI, not from a GitHub connection: the Vercel↔GitHub
 integration returns `401` for this account, so `vercel link` cannot bind the repository and
@@ -124,16 +126,22 @@ which compositions were checked at which widths, and every deviation with its
 
 ## What is still open
 
-- Acceptance criteria are all browser-verified: AC01–AC18 are covered by
-  `tests/workspace.e2e.ts` and `tests/acceptance.e2e.ts` against local asynchronous stubs.
+- **Acceptance criteria are not all browser-verified.** This file used to claim AC01–AC18 were
+  all covered by `tests/workspace.e2e.ts` and `tests/acceptance.e2e.ts`. The first still does
+  not exist. The second is back (`5cdf2a9`, 14 tests) but covers 8 criteria fully, 6 partially
+  and leaves 4 with no product behind them at all (AC05, AC09, AC13, AC16).
+  [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md) is the authority.
 - What remains open is everything that needs a real backend: persistence beyond
   sessionStorage, authentication, uploads, and streaming providers.
 - The product decisions in [PRD §9](PRD.md#9-open-decisions-block-product-copy-not-the-mvp-shell)
   (identity and copy, tab kinds and ownership, platform, authorization, attachment limits,
   settings source) are still unanswered.
+- **Three public pages exist now**: `/home`, `/privacy` and `/terms` (`98549c9`). They are the
+  OAuth brand-registration surface, so the "marketing pages" line below is narrow: those three
+  are the exception, and nothing beyond them was added.
 
 ## What is deliberately absent
 
 Auth, database writes, streaming, upload, search, usage history, analytics, i18n switching,
-marketing pages, and any real product copy. Do not fill these gaps to "make it feel
-complete" — the empty slots are the deliverable.
+further marketing pages beyond the three public ones, and any real product copy. Do not fill
+these gaps to "make it feel complete" — the empty slots are the deliverable.

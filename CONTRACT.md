@@ -55,11 +55,15 @@ Convex imports cannot depend on SvelteKit aliases or environment modules. Svelte
 keys and chat history stay in current request/tab memory. On the Convex path a BYOK credential
 is posted once and stored only as an AES-256-GCM blob under `MODELS_ENC_KEY` (`modelCreds`,
 and `mcpConnections` for a user-owned MCP server); every read re-derives `owner` and never
-returns the plaintext. On the SvelteKit path (`src/lib/byok_key.ts`) the key is a module-scope
-value: no storage, no URL, no log, gone when the tab closes. Memories
+returns the plaintext. On the SvelteKit path (`src/lib/byok_key.ts`) the key is one tab-scoped
+`sessionStorage` draft written and read by that module alone: no `localStorage`, no URL, no log,
+gone when the tab closes, kept across a reload so a stream in flight can finish. Memories
 (`src/lib/memories.ts`) are `localStorage` notes that reach a model as untrusted context, never
 as an instruction. The git surface (`src/lib/server/git.ts`, `src/routes/api/git/+server.ts`)
-is read-only, root-allowlisted and subcommand-bounded. Tool output is untrusted data; MCP calls
+is root-allowlisted and subcommand-bounded; diff and status are open because they cannot
+write, while stage, commit and worktree changes are denied unless `GIT_POLICY_JSON` grants the
+exact verb (`src/lib/server/policy.ts`, deny-by-default on unset or malformed policy). Push and
+PR review do not exist. Tool output is untrusted data; MCP calls
 require configured or per-user endpoint/tool allowlists and explicit review, never automatic model execution. See the focused
 [Svelte](docs/svelte-best-practices.md) and [Convex](docs/convex-best-practices.md) rules.
 
@@ -74,14 +78,15 @@ contracts, deliberate deviations and the re-sync procedure.
 
 ### Authoritative inputs for this product
 
-| Concern                                          | Source of truth                                                               |
-| ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Shell UI, layout, menus, tabs                    | `slices/workspace-shell/**` (vendored from `rahmanef63/laya-npu` @ `9a893b2`) |
-| Shared shell modules and tokens                  | `shared/**`; token block merged into `src/routes/layout.css`                  |
-| Chat surface                                     | `src/lib/views/Chat.svelte` (vendored)                                        |
-| Composition root: registry, runtime, persistence | `slices/workspace-surface/**`                                                 |
-| Route                                            | `src/routes/+page.svelte` (mounts `WorkspaceApp`; the shell owns navigation)  |
-| Product identity and metadata                    | `src/lib/config/app.ts`, `src/lib/config/metadata.ts`                         |
+| Concern                                          | Source of truth                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Shell UI, layout, menus, tabs                    | `slices/workspace-shell/**` (vendored from `rahmanef63/laya-npu` @ `9a893b2`)         |
+| Shared shell modules and tokens                  | `shared/**`; token block merged into `src/routes/layout.css`                          |
+| Chat surface                                     | `src/lib/views/Chat.svelte` (vendored)                                                |
+| Composition root: registry, runtime, persistence | `slices/workspace-surface/**`                                                         |
+| Route                                            | `src/routes/+page.svelte` (mounts `WorkspaceApp`; the shell owns navigation)          |
+| Public pages (no auth, no workspace bundle)      | `src/routes/{home,privacy,terms}/+page.svelte`; identity in `src/lib/config/legal.ts` |
+| Product identity and metadata                    | `src/lib/config/app.ts`, `src/lib/config/metadata.ts`                                 |
 
 ### Rules specific to this product
 
@@ -90,6 +95,12 @@ contracts, deliberate deviations and the re-sync procedure.
   exception with its `TODO(rr)` marker.
 - **Do not add `/workspace`, `/capabilities` or `/settings` routes.** The shell owns
   navigation; a second route family would be a second source of truth.
+- **Three public pages are the only non-app routes.** `/home`, `/privacy` and `/terms` exist for
+  OAuth brand registration and render without auth or the workspace bundle. Their shared
+  identity (app name, operator, contact mailbox, jurisdiction, effective date, license) lives in
+  `src/lib/config/legal.ts` — one place, so the pages cannot disagree with each other or with
+  the consent screen. The sitemap lists exactly `/`, `/privacy` and `/terms`; `/home` is not
+  listed, and a route change must update `src/routes/contract.spec.ts` with it.
 - **Three engines, no removals.** `local` (browser, no account), `device` (a runtime the user
   paired), `cloud` (a Convex action on the user's own key). With no `PUBLIC_CONVEX_URL` the
   cloud engine reports `unsupported` and the workspace is exactly the local template. Never

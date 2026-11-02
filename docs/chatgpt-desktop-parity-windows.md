@@ -151,29 +151,36 @@ enter `docs/PRD.md` on this evidence.
 
 ## 6. Where the template stands, corrected
 
-Reading the repository at `1195928` (the brief's baseline), two of its "absent" rows are
-stale on the current tree, and one present row is understated:
+That section was written against the repository at `1195928` (the brief's baseline). Four of
+its "still absent" rows have since shipped — superseded as of `98549c9`:
 
-| Capability     | Brief says                                         | Current tree                                                                       |
-| -------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Terminal panel | present                                            | present, plus `src/lib/runtime/terminal.ts` and `src/lib/runtime/terminal.spec.ts` |
-| Device pairing | present                                            | present, plus `src/lib/views/Devices.svelte` (405 lines)                           |
-| Projects       | absent                                             | still absent; `move-project` / `remove-project` still carry `disabledReason`       |
-| Git surface    | absent                                             | still absent — no `git` invocation anywhere under `src/lib` or `src/routes`        |
-| Memories       | absent                                             | still absent                                                                       |
-| Automations    | absent                                             | still absent                                                                       |
-| Parallel chats | absent                                             | still absent                                                                       |
-| MCP App host   | absent ("hosts MCP tools, is not an MCP App host") | still absent, and now provably the right gap to name                               |
+| Capability     | Brief says                                         | Current tree                                                                                                                                                |
+| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terminal panel | present                                            | present, plus `src/lib/runtime/terminal.ts` and `src/lib/runtime/terminal.spec.ts`                                                                          |
+| Device pairing | present                                            | present, plus `src/lib/views/Devices.svelte`                                                                                                                |
+| Projects       | absent                                             | **shipped** — `src/lib/projects.ts`, `src/lib/views/Projects.svelte`, `projects.setDetail` (`src/convex/projects.ts:209`)                                   |
+| Git surface    | absent                                             | **shipped, gated** — `src/lib/server/git.ts`, `src/routes/api/git/+server.ts`, `src/lib/views/Git.svelte`; writes behind `GIT_POLICY_JSON`, deny-by-default |
+| Memories       | absent                                             | **shipped** — `src/lib/memories.ts` (local) + `src/convex/memories.ts` (owner-scoped)                                                                       |
+| Automations    | absent                                             | **shipped (partial)** — `src/lib/views/Automations.svelte`; records, dry-run plan and idempotent `claimRun`, but the model call is absent                   |
+| Parallel chats | absent                                             | still absent                                                                                                                                                |
+| MCP App host   | absent ("hosts MCP tools, is not an MCP App host") | **partial** — `src/lib/views/McpApps.svelte` plus a `mcp_app` verb and `MCP_APPS_ALLOW` gate; the frame host is not verified in a browser                   |
 
-## 7. Recommendation
+The four rows that changed did so after this evidence file was written; the parity checklist
+(`docs/parity-checklist-2026-11-02.md` §6–§7) carries the phase-by-phase status and is the
+newer source. Nothing here re-derives what the Windows host measured — sections 1–5 are
+unchanged observations from that host.
 
-Step 1 of the brief's cost order — **Projects** — still fits, and it is the only one of the
-four whose contract already exists in the tree.
+## 7. Recommendation (as of the baseline, now executed)
 
-Why not the git surface first, even though `connect-git-worker` proves the reference product
-has it: this template has no server-side repository concept at all, so a git surface needs a
-new route, an allowlist and a process boundary before it produces value. Projects needs only
-a local store on the existing draft-store pattern.
+The recommendation below was written when Projects was still absent. **It has been carried
+out**: Projects, git, memories and automations all exist, and the "exact files a Projects step
+would touch" list describes what was built. Kept as the record of the cost order, not as
+current guidance.
+
+Why Projects went first, even though `connect-git-worker` proves the reference product has
+git: this template had no server-side repository concept, so a git surface needed a new route,
+an allowlist and a process boundary before it produced value. Projects needed only a local
+store on the existing draft-store pattern.
 
 Exact files a Projects step would touch:
 
@@ -185,9 +192,10 @@ Exact files a Projects step would touch:
 No new dependency, no new environment variable, no schema table: the project membership is
 local state, matching the brief's "no shared identity, no server-side session store" line.
 
-**Explicitly not recommended now:** memories (needs a table and a retention decision),
-plugin-extension entrypoints (needs the MCP App host, which is the largest single gap
-measured here), computer use, mobile remote, MCP 2.0 events.
+**Explicitly not recommended then:** memories (needed a table and a retention decision),
+plugin-extension entrypoints (needs the MCP App host, which is the largest single gap measured
+here), computer use, mobile remote, MCP 2.0 events. Memories shipped anyway on 2026-11-02
+(local plus an owner-scoped Convex table); the other three are still open.
 
 ## 8. Repository hygiene
 

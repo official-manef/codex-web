@@ -26,10 +26,29 @@ of every inline prose link.
 
 ## Breakpoint x surface matrix
 
-`PASS` means zero visible overflow **and** `scrollWidth <= innerWidth` with the `html`/`body`
-clip removed. The `doc` column of the raw run printed the same value as `innerWidth` at every
-cell (`chat=320/320`, `apps=1024/1024`, `overview=2560/2560`, ...), so the matrix is one
-verdict per cell.
+Read this table for what it is: **one regression sweep, not a tuned breakpoint grid.** The
+layout has two real width rules plus one JavaScript threshold, and they are the only widths
+anything is designed against:
+
+| Rule                                                         | Where                                                                                                |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `@media (max-width: 1100px)`                                 | `slices/workspace-shell/workspace-shell.svelte`, `src/lib/views/Chat.svelte`                         |
+| `@media (max-width: 600px)`                                  | `slices/workspace-shell/workspace-shell.svelte` (two), `shared/chat-ui/ComparisonTabs.svelte`        |
+| JS threshold `viewportWidth > 1100` (sidebar vs drawer)      | `slices/workspace-shell/workspace-shell.svelte` (six sites), `src/lib/views/Chat.svelte`             |
+| `@media (min-width: 650px)` — page chrome, not the workspace | `src/routes/layout.css`                                                                              |
+| Narrow niceties: `max-width: 480px`, `max-width: 400px`      | `shared/chat-ui/ChatSurface.svelte`, `src/lib/views/Chat.svelte`, `shared/chat-ui/ModeSwitch.svelte` |
+
+**There is no 768px rule anywhere.** `grep -rn 768 src slices shared` (excluding spec files)
+returns only `BrowserCanvas.svelte`'s device presets (`tablet: [768, 1024]`, `laptop: [1366,
+768]`). 768 is a **test width**, and so are the other ten. Any claim that the layout is "tuned
+per breakpoint" across eleven widths describes the test matrix, not the CSS.
+
+`PASS` in the table means zero visible overflow **and** `scrollWidth <= innerWidth` with the
+`html`/`body` clip removed, at that width. The eleven widths are the test's own list
+(`tests/responsive.e2e.ts:17`), chosen to cover phones, tablet, laptop and large monitor; the
+`doc` column of the raw run printed the same value as `innerWidth` at every cell
+(`chat=320/320`, `apps=1024/1024`, `overview=2560/2560`, ...), so the matrix is one verdict per
+cell.
 
 | width | chat | manef | apps | transcribe | files | browser | terminal | overview |
 | ----- | ---- | ----- | ---- | ---------- | ----- | ------- | -------- | -------- |
@@ -199,12 +218,19 @@ Measured on the branch this work landed on; current totals are in
 [progress.md](progress.md) §Gates.
 
 ```sh
-PLAYWRIGHT_PORT=4518 npx playwright test tests/responsive.e2e.ts   # 23 passed (9 cases x 3 projects)
-npx vitest run                                                    # 441 passed, 3 skipped
+PLAYWRIGHT_PORT=4518 npx playwright test tests/responsive.e2e.ts   # see below
 npx prettier --check .                                            # clean
 npx eslint .                                                      # clean
 npx svelte-check --threshold error                                # 0 errors, 0 warnings
 ```
+
+**That command line was wrong.** It said `23 passed (9 cases x 3 projects)` — 9×3 is 27, and 23
+is only the **per-project** count, not a total. Measured on `98549c9` with `npx playwright test
+--list tests/responsive.e2e.ts`: **69 registered = 23 cases per project × 3 projects**. The 9
+`test()` statements expand to 23 because two of them loop over 11 widths and 5 widths
+respectively. The run itself was **not** performed on this commit, so the pass/fail count is
+unverified here. Unit totals are in [progress.md](progress.md) §Gates; the `441 passed` line
+that used to sit in this block was a second home for a number that belongs in one place.
 
 The webServer `timeout` is now `300_000` in `playwright.config.ts` (defect 4 above), which is the
 same fix `edge-cases-2026-11-02.md` §11 landed independently. It does not stop the remaining

@@ -3,7 +3,15 @@
 Living status for this repository. Correct only when a command below was run on the
 commit named at the top. If a line here disagrees with the code, the code wins — fix the line.
 
-Baseline: `d839f75`, `main`, 2026-10-31.
+**Baseline vs gate commit — two different SHAs, both correct.**
+
+- **Baseline `d839f75`** (2026-10-31): where measurement of this tracker _started_. The state
+  table below and the "where we are" rows were first written against it.
+- **Gate commit `98549c9`** (2026-11-02, 39 commits above the last recorded gate run `597fdaf`):
+  where the commands in §Gates were **actually run for this revision**.
+
+A number without its commit is meaningless here, so §Gates names `98549c9` explicitly. Do not
+read the baseline line as the commit the gate block measured.
 
 ## Terminal bridge
 
@@ -95,37 +103,42 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
-Run 2026-11-02 on `597fdaf` (`bin/gate`, exit 2 — see below):
+Run 2026-11-02 in a clean worktree at **`98549c9`** (detached HEAD, `node_modules` symlinked;
+the working tree at the time carried unrelated in-progress edits, so it was not the tree gated):
 
 ```
-prettier --check    clean
-eslint .            clean
-svelte-check        0 errors, 0 warnings
-tsc -p src/convex   clean
-vitest run          81 files / 939 passed / 3 skipped
-vite build          ok
-node --test bridge  ok
-playwright          426 tests over 8 files × 3 projects; 355 passed / 9 failed / 62 skipped
-convex              ABSENT (nothing answered: no local deployment on this checkout)
+check (svelte-check + convex types + version + assets)   0 errors, 0 warnings
+lint (prettier --check + eslint + svelte5 guard)         clean
+test:unit                                                107 files / 1294 passed / 3 skipped (1297)
+build (vite / sveltekit)                                 ok
+playwright --list                                        178 cases × 3 projects = 534 registered
 ```
 
-`npx vitest run` alone, verified the same day: **81 files / 939 passed / 3 skipped (942)**.
-The 3 skips are still the anonymous-refusal assertions in
+The three unit skips are the anonymous-refusal assertions in
 `src/convex/deployment.spec.ts` — no Convex deployment is recorded for this checkout, so they
-skip with the reason the spec attaches. 62 of the 426 Playwright cases are also skips: the
-28-id surface walk and three window-level assertions run once, in `desktop` only
-(`testInfo.project.name`), so 2 of every 3 projects skip them by design.
+skip with the reason the spec attaches. The Playwright figure is **registration, not a run**:
+the suite was listed, not executed, on this commit. So is the Convex probe — unverified here.
 
-The 9 Playwright failures are the **webServer-lifetime flake**, not the app: all 9 are
-`narrow-mobile` and every trace says `net::ERR_CONNECTION_REFUSED`, i.e. the preview was torn
-down under a still-navigating worker. `bin/gate` therefore reports `FAIL — playwright` and exits
-2 here. This is the same failure `gate.md` §Known flake documents; it is a property of this host
-at more than one worker, not of the tests.
+A gate block from an earlier revision, kept because it is the last full `bin/gate` run:
 
-The earlier numbers in this block's own history: `36 files / 197 passed / 3 skipped` before the
-Convex push and the route contract suites, then `50 / 441 / 3` on `337850c`, then
-`57 files / 596 passed / 3 skipped` on `test/convex`. They are listed here once so the drift is
-visible, not repeated in four documents.
+```
+prettier --check    clean        eslint .  clean        svelte-check  0/0
+tsc -p src/convex   clean        vite build ok         node --test bridge  ok
+vitest run          81 files / 939 passed / 3 skipped
+playwright          426 tests over 8 files × 3 projects; 355 passed / 9 failed / 62 skipped
+convex              ABSENT
+```
+
+Those 9 failures were the **webServer-lifetime flake**, not the app: all 9 `narrow-mobile`,
+every trace `net::ERR_CONNECTION_REFUSED`, i.e. the preview torn down under a still-navigating
+worker. `bin/gate` reported `FAIL — playwright` and exited 2. See `gate.md` §Known flake; it is
+a property of this host at more than one worker.
+
+The chain that got here, listed once so the drift stays visible: `36 / 197 / 3` (`dff55b3`) →
+`50 / 441 / 3` (`337850c`) → `57 / 596 / 3` (`test/convex`) → `81 / 939 / 3` (`597fdaf`) →
+`107 / 1294 / 3` (`98549c9`). The earlier Playwright block said "426 tests over 8 files" and a
+28-id surface walk; today the registry is 30 ids (`tests/surfaces.e2e.ts:91`), the suite is ten
+files and 178 cases, so those two figures were stale, not merely old.
 
 This block is the only place gate numbers belong. Other documents link here instead of
 copying them; a count repeated in three files is how `138 passed (27 files)` survived two
@@ -354,13 +367,17 @@ they will not run as-is: the shell now owns navigation and `/` mounts the worksp
 them as the scenario list, not as runnable tests, and re-point each at the current
 selectors before claiming the AC. Do not restore the files and call the gate green.
 
-> **Done 2026-11-02.** `tests/acceptance.e2e.ts` is back with 14 criteria driving the current
-> shell (composer, hash navigation, settings window, output tabs, timeline). AC05, AC09,
-> AC13 and AC16 are recorded as **no longer applicable** instead of tested: the deleted route
-> family owned the `offline` retry path, the dirty-tab contract, the capability catalog and
-> the composer's authorization input. AC03, AC06 and AC12 assert only the part of their
-> scenario this build performs. Details, selectors and the cost of a full pass:
-> [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
+> **Done 2026-11-02** (`5cdf2a9`). `tests/acceptance.e2e.ts` is back with 14 criteria driving
+> the current shell (composer, hash navigation, settings window, output tabs, timeline).
+> `tests/workspace.e2e.ts` has **not** returned and nothing re-points it.
+>
+> The four criteria with no test — **AC05, AC09, AC13, AC16 — are product gaps, not test
+> gaps**: the `offline` retry path, the dirty-tab contract, the capability catalog and the
+> composer's authorization input do not exist in this build, so no honest test can assert
+> them. Five more assert less than the bar: **AC01** (control `disabled`, no visible reason),
+> **AC02** (a chip, not "thumbnail ready"), **AC03** (no blocked send), **AC06** (no partial
+> text) and **AC08** (two tabs where the criterion says three). Details and the per-row
+> verdict: [ac-coverage-2026-11-02.md](ac-coverage-2026-11-02.md).
 
 ## How to update this file
 

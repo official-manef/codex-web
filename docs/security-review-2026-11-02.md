@@ -19,16 +19,16 @@ expire with them.
 
 ## Summary
 
-| Surface                                          | Verdict    | Evidence                                                                                                          |
-| ------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `/api/mcp/server` bearer check                   | no finding | `src/lib/server/access.spec.ts`, route read in full                                                               |
-| `/api/mcp/tools` + server MCP allowlist          | fixed      | `src/lib/server/mcp/mcp.spec.ts` — `localhost.` / `127.0.0.1.` bypassed the public-HTTPS rule                     |
-| `/auth/*` + `auth/oidc.ts`                       | fixed      | `src/lib/server/auth/callback.spec.ts` — cross-origin callback burned the pending login                           |
-| `/api/ai/{chat,config}`                          | no finding | `src/lib/server/ai/chat.spec.ts`, `src/lib/server/ai/config.ts` read in full                                      |
-| `/api/manef/[...path]`                           | no finding | `src/lib/server/manef.spec.ts`, route read in full                                                                |
-| `bridge/terminal-bridge.mjs` + `bridge_token.ts` | fixed      | `src/lib/runtime/terminal-bridge.spec.ts` — three findings, three failing tests                                   |
-| `src/convex/*` identity boundary                 | no finding | `src/convex/store.spec.ts`, every public handler audited by hand                                                  |
-| `src/lib/byok_key.ts`                            | fixed      | outlived its tab; now `src/lib/byok_input.ts` reads a tab-scoped draft and `byok_key.ts` holds it in module scope |
+| Surface                                          | Verdict    | Evidence                                                                                      |
+| ------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------- |
+| `/api/mcp/server` bearer check                   | no finding | `src/lib/server/access.spec.ts`, route read in full                                           |
+| `/api/mcp/tools` + server MCP allowlist          | fixed      | `src/lib/server/mcp/mcp.spec.ts` — `localhost.` / `127.0.0.1.` bypassed the public-HTTPS rule |
+| `/auth/*` + `auth/oidc.ts`                       | fixed      | `src/lib/server/auth/callback.spec.ts` — cross-origin callback burned the pending login       |
+| `/api/ai/{chat,config}`                          | no finding | `src/lib/server/ai/chat.spec.ts`, `src/lib/server/ai/config.ts` read in full                  |
+| `/api/manef/[...path]`                           | no finding | `src/lib/server/manef.spec.ts`, route read in full                                            |
+| `bridge/terminal-bridge.mjs` + `bridge_token.ts` | fixed      | `src/lib/runtime/terminal-bridge.spec.ts` — three findings, three failing tests               |
+| `src/convex/*` identity boundary                 | no finding | `src/convex/store.spec.ts`, every public handler audited by hand                              |
+| `src/lib/byok_key.ts`                            | fixed      | one module; reads and writes one tab-scoped `sessionStorage` draft, never `localStorage`      |
 
 Five fixes. Four distinct root causes: a trailing dot in a hostname denylist, a cookie consumed
 before the request was authorised, a request header trusted as configuration, and a credential
@@ -350,10 +350,15 @@ possible in the current build graph.
 > defect it describes is real; only the claim about the file's existence was false. See
 > [claims-audit-2026-11-02.md](claims-audit-2026-11-02.md) #10.
 
-`src/lib/byok_key.ts` holds the SvelteKit provider key in **module scope** while a turn streams:
-not `localStorage`, not `sessionStorage`, never a URL. The live read path is
-`src/lib/byok_input.ts`, which the chat screen calls. Both modules export a function named
-`readProviderKey`; `Chat.svelte` imports the `byok_input` one.
+> **Correction, 2026-11-03.** The two-module split this section describes is gone, and it was a
+> live defect rather than a tidiness item: `Chat.svelte` saved through `byok_key.ts` (module scope)
+> and read through `byok_input.ts` (a `sessionStorage` draft), and nothing wrote that draft, so the
+> pasted key was never the key that got sent and every server turn failed with "holds no key for
+> this tab". `src/lib/byok_input.ts` is deleted; `src/lib/byok_key.ts` now owns the read, the write
+> and the clear, over one tab-scoped draft, and `src/lib/byok_key.spec.ts` pins save -> read.
+
+`src/lib/byok_key.ts` holds the SvelteKit provider key in one tab-scoped `sessionStorage` draft:
+not `localStorage`, never a URL, never a log. The module is the only reader and the only writer.
 
 The SvelteKit chat screen used to read its provider key like this:
 
@@ -382,15 +387,13 @@ Evidence:
 × a non-string draft value is not sent as a key
 ```
 
-Fix: `src/lib/byok_input.ts` reads the tab-scoped draft only, type-checks the value, and is the
-single place the chat screen gets a key from. `src/lib/byok_key.ts` is a separate module-scope
-holder for the same value on the streaming path. No `localStorage` access anywhere in either
-path.
+Fix: `src/lib/byok_key.ts` reads the tab-scoped draft only, type-checks the value against the
+same `KEY_PATTERN` the server enforces, and is the single place the chat screen gets a key from.
+No `localStorage` access anywhere on that path.
 
-> **Open item, recorded not fixed.** Two modules export `readProviderKey`. They agree today, and
-> `Chat.svelte` imports only the `byok_input` one, but nothing structural keeps them in step —
-> this is the same duplication shape that produced the trailing-dot bug in §`/api/mcp/tools`.
-> Consolidating them is a code change and belongs in its own commit, not in a docs audit.
+> **Closed 2026-11-03.** The duplicate `readProviderKey` export is gone with `byok_input.ts`.
+> `src/lib/byok_key.spec.ts` asserts that save then read is one value and that a key in
+> `localStorage` is never read, so the two halves cannot drift apart again.
 
 Checked: the key is not in any URL — `streamServerChat` POSTs it as a JSON field to a
 same-origin route. It is not in a log — `logEvent` receives counts and outcomes only, and

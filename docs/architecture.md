@@ -13,6 +13,7 @@ and `AI_TOOLS_ENABLED` all default to `false`, and `PUBLIC_CONVEX_URL` empty mea
 
 ```text
 /                     → app-shell chrome + Chat (primary) + tabbed output region (secondary)
+/home /privacy /terms → public pages; no auth, no workspace bundle (OAuth brand registration)
 
 hash routes           → #apps #transcribe #files #browser #terminal #chat … (rail/launcher destinations)
                         → #models #setup #backends #providers #pricing #faq
@@ -168,7 +169,11 @@ The public app config and catalog drive page titles, descriptions, icons and sha
 images. `PUBLIC_SITE_URL` supplies an explicit canonical origin; incoming host headers
 do not choose it. `PUBLIC_SEO_INDEXABLE` defaults false and requires that origin when
 enabled. Preview sites and demo app routes are noindex. The robots and sitemap endpoints
-use the same settings; only the shipped public landing URL is included in the sitemap.
+use the same settings; the sitemap lists exactly three locations — `/`, `/privacy`, `/terms` —
+and `src/routes/contract.spec.ts` pins that count. Note what `/` actually renders: the
+workspace shell, not the landing page. `/home` is the human-facing landing and is **not** in
+the sitemap, so the URL a crawler is told is canonical is the app. Nothing else is listed: an
+app screen is reached by hash, not by URL, so it is not a crawlable page.
 See [the environment consumer matrix](environment.md).
 
 The asset script writes committed placeholders, file fingerprints and a web manifest;

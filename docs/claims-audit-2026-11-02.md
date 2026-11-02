@@ -203,8 +203,10 @@ Stated as a limit, not as a pass:
   wins, because that needs history the branch does not have.
 - `laya-parity.md` §2 still lists a view set this tree does not contain. It is provenance, now
   labelled as such.
-- Two modules export `readProviderKey` (`src/lib/byok_key.ts` and `src/lib/byok_input.ts`);
-  `Chat.svelte` imports the `byok_input` one. A live duplicate, recorded here rather than fixed in
-  a docs-only change.
+- ~~Two modules export `readProviderKey` (`src/lib/byok_key.ts` and `src/lib/byok_input.ts`);
+  `Chat.svelte` imports the `byok_input` one.~~ **Resolved 2026-11-03.** It was not just a
+  duplicate: the chat saved through `byok_key.ts` and read through `byok_input.ts`, and nothing
+  wrote that draft, so a pasted key was never sent. `byok_input.ts` is deleted and
+  `src/lib/byok_key.spec.ts` pins save -> read as one value. Entry kept as history.
 - `bin/gate`'s `playwright` step will report `FAIL` at default workers for the webServer reason
   above. Changing that is a `playwright.config.ts` decision, not a docs one.

@@ -47,8 +47,11 @@ built-in it is pinned like OpenAI itself.
 The same slug also exists in `src/lib/server/ai/config.ts` for the SvelteKit route, which
 serves four providers against eleven on the Convex path. `src/convex/` cannot import from
 `src/lib/` — the Convex runtime bundles its own module graph — so the two files duplicate the
-host on purpose. Drift shows up as a key sent to the wrong origin, and
-`vitest run src/convex src/lib/server/ai` is what catches it.
+host on purpose. Drift shows up as a key sent to the wrong origin.
+`src/lib/server/ai/pin.spec.ts` is what catches it: it imports `PROVIDERS['nine-router']` from
+`src/convex/providers.ts` and compares that base URL against the host literals read out of
+`src/lib/server/ai/chat.ts`, so the two sides are genuinely different sources and a typo in
+either file fails the test.
 
 **Manual-key fallback is a flow, not a field.** The connect form shows, for every built-in
 provider: the official key page (`docsUrl`), an instruction to create a key there, the fact

@@ -266,7 +266,8 @@ validation · **R** response shape · **U** upstream failure / timeout.
 | robots: unset origin → no `undefined` in the document                          | R    | 200    |
 | robots: verification token never embedded                                      | R    | —      |
 | sitemap: `application/xml; charset=utf-8`, well-formed empty `urlset` when off | R    | 200    |
-| sitemap: exactly one `<loc>` when on                                           | R    | 200    |
+| sitemap: exactly three `<loc>` when on — `/`, `/privacy`, `/terms`             | R    | 200    |
+| sitemap: no app path (`/apps/`) is listed (metadata.spec)                      | R    | 200    |
 | Non-boolean `PUBLIC_SEO_INDEXABLE` throws rather than guessing                 | I    | throws |
 | Indexing on with no origin throws rather than publishing a relative sitemap    | I    | throws |
 | Origin with a query string is refused, so no unescaped `&` can reach the XML   | I    | throws |

@@ -42,7 +42,7 @@ the tab). "Reader" names the function that reads it today.
 | `laya-draft-v1:workspace-layout`             | S     | `shared/workspace-layout`                | same                                | `{ output, lastOutput, outputRatio, navWidth, inspectorWidth }` | missing fields → clamped defaults          | each field clamped individually                                    |
 | `laya-draft-v1:desktop-output-tabs-v2`       | S     | `workspace-shell.svelte`                 | same                                | object                                                          | `v1` key is a _different key_              | shape unknown → `null` → defaults                                  |
 | `laya-draft-v1:desktop-navigation-collapsed` | S     | `workspace-shell.svelte`                 | same                                | boolean                                                         | —                                          | `!== true` → false                                                 |
-| `laya-draft-v1:byok-key`                     | S     | `Chat.svelte` (typed key)                | `byok_input.ts`                     | string inside the draft envelope                                | —                                          | non-string → `""`                                                  |
+| `laya-draft-v1:byok-key`                     | S     | `byok_key.ts` `saveProviderKey`          | `byok_key.ts` `readProviderKey`     | string inside the draft envelope                                | —                                          | not `KEY_PATTERN` → `""`                                           |
 | `laya-draft-v1:<view>` (per-screen)          | S     | each view (`SpeechControls`, `Snake`, …) | same                                | per-view object                                                 | —                                          | read per field; unknown → default                                  |
 | `laya-session`                               | L     | `Chat.svelte` `rememberSession`          | `Chat.svelte` `initialize`          | **raw id, no JSON quoting**                                     | same (it never changed)                    | anything else → `""` → first chat opens                            |
 | `laya-browser-rpa`                           | L     | `BrowserAutomation.svelte`               | same                                | **raw 24-hex run id**                                           | same                                       | non-id → ignored                                                   |
@@ -147,8 +147,9 @@ the deliberate `clear()` calls behind a "Clear all" button.
 - **`bridge-token:v1:<deviceId>`** keeps its own reader and is _not_ migrated. It already has a
   version field, and a pairing token is a credential: silently lifting an old token forward is
   worse than asking the user to pair again. A future shape bump should invalidate, not migrate.
-- **The BYOK provider key** (`byok_key.ts`) is in module scope, not storage. It is listed in the
-  inventory so the next reader does not "fix" that by persisting it.
+- **The BYOK provider key** (`byok_key.ts`) is one tab-scoped `sessionStorage` draft, written and
+  read by that module alone, and checked against `KEY_PATTERN` on the way out so a malformed value
+  is never sent. It is never `localStorage`; that was the leak this inventory exists to prevent.
 - **`workspace-template:backend` / `:chat-backend`** are opaque one-value strings. An envelope
   would add bytes and no safety: the consumer already falls back to `localBackend` for anything
   it does not recognise.

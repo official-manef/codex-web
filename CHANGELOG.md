@@ -7,6 +7,17 @@ its own history. Notable changes follow [Semantic Versioning](https://semver.org
 
 ### Added
 
+- **Public landing and legal pages** — `src/routes/home`, `src/routes/privacy`,
+  `src/routes/terms`, and `src/lib/config/legal.ts` holding the app name, operator, contact
+  mailbox, jurisdiction, effective date and license in one place so the three pages cannot
+  disagree with each other or with the OAuth consent screen. They exist because registering an
+  OAuth client needs three reachable public URLs and a reviewer who opens `/` otherwise lands
+  in the workspace shell with no policy text anywhere. The pages render without auth and
+  without the workspace bundle. `/home` is a separate route; `/` stays the app.
+- **`projects.setDetail`** — the mutation `Projects.svelte` already called but which did not
+  exist (a regression from the upstream merge). Bounded: 2000 characters of instructions, 20
+  relative-path labels, duplicate and traversal-shaped paths refused. It is a label store,
+  never a filesystem read. It also joined the ownership audit's pinned function list.
 - **BYOK key holder for the SvelteKit route** — `src/lib/byok_key.ts`. It accepts exactly the
   `keySchema` alphabet from `src/lib/server/ai/config.ts`, so `/api/ai/chat` is never handed a
   body it must reject. Module scope only: no `localStorage`, no `sessionStorage`, no URL, no
@@ -43,6 +54,10 @@ its own history. Notable changes follow [Semantic Versioning](https://semver.org
 
 ### Changed
 
+- **Sitemap lists three pages, not one.** `sitemapDocument` now emits `/`, `/privacy` and
+  `/terms`. A policy nobody can find is not a published policy, so the two legal pages are
+  listed; the contract test that pinned a count of one now pins three.
+  `src/lib/config/metadata.spec.ts` and `src/routes/contract.spec.ts` both assert it.
 - `docs/byok.md` §1 restated as "the browser never **persists** a provider key", with the
   SvelteKit path documented honestly next to the Convex one.
 - `docs/PRD.md` §7 and `docs/implementation-plan.md` §10 no longer state that `tests/workspace.e2e.ts`
@@ -50,12 +65,16 @@ its own history. Notable changes follow [Semantic Versioning](https://semver.org
   that contradicted the paragraph above it.
 - Pinned test counts removed from `docs/byok.md` and `docs/progress.md` in favour of the command
   that reports them.
+- `svelte/no-navigation-without-resolve` is off for the three legal pages, with the reason in
+  `eslint.config.js`: they link mostly to absolute external URLs, and `resolve()` is typed for
+  internal SvelteKit routes only.
 
 ### Verification
 
-`bun run verify` (0 type errors, 227 unit tests), `bunx playwright test` 18/18 across
-narrow-mobile/mobile/desktop, `bun run test:dev` 4/4. The 4 skipped unit tests are
+Measured on `98549c9`: `bun run check` and `bun run lint` clean, `bun run test:unit`
+107 files / 1294 passed / 3 skipped (1297), `bun run build` ok. The 3 skips are
 `src/convex/deployment.spec.ts`, which skips itself when no Convex deployment answers.
+Playwright was listed, not run: 178 cases × 3 projects = 534 registered.
 
 ## [0.6.0] - 2026-10-29
 
