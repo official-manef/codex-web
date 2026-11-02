@@ -153,3 +153,39 @@ deliberately does not contain.
 **Generated types.** `src/convex/_generated/api.d.ts` lists the modules by hand because
 `convex codegen` needs a deployment. `api.js` uses `anyApi`, so runtime is unaffected. Run
 `bun run convex:dev` once against a real deployment and the file regenerates.
+
+## 8. No-login BYOK on a deployment without auth
+
+`AUTH_ENABLED=false` (the default) plus no `CAPABILITY_ACCESS_TOKEN` used to mean every
+`/api/ai/*` call answered 401, because `requireCapabilityAccess` fell through to `readSession`.
+That made BYOK impossible to try on a plain deployment: the capability was built, the key holder
+existed, and the door was locked.
+
+The rule now, in `src/lib/server/access.ts`:
+
+| deployment                              | request               | result                              |
+| --------------------------------------- | --------------------- | ----------------------------------- |
+| `AUTH_ENABLED=false`, no operator token | same origin           | allowed, burst-limited by client IP |
+| `AUTH_ENABLED=false`, no operator token | foreign `Origin`      | 403                                 |
+| any deployment                          | valid operator bearer | allowed                             |
+| `AUTH_ENABLED=true`                     | signed-in session     | allowed                             |
+| `AUTH_ENABLED=true`                     | no session            | 401                                 |
+
+Two properties are load-bearing and must not be relaxed:
+
+1. **Same origin still decides.** A non-GET request is checked against `PUBLIC_SITE_URL`, so an
+   anonymous allowance is not an open relay.
+2. **The anonymous bucket is per client address**, capped at 20 requests/minute and 1024 buckets.
+   It is a small-deployment limiter, not a distributed one.
+
+Turning on `MCP_CLIENT_ENABLED` without `MCP_SERVERS_JSON` is **not** a harmless extra: the
+config route throws on the missing list, answers 503, and the chat screen silently loses the
+whole BYOK panel because it reads provider settings from that same route. Enable MCP client and
+its server list together, or neither.
+
+## 9. Namespaced model ids
+
+`modelName` in `src/lib/server/ai/config.ts` now accepts `/`, so `cx/gpt-6.1-sol` and
+`ag/gemini-3.8-flash` are valid approved ids. Before this, every namespaced id was refused as
+"Model is not approved" — which is most of the catalog that actually answers. A traversal-shaped
+id (`cx/../escape`) is still rejected, and both cases have a test.
