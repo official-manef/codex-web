@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# bin/caps — measured capability matrix for codex-web.
+#
+# Counts what the tree can actually prove today. Each row is measured against
+# files in the tree rather than claimed from a design doc.
+#
+# Usage:
+#   bin/caps
+#
+# Exit codes:
+#   0  report printed
+#   2  repo root missing
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+if [ -z "$REPO_ROOT" ] || [ ! -f "$REPO_ROOT/package.json" ]; then
+	echo "error: repo root missing" >&2
+	exit 2
+fi
+cd "$REPO_ROOT" || exit 2
+
+PRESENT_COUNT=0
+ABSENT_COUNT=0
+UNPROVEN_COUNT=0
+
+record() {
+	local state="$1"
+	local id="$2"
+	local evidence="$3"
+
+	case "$state" in
+		PRESENT)
+			PRESENT_COUNT=$((PRESENT_COUNT + 1))
+			;;
+		ABSENT)
+			ABSENT_COUNT=$((ABSENT_COUNT + 1))
+			;;
+		UNPROVEN)
+			UNPROVEN_COUNT=$((UNPROVEN_COUNT + 1))
+			;;
+	esac
+
+	printf '%s  %s  %s\n' "$state" "$id" "$evidence"
+}
+
+# 1. agent-loop
+if grep -q "tools: TOOL_SPECS" src/lib/server/ai/chat.ts 2>/dev/null; then
+	record PRESENT "agent-loop" "tools: TOOL_SPECS in src/lib/server/ai/chat.ts"
+else
+	record ABSENT "agent-loop" "tools: TOOL_SPECS missing from src/lib/server/ai/chat.ts"
+fi
+
+# 2. tool-exec
+if grep -q "createBridgeClient" src/routes/api/ai/chat/+server.ts 2>/dev/null; then
+	record PRESENT "tool-exec" "createBridgeClient in src/routes/api/ai/chat/+server.ts"
+else
+	record ABSENT "tool-exec" "createBridgeClient missing from src/routes/api/ai/chat/+server.ts"
+fi
+
+# 3. images (composer path; honest signal for gap #6)
+if grep -q "toWireImages" src/lib/views/Chat.svelte 2>/dev/null; then
+	record PRESENT "images" "toWireImages in src/lib/views/Chat.svelte"
+else
+	record ABSENT "images" "toWireImages missing from src/lib/views/Chat.svelte"
+fi
+
+# 4. image-intake
+if test -f src/lib/uploads.ts; then
+	record PRESENT "image-intake" "src/lib/uploads.ts exists"
+else
+	record ABSENT "image-intake" "src/lib/uploads.ts missing"
+fi
+
+# 5. parallel-tools
+if grep -q "runBounded" src/lib/server/ai/chat.ts 2>/dev/null; then
+	record PRESENT "parallel-tools" "runBounded in src/lib/server/ai/chat.ts"
+else
+	record ABSENT "parallel-tools" "runBounded missing from src/lib/server/ai/chat.ts"
+fi
+
+# 6. git-write
+if grep -q "action: z.literal('commit')" src/routes/api/git/+server.ts 2>/dev/null; then
+	record PRESENT "git-write" "action: z.literal('commit') in src/routes/api/git/+server.ts"
+else
+	record ABSENT "git-write" "action: z.literal('commit') missing from src/routes/api/git/+server.ts"
+fi
+
+# 7. git-remote
+if test -f src/lib/server/git_remote.ts; then
+	record PRESENT "git-remote" "src/lib/server/git_remote.ts exists"
+else
+	record ABSENT "git-remote" "src/lib/server/git_remote.ts missing"
+fi
+
+# 8. mcp-apps
+if grep -q "appAllowed" src/routes/api/mcp/apps/+server.ts 2>/dev/null; then
+	record PRESENT "mcp-apps" "appAllowed in src/routes/api/mcp/apps/+server.ts"
+else
+	record ABSENT "mcp-apps" "appAllowed missing from src/routes/api/mcp/apps/+server.ts"
+fi
+
+# 9. automations-plan
+if grep -q "planRunOnce" src/routes/api/automations/run/+server.ts 2>/dev/null; then
+	record PRESENT "automations-plan" "planRunOnce in src/routes/api/automations/run/+server.ts"
+else
+	record ABSENT "automations-plan" "planRunOnce missing from src/routes/api/automations/run/+server.ts"
+fi
+
+# 10. automations-run (plan+claim only; model call absent -> unproven)
+if grep -q "claimRun" src/convex/automations.ts 2>/dev/null; then
+	record UNPROVEN "automations-run" "no model call exists"
+else
+	record ABSENT "automations-run" "claimRun missing from src/convex/automations.ts"
+fi
+
+# 11. reasoning-effort
+if grep -q "effortForProvider" src/routes/api/ai/config/+server.ts 2>/dev/null; then
+	record PRESENT "reasoning-effort" "effortForProvider in src/routes/api/ai/config/+server.ts"
+else
+	record ABSENT "reasoning-effort" "effortForProvider missing from src/routes/api/ai/config/+server.ts"
+fi
+
+# 12. memories-dual (unwired helper -> unproven)
+if grep -q "shouldDualWrite" src/lib/views/ src/routes/ -r 2>/dev/null; then
+	record PRESENT "memories-dual" "shouldDualWrite wired in views/routes"
+else
+	record UNPROVEN "memories-dual" "shouldDualWrite not wired in views or routes"
+fi
+
+# 13. pr-review
+record ABSENT "pr-review" "no forge credential in this app"
+
+# 14. web-search
+record ABSENT "web-search" "hosted tool, no equivalent"
+
+REACHABLE=$((PRESENT_COUNT + ABSENT_COUNT))
+if [ "$REACHABLE" -eq 0 ]; then
+	PCT="0"
+else
+	PCT=$(awk -v p="$PRESENT_COUNT" -v r="$REACHABLE" 'BEGIN { printf "%.1f", (p / r) * 100 }')
+fi
+
+printf 'present %d, absent %d, unproven %d — %s%% of reachable\n' \
+	"$PRESENT_COUNT" "$ABSENT_COUNT" "$UNPROVEN_COUNT" "$PCT"
+
+exit 0

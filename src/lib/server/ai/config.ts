@@ -3,6 +3,7 @@ import type { AiProvider, ChatMessage } from './contracts';
 import { textOf } from './contracts';
 import { decodedBytes, MAX_IMAGE_BYTES, MAX_IMAGES_PER_TURN } from '$lib/uploads';
 import type { IntegrationEnv } from '../integrations/config';
+import { EFFORTS, effortForProvider, type ReasoningEffort } from '../../reasoning';
 
 const modelName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/);
 const modelsSchema = z
@@ -76,6 +77,7 @@ const chatSchema = z
 		apiKey: keySchema,
 		memory: z.string().max(2000).optional(),
 		toolUse: z.boolean().default(false),
+		reasoningEffort: z.enum(EFFORTS as [ReasoningEffort, ...ReasoningEffort[]]).optional(),
 		messages: z
 			.array(
 				z.discriminatedUnion('role', [
@@ -140,6 +142,7 @@ export function parseChat(
 	messages: ChatMessage[];
 	memory?: string;
 	toolUse: boolean;
+	reasoningEffort?: ReasoningEffort;
 } {
 	const settings = aiSettings(env);
 	if (!settings.enabled) throw new Error('AI is disabled');
@@ -155,6 +158,12 @@ export function parseChat(
 		input.messages.reduce((size, message) => size + textOf(message.content).length, 0) > 32000
 	)
 		throw new Error('Conversation exceeds the limit or has no final user message');
+	if (input.reasoningEffort) {
+		const check = effortForProvider(input.provider, input.reasoningEffort);
+		if (!check.accepted && input.reasoningEffort !== 'none') {
+			throw new Error(check.reason ?? 'Provider does not support reasoning effort');
+		}
+	}
 	return input;
 }
 

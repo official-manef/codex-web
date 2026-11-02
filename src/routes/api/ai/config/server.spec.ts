@@ -63,9 +63,23 @@ describe('/api/ai/config GET', () => {
 		const body = await res.json();
 		expect(body.ai.enabled).toBe(true);
 		expect(body.ai.providers).toEqual([
-			{ id: 'openai', label: 'OpenAI', models: ['gpt-a'] },
-			{ id: 'nine-router', label: '9router', models: ['r1'] }
+			{
+				id: 'openai',
+				label: 'OpenAI',
+				models: ['gpt-a'],
+				efforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']
+			},
+			{ id: 'nine-router', label: '9router', models: ['r1'], efforts: [] }
 		]);
+	});
+
+	test('exposes accepted reasoning efforts per provider', async () => {
+		const res = await GET(makeEvent(token));
+		const body = await res.json();
+		const openai = body.ai.providers.find((p: { id: string }) => p.id === 'openai');
+		const nineRouter = body.ai.providers.find((p: { id: string }) => p.id === 'nine-router');
+		expect(openai.efforts).toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+		expect(nineRouter.efforts).toEqual([]);
 	});
 
 	test('exposes MCP alias names only, never urls, auth style or tool lists', async () => {

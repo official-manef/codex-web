@@ -398,3 +398,44 @@ One contract conflict surfaced here and was resolved in favour of the stricter s
 a valid image, and that the log field `images` was a boolean. With intake sniffing real magic
 bytes both claims are wrong, so the spec was corrected — it now uses an actual 1×1 PNG and expects
 `images: 1`. A test that passes because nothing validates the payload is not evidence.
+
+## 9. Wave 7 — measured, not asserted
+
+`bin/caps` now measures the tree instead of a reader checking files by eye. Run it, do not trust
+this table:
+
+```
+$ bin/caps
+PRESENT   agent-loop       tools: TOOL_SPECS in src/lib/server/ai/chat.ts
+PRESENT   tool-exec        createBridgeClient in src/routes/api/ai/chat/+server.ts
+PRESENT   images           toWireImages in src/lib/views/Chat.svelte
+PRESENT   image-intake     src/lib/uploads.ts exists
+PRESENT   parallel-tools   runBounded in src/lib/server/ai/chat.ts
+PRESENT   git-write        action: z.literal('commit') in src/routes/api/git/+server.ts
+PRESENT   git-remote       src/lib/server/git_remote.ts exists
+PRESENT   mcp-apps         appAllowed in src/routes/api/mcp/apps/+server.ts
+PRESENT   automations-plan planRunOnce in src/routes/api/automations/run/+server.ts
+UNPROVEN  automations-run  no model call exists
+PRESENT   reasoning-effort effortForProvider in src/routes/api/ai/config/+server.ts
+UNPROVEN  memories-dual    shouldDualWrite not wired in views or routes
+ABSENT    pr-review        no forge credential in this app
+ABSENT    web-search       hosted tool, no equivalent
+present 10, absent 2, unproven 2 — 83.3% of reachable
+```
+
+Gap #6 ("image input") moved from `gap` to `present` **only** because `toWireImages` appears in
+`Chat.svelte`. Before this wave that grep failed, which is why the earlier estimate was lowered
+from 60% back to 60% when the composer turned out to send no image part at all.
+
+Still open after this wave, and each one is named so nobody has to rediscover it:
+
+| #   | Gap                 | Why it stays open                                                                                |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------ |
+| 4   | Reasoning effort    | The data and refusal exist; no provider adapter sends the field, and only OpenAI would accept it |
+| 5   | Parallel chats      | `compare` manages targets in the UI; a turn still sends one provider                             |
+| 15  | PR review           | No forge credential. `git_remote.ts` parses the origin and stops at a web URL                    |
+| 17  | Multi-repo projects | Projects hold instructions and labels for one root                                               |
+| 21  | MCP 2.0 events      | SDK 1.30.0 has no event transport                                                                |
+| 25  | Web search          | Hosted tool; no equivalent exists in this stack                                                  |
+| 34  | Voice dictation     | Recorder works against a stub device                                                             |
+| 35  | Remote mobile       | Needs a relay and a second identity — a product change                                           |

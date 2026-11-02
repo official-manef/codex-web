@@ -1,5 +1,6 @@
 import { cloudAvailable, cloudTurn, type CloudTurn, type CloudResult } from '$lib/cloud/chat';
 import type { AiProvider, ChatMessage, ChatEvent } from '$lib/server/ai/contracts';
+import type { ReasoningEffort } from '$lib/reasoning';
 
 export type ChatBackend = 'convex' | 'server' | 'stub';
 
@@ -25,6 +26,7 @@ export interface StreamServerChatInput {
 	messages: ChatMessage[];
 	memory?: string;
 	toolUse?: boolean;
+	reasoningEffort?: ReasoningEffort;
 }
 
 export interface StreamServerChatResult {
@@ -57,6 +59,7 @@ export async function streamServerChat(
 	};
 	if (input.memory !== undefined) body.memory = input.memory;
 	if (input.toolUse !== undefined) body.toolUse = input.toolUse;
+	if (input.reasoningEffort !== undefined) body.reasoningEffort = input.reasoningEffort;
 
 	const response = await fetcher('/api/ai/chat', {
 		method: 'POST',

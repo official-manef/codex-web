@@ -10,6 +10,11 @@
 		toMemoryRows,
 		type MemoryRow,
 	} from "#lib/memory_client.js";
+	import {
+		shouldDualWrite,
+		reconcile,
+		DUAL_WRITE_FLAG,
+	} from "#lib/memory_dual.js";
 	import { onMount } from "svelte";
 	import { useMutation, useQuery, useAuth } from "convex-svelte";
 	import { env } from "$env/dynamic/public";
@@ -32,13 +37,40 @@
 	let error = $state("");
 	let notice = $state("");
 	let importing = $state(false);
+	let localDualWrite = $state<string | undefined>(undefined);
 
 	onMount(() => {
 		localItems = memoryStore.all();
+		try {
+			const saved = localStorage.getItem(DUAL_WRITE_FLAG);
+			if (saved !== null) {
+				localDualWrite = saved;
+			}
+		} catch {
+			// Storage unavailable
+		}
 	});
+
+	const dualWrite = $derived(
+		shouldDualWrite(
+			localDualWrite ?? env.PUBLIC_MEMORY_DUAL_WRITE,
+			isCloud,
+		),
+	);
+
+	function toggleDualWrite() {
+		const next = dualWrite.enabled ? "false" : "true";
+		localDualWrite = next;
+		try {
+			localStorage.setItem(DUAL_WRITE_FLAG, next);
+		} catch {
+			// Storage unavailable
+		}
+	}
 
 	const cloudItems = $derived(toMemoryRows(listQuery?.data));
 	const items = $derived(isCloud ? cloudItems : localItems);
+	const reconciliation = $derived(reconcile(localItems, cloudItems));
 	const canImportLocal = $derived(
 		isCloud &&
 			!listQuery?.isLoading &&
@@ -64,6 +96,10 @@
 		if (isCloud && addMutation) {
 			try {
 				await addMutation({ text: trimmed });
+				if (dualWrite.enabled) {
+					memoryStore.add(draft);
+					localItems = memoryStore.all();
+				}
 				draft = "";
 				notice = "Memory added.";
 			} catch (e: any) {
@@ -194,6 +230,16 @@
 >
 	{#snippet actions()}
 		<span class="chip mono">{items.length} of {MAX_MEMORIES}</span>
+		{#if isCloud}
+			<button
+				type="button"
+				class="btn text-[11.5px]"
+				onclick={toggleDualWrite}
+				aria-pressed={dualWrite.enabled}
+			>
+				Dual write: {dualWrite.enabled ? "on" : "off"}
+			</button>
+		{/if}
 		{#if items.length > 0}
 			<button type="button" class="btn" onclick={clearAll}>Clear all</button>
 		{/if}
@@ -206,6 +252,19 @@
 			Stored in this browser only
 		{/if}
 	</p>
+
+	{#if isCloud}
+		{#if reconciliation.conflicts.length > 0}
+			<p class="mb-3 text-[12.5px] leading-relaxed text-ink-3" role="status">
+				{reconciliation.conflicts.length} note(s) mirrored locally and in cloud.
+			</p>
+		{/if}
+		{#if reconciliation.toCloud.length > 0 && cloudItems.length > 0}
+			<p class="mb-3 text-[12.5px] leading-relaxed text-ink-3" role="status">
+				{reconciliation.toCloud.length} un-synced local note(s).
+			</p>
+		{/if}
+	{/if}
 
 	<section class="card mb-6 p-4">
 		<label for="memory-draft" class="mb-1.5 block text-[13px] font-medium text-ink">
