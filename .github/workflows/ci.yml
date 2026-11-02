@@ -1,5 +1,15 @@
 name: CI
 
+# One definition of "verified": `bin/gate --ci`.
+#
+# The previous version of this file ran `bun run verify` plus the browser suites by hand. That
+# was a second, subtly different definition — it ran steps `bin/gate` did not (the Svelte 5
+# guard, `assets:check`, the Node adapter smoke) and it skipped steps `bin/gate` did (the bridge
+# contract test), so a developer could pass `bin/gate` locally and fail here, or vice versa.
+# Now CI calls the same script a developer calls, with `--ci` to annotate the Actions log and to
+# tolerate exactly one unprovable step: the Convex auth boundary, which needs a deployment a
+# runner does not have. Every other UNPROVEN still fails the run.
+
 on:
   push:
     branches: [main]
@@ -14,30 +24,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Node version comes from .node-version, which is 22.23.2 — inside `engines.node`
+      # (`^22.23.2 || ^24.15.0`) and inside what Convex accepts for `use node` actions (22/24,
+      # never 26). Nothing else in the repo pins a second version, so this is the single source.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
+
+      # `bun-version-file: package.json` reads `packageManager` (`bun@1.4.2`) and falls back to
+      # `engines.bun`; both say the same thing here, so the two inputs cannot disagree.
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
+
       - run: bun install --frozen-lockfile
-      - run: bun run verify
-      - run: bunx playwright install --with-deps chromium
-      - run: bun run test:e2e
-      - run: bun run test:dev
-      - run: bun run build && node scripts/smoke-node.mjs
+
+      # The gate shells out to node_modules/.bin. It does not install anything itself, so this
+      # is the only step that can turn a missing dependency into a confusing failure.
+      - name: Verify dependencies are installed
+        run: |
+          fail=0
+          for tool in prettier eslint svelte-kit svelte-check tsc vitest vite playwright; do
+            if [ ! -x "node_modules/.bin/$tool" ]; then
+              echo "::error title=missing tool::node_modules/.bin/$tool is absent after bun install"
+              fail=1
+            fi
+          done
+          exit "$fail"
+
+      # `--with-deps` needs root; without it ubuntu-latest already has the shared libraries
+      # this suite needs, but installing them explicitly is what makes the step honest instead
+      # of relying on a runner image that changes. The gate reports UNPROVEN if the binary is
+      # missing, so a skipped install cannot pass silently.
+      - name: Install chromium
+        run: bunx playwright install --with-deps chromium
+
+      # Everything else is one command. --ci annotates failures as ::error and tolerates only
+      # the documented Convex hole, as a ::warning on the run.
+      - name: Gate
+        run: bin/gate --ci
         env:
-          DEPLOY_TARGET: node
+          # Left unset on purpose: a runner has no Convex deployment, and pinning a URL here
+          # would either point at a stranger's backend or turn the auth tests into the
+          # permanent silent skip bin/gate exists to prevent. Unset means the gate reports the
+          # three auth tests as an accepted, loudly-announced hole.
+          CI: 'true'
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-failure
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report/
           retention-days: 7

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # bin/gate — one honest gate for this repo.
 #
-# This repository has no CI, so this script is the only thing standing between a branch and
-# "it works". It exists because the pieces it replaces each lied at least once:
+# `.github/workflows/ci.yml` runs THIS script (`bun run gate:ci`), not a re-implementation of
+# it, so "verified" has one definition. It exists because the pieces it replaces each lied at
+# least once:
 #
 #   * `npx vitest run` printed `197 passed | 3 skipped` on one machine and `179 passed |
 #     4 skipped` on another for the same commit. The skip count was not a property of the
@@ -14,7 +15,10 @@
 # proven is reported as UNPROVEN, which is its own state with its own exit code.
 #
 # Usage:
-#   bin/gate
+#   bin/gate          # the command a developer runs; every step must PASS
+#   bin/gate --ci     # the command CI runs; annotates Actions output and lets exactly one
+#                     # kind of UNPROVEN through: the Convex auth boundary, which needs a
+#                     # deployment CI does not have. Every other UNPROVEN still fails.
 #
 # Exit codes:
 #   0  every step PASSed and nothing was skipped
@@ -26,6 +30,9 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
+
+CI_MODE=0
+[ "${1:-}" = '--ci' ] && CI_MODE=1
 
 BIN=./node_modules/.bin
 WORK="${TMPDIR:-/tmp}/gate-$$"
@@ -42,6 +49,10 @@ now_ms() { date +%s%3N; }
 
 fmt_ms() {
 	local ms="$1"
+	# A wall clock that steps backwards under load (this host is WSL, and several gates share
+	# 16 cores) yields a negative delta. Print 0ms rather than a negative duration nobody can
+	# act on; the step's verdict is unaffected either way.
+	[ "$ms" -lt 0 ] && ms=0
 	if [ "$ms" -lt 1000 ]; then
 		printf '%dms' "$ms"
 	else
@@ -100,6 +111,48 @@ need_tool() {
 }
 
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g' "$1"; }
+
+# Reduce a Playwright JSON report to lines the shell can read:
+#   stats<TAB>total<TAB>skipped
+#   declared<TAB>reason<TAB>project › title   (one per skip that states a reason)
+#   silent<TAB>project › title                (one per skip that does not)
+# `test.skip()` without a description, `test.fixme()` and a `--grep` that matches nothing all
+# exit 0. Counting them here is what keeps "0 failed" from meaning "nothing ran".
+pw_json_stats() {
+	[ -f "$1" ] || return 0
+	node -e '
+		const fs = require("node:fs");
+		let report;
+		try {
+			report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+		} catch {
+			// An unreadable report means no proof, not a pass: caller sees no `stats` line and
+			// treats that as 0 tests, which is UNPROVEN.
+			process.exit(0);
+		}
+		let total = 0;
+		let skipped = 0;
+		const rows = [];
+		const walk = (suite) => {
+			for (const spec of suite.specs ?? []) {
+				for (const test of spec.tests ?? []) {
+					total += 1;
+					if (test.status !== "skipped") continue;
+					skipped += 1;
+					const reason = (test.annotations ?? []).find(
+						(a) => a.type === "skip" && typeof a.description === "string" && a.description.trim()
+					)?.description;
+					const title = test.projectName ? `${test.projectName} › ${spec.title}` : spec.title;
+					rows.push(reason ? ["declared", reason.replace(/\t/g, " "), title] : ["silent", "", title]);
+				}
+			}
+			for (const child of suite.suites ?? []) walk(child);
+		};
+		for (const suite of report.suites ?? []) walk(suite);
+		process.stdout.write(`stats\t${total}\t${skipped}\n`);
+		for (const [kind, reason, title] of rows) process.stdout.write(`${kind}\t${reason}\t${title}\n`);
+	' "$1" 2>/dev/null
+}
 
 # ── environment ────────────────────────────────────────────────────────────────────────────
 
@@ -194,6 +247,15 @@ fi
 
 section 'steps'
 
+# Cheapest first: a tracked credential or a version mismatch costs a commit to find otherwise.
+# `scripts/secret-scan.sh` is documented as "must exit 0 before any commit" in docs/README.md,
+# so it belongs in the definition of verified rather than in a reader's memory.
+if run secret-scan bash scripts/secret-scan.sh; then
+	pass secret-scan "$LAST_MS"
+else
+	fail secret-scan "$LAST_MS" 'a tracked file looks like it contains a credential'
+fi
+
 if need_tool prettier prettier; then
 	if run prettier "$BIN/prettier" --check .; then
 		pass prettier "$LAST_MS"
@@ -233,9 +295,39 @@ if need_tool tsc convex-types; then
 	fi
 fi
 
+# `package.json`'s `check` script also runs these two; the gate was missing both, so a version
+# bump or a stale generated icon passed here and failed in CI's `bun run verify`.
+if run version node scripts/version.mjs --check; then
+	pass version "$LAST_MS"
+else
+	fail version "$LAST_MS" 'package.json and version.json disagree; run: bun run version:bump <x.y.z>'
+fi
+
+if run svelte5-guard node scripts/check-svelte5.mjs; then
+	pass svelte5-guard "$LAST_MS"
+else
+	fail svelte5-guard "$LAST_MS" 'legacy Svelte syntax in src/ or slices/'
+fi
+
+# `bun run assets:check` executes a .ts file, so it needs bun, not node.
+if ! command -v bun >/dev/null 2>&1; then
+	printf '  UNPROVEN  %-14s %s\n' assets "0ms"
+	printf '            bun is required: scripts/assets.ts is TypeScript\n'
+	printf '            fix: %s\n' 'curl -fsSL https://bun.sh/install | bash'
+	UNPROVEN+=("assets")
+elif run assets bun scripts/assets.ts check; then
+	pass assets "$LAST_MS"
+else
+	fail assets "$LAST_MS" 'generated icons are stale; run: bun run assets:generate'
+fi
+
 # ── vitest, with skips surfaced ────────────────────────────────────────────────────────────
 
 VITEST_SKIPS=0
+PLAYWRIGHT_SKIPS=0
+# 1 only when every vitest skip is the Convex-auth-boundary hole AND no deployment answered.
+# `--ci` tolerates exactly this; anything else that did not run still fails the run.
+VITEST_CONVEX_HOLE=0
 VITEST_SUMMARY=''
 if need_tool vitest vitest; then
 	# --reporter=verbose is load-bearing, not cosmetic: it is the only reporter that prints
@@ -280,6 +372,22 @@ if need_tool vitest vitest; then
 		fi
 	else
 		# Tests passed, but some of them did not run. Saying PASS here is the original lie.
+		# `absent`/`empty` is the only skip pattern CI is allowed to tolerate, and only when
+		# every skip is the Convex auth boundary: the runner has no deployment, so those
+		# tests cannot be made to run remotely. A skip with any other reason is not the hole
+		# CI accepts and still fails the run.
+		case "$CONVEX_STATE" in
+		absent | empty)
+			# Exit 0 from awk means every skip reason is the Convex hole; any other reason
+			# (a silent skip, a `.skip` somebody added) makes it exit 1 and CI still fails.
+			if awk -F'\t' '
+				$1 !~ /^(no Convex deployment|deployment reachable but auth boundary NOT proven)/ { bad = 1 }
+				END { exit bad ? 1 : 0 }
+			' "$SKIP_LOG"; then
+				VITEST_CONVEX_HOLE=1
+			fi
+			;;
+		esac
 		unproven vitest "$LAST_MS" \
 			"$VITEST_SKIPS test(s) skipped, Convex is ${CONVEX_STATE}: ${VITEST_SUMMARY:-?}" \
 			"$CONVEX_FIX"
@@ -331,22 +439,103 @@ else
 	# dishonesty as skipping it: the suite below is known to have a load-sensitive flake and
 	# the gate's job is to report that, not to outvote it.
 	#
-	# Workers ARE bounded. `playwright test` defaults to one worker per CPU; on a 16-core host
-	# that outlives the webServer and 77 files fail with ERR_CONNECTION_REFUSED against a
-	# server already torn down — a green suite reported as failed. Measured 2026-11-02: default
-	# count fails, `--workers=2` passes 357, `--workers=1` passes and is slower. The bound is a
-	# property of this host, so it is stated here rather than hidden in the config.
-	if run playwright "$BIN/playwright" test --workers="${PLAYWRIGHT_WORKERS:-2}"; then
-		pass playwright "$LAST_MS"
+	# The worker bound lives in `playwright.config.ts` (`workers`), not here, so CI and this
+	# script run the same count without one of them having to remember a flag. Measured
+	# 2026-11-02 on a 16-core host: default count fails (77 ERR_CONNECTION_REFUSED against a
+	# webServer already torn down), `--workers=2` passes 357, `--workers=1` passes and is
+	# slower. Configuring it there makes the number a property of the repo, not the machine.
+	PLAYWRIGHT_JSON="$WORK/playwright.json"
+	PW_STATS=''
+	if PLAYWRIGHT_JSON_OUTPUT_NAME="$PLAYWRIGHT_JSON" run playwright \
+		"$BIN/playwright" test --reporter=list,json; then
+		PW_RC=0
 	else
+		PW_RC=$?
+	fi
+	PW_STATS="$(pw_json_stats "$PLAYWRIGHT_JSON")"
+	PW_TOTAL="$(printf '%s\n' "$PW_STATS" | awk -F'\t' '$1 == "stats" { print $2 }')"
+	PLAYWRIGHT_SKIPS="$(printf '%s\n' "$PW_STATS" | awk -F'\t' '$1 == "stats" { print $3 }')"
+	PW_SILENT="$(printf '%s\n' "$PW_STATS" | awk -F'\t' '$1 == "silent"' | wc -l | tr -d ' ')"
+	printf '%s\n' "$PW_STATS" | awk -F'\t' '$1 == "declared" { print $2 "\t" $3 }' >>"$SKIP_LOG"
+
+	if [ "$PW_RC" -ne 0 ]; then
 		fail playwright "$LAST_MS" 'browser suite failed; see report above (npx playwright show-report)'
+	elif [ "${PW_TOTAL:-0}" -eq 0 ]; then
+		# Zero tests and zero failures exit 0. That is the same lie as a silent skip.
+		unproven playwright "$LAST_MS" \
+			'the browser suite ran 0 tests' \
+			'check testMatch and the project list in playwright.config.ts'
+	elif [ "$PW_SILENT" -gt 0 ]; then
+		unproven playwright "$LAST_MS" \
+			"$PW_SILENT skipped test(s) state no reason" \
+			'give every test.skip a second argument, or delete the skip'
+	else
+		pass playwright "$LAST_MS"
+		[ "$PLAYWRIGHT_SKIPS" -gt 0 ] &&
+			printf '            %s declared skip(s), reasons listed below\n' "$PLAYWRIGHT_SKIPS"
+	fi
+fi
+
+# ── playwright, dev server ─────────────────────────────────────────────────────────────────
+#
+# A second config boots `vite dev` instead of `vite preview` and greps four smoke tests. It is
+# the only thing that proves the dev server hydrates, which is what a developer actually runs.
+if ! command -v bun >/dev/null 2>&1 || [ ! -x "$BIN/playwright" ]; then
+	: # already reported above as UNPROVEN playwright
+else
+	DEV_JSON="$WORK/playwright-dev.json"
+	if PLAYWRIGHT_JSON_OUTPUT_NAME="$DEV_JSON" run dev-smoke \
+		"$BIN/playwright" test --config playwright.dev.config.ts --reporter=list,json; then
+		DEV_RC=0
+	else
+		DEV_RC=$?
+	fi
+	DEV_TOTAL="$(pw_json_stats "$DEV_JSON" | awk -F'\t' '$1 == "stats" { print $2 }')"
+	if [ "$DEV_RC" -ne 0 ]; then
+		fail dev-smoke "$LAST_MS" 'dev-server smoke failed'
+	elif [ "${DEV_TOTAL:-0}" -eq 0 ]; then
+		# The config selects its tests with --grep. A renamed test makes the grep match nothing,
+		# and a suite of zero tests passes. That is why the count is asserted, not assumed.
+		unproven dev-smoke "$LAST_MS" \
+			'playwright.dev.config.ts matched 0 tests (its --grep no longer matches a title)' \
+			'update the grep in playwright.dev.config.ts to the current test names'
+	else
+		pass dev-smoke "$LAST_MS"
+	fi
+fi
+
+# ── standalone Node server ──────────────────────────────────────────────────────────────────
+#
+# `vite build` proves the bundle compiles; it does not prove the Node adapter's output boots and
+# answers. The smoke spawns the real server on 4199 and checks routes, the disabled-capability
+# API and the 404 — so it needs its own build with DEPLOY_TARGET=node.
+if [ ! -x "$BIN/vite" ]; then
+	# Already reported as UNPROVEN build above; the Node build cannot run without vite.
+	:
+else
+	NODE_BUILD_OK=0
+	if DEPLOY_TARGET=node run node-build "$BIN/vite" build; then
+		if run node-smoke node scripts/smoke-node.mjs; then
+			NODE_BUILD_OK=1
+		fi
+	fi
+	if [ "$NODE_BUILD_OK" = 1 ]; then
+		pass node-smoke "$LAST_MS"
+	else
+		fail node-smoke "$LAST_MS" 'the Node adapter build or its route smoke failed'
 	fi
 fi
 
 # ── skips, spelled out ────────────────────────────────────────────────────────────────────
+#
+# Both suites report here. A declared skip in the browser suite is honest (one pass over a
+# width-independent DOM, said out loud), so it does not make the run UNPROVEN — but it is
+# printed, because a skip count nobody reads is how the Convex hole survived. A skip with no
+# reason does make it UNPROVEN.
 
-if [ "$VITEST_SKIPS" -gt 0 ]; then
-	section "skipped tests ($VITEST_SKIPS)"
+TOTAL_SKIPS=$((VITEST_SKIPS + PLAYWRIGHT_SKIPS))
+if [ "$TOTAL_SKIPS" -gt 0 ]; then
+	section "skipped tests ($TOTAL_SKIPS)"
 	# Grouped by reason: one reason per block, then the tests it silenced. Identical reasons
 	# collapse, so the reader sees "3 tests — this one missing fact" instead of three lines
 	# that look like three unrelated problems.
@@ -366,12 +555,52 @@ fi
 section 'verdict'
 printf '  %d passed, %d unproven, %d failed\n' "${#PASSED[@]}" "${#UNPROVEN[@]}" "${#FAILED[@]}"
 
+annotate() {
+	[ "$CI_MODE" = 1 ] || return 0
+	printf '%s\n' "$2"
+}
+
 if [ "${#FAILED[@]}" -gt 0 ]; then
+	for step in "${FAILED[@]}"; do
+		annotate fail "::error title=gate: ${step} failed::bin/gate reported ${step} as FAIL; see the step output above."
+	done
 	printf '\n  FAIL — %s\n' "${FAILED[*]}"
 	exit 1
 fi
 
 if [ "${#UNPROVEN[@]}" -gt 0 ]; then
+	if [ "$CI_MODE" = 1 ]; then
+		# CI has no Convex deployment, so the three auth-boundary tests cannot run there. That is
+		# the ONE hole `--ci` tolerates, and it is tolerated loudly: a notice on the run, a
+		# summary line, and this script still exits 0. Every other UNPROVEN fails, because a
+		# runner that skips prettier or the browser suite is the green-CI-that-hides-defects
+		# this file exists to prevent.
+		ALLOWED=()
+		BLOCKING=()
+		for step in "${UNPROVEN[@]}"; do
+			if [ "$step" = vitest ] && [ "$VITEST_CONVEX_HOLE" = 1 ]; then
+				ALLOWED+=("$step")
+			else
+				BLOCKING+=("$step")
+			fi
+		done
+		for step in "${ALLOWED[@]}"; do
+			annotate notice "::warning title=gate: ${step} UNPROVEN in CI (Convex auth boundary)::No CONVEX_URL on the runner, so the anonymous-refusal assertions skipped. This run does NOT prove the auth boundary. Prove it locally: npx convex dev, then bin/gate."
+			printf '\n  UNPROVEN IN CI (accepted) — %s\n' "${ALLOWED[*]}"
+			printf '  No Convex deployment on the runner: the auth boundary is unproven here.\n'
+			printf '  bin/gate locally, with `npx convex dev` running, is the only proof of it.\n'
+		done
+		if [ "${#BLOCKING[@]}" -eq 0 ]; then
+			printf '\n  PASS IN CI — every step ran; the Convex auth boundary is unproven and says so\n'
+			exit 0
+		fi
+		for step in "${BLOCKING[@]}"; do
+			annotate fail "::error title=gate: ${step} UNPROVEN::${step} did not exercise what it exists to prove."
+		done
+		printf '\n  UNPROVEN — %s\n' "${BLOCKING[*]}"
+		printf '  Not green. Something in this run was not exercised, so nothing here claims it works.\n'
+		exit 2
+	fi
 	printf '\n  UNPROVEN — %s\n' "${UNPROVEN[*]}"
 	printf '  Not green. Something in this run was not exercised, so nothing here claims it works.\n'
 	exit 2
