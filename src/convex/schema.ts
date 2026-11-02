@@ -156,7 +156,11 @@ export default defineSchema({
 		sessionId: v.string()
 	})
 		.index('by_owner', ['owner'])
-		.index('by_project', ['projectId']),
+		.index('by_project', ['projectId'])
+		// The lookup every assign/unassign/ofSession call makes. Without it both paths read the
+		// owner's whole membership set and filter in memory, which is correct only while that set
+		// is smaller than the read bound.
+		.index('by_owner_session', ['owner', 'sessionId']),
 
 	// ── automations ───────────────────────────────────────────────────────────────────────
 	automations: defineTable({

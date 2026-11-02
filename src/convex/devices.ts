@@ -87,6 +87,10 @@ export const register = mutation({
 			.take(MAX_DEVICES);
 		if (existing.length >= MAX_DEVICES)
 			throw new Error('This account already has the maximum devices.');
+		// A pairing token names one machine. Two rows with the same hash would mean revoking one
+		// device left a second row holding the same still-valid token alive.
+		if (existing.some((row) => row.tokenHash === args.tokenHash))
+			throw new Error('That pairing token is already registered. Generate a new one.');
 		return await ctx.db.insert('devices', {
 			owner,
 			name: args.name.trim().slice(0, 80) || 'This device',

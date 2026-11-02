@@ -60,6 +60,12 @@ export const create = mutation({
 		if (!isValidInterval(args.intervalMinutes)) {
 			fail('invalid_request', `Interval must be one of: ${INTERVALS.join(', ')} minutes.`);
 		}
+		// A session id is a caller-supplied reference, not authority: without this, an owner could
+		// attach an automation to someone else's chat and have the runner read that prompt later.
+		if (args.sessionId !== undefined) {
+			const parent = await ctx.db.get('sessions', args.sessionId);
+			if (!parent || parent.owner !== owner) fail('not_found', 'That chat is not available.');
+		}
 		const existing = await ctx.db
 			.query('automations')
 			.withIndex('by_owner', (q) => q.eq('owner', owner))

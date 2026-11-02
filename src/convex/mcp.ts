@@ -35,6 +35,7 @@ import type { McpEndpoint } from './_shared/mcp_transport';
 
 const MAX_CONNECTIONS = 16;
 const APPROVAL_TTL_MS = 120_000;
+/** Pending approvals one owner may hold. Also the page the sweep reads. */
 const APPROVALS_SCANNED = 16;
 
 const publicConnection = v.object({
@@ -356,7 +357,7 @@ export const prepare = action({
 	}
 });
 
-/** Store one approval, dropping this owner's expired rows on the way in. */
+/** Store one approval, dropping this owner's expired rows and refusing past the pending cap. */
 export const insertApproval = internalMutation({
 	args: {
 		owner: v.string(),
@@ -369,12 +370,26 @@ export const insertApproval = internalMutation({
 	returns: v.null(),
 	handler: async (ctx, args) => {
 		const now = Date.now();
-		const recent = await ctx.db
+		// `by_owner` is creation-ordered, so its front page holds the oldest rows — exactly where
+		// expired approvals sit. The cap below is what keeps this page sufficient: without it a
+		// client looping `prepare` inside one 120-second window accumulated rows forever, since
+		// nothing in that window is expired and the sweep only ever looked at 16.
+		const page = await ctx.db
 			.query('mcpApprovals')
 			.withIndex('by_owner', (q) => q.eq('owner', args.owner))
 			.take(APPROVALS_SCANNED);
-		for (const row of recent)
+		let pending = 0;
+		for (const row of page) {
 			if (row.expiresAt <= now) await ctx.db.delete('mcpApprovals', row._id);
+			else pending++;
+		}
+		// A full page of live rows is the same answer as a full page plus one: this owner is at
+		// the cap. The sweep above already removed whatever expired rows the page held.
+		if (pending >= APPROVALS_SCANNED)
+			fail(
+				'rate_limited',
+				'Too many tool calls are waiting for confirmation. Approve or discard one, or retry in two minutes.'
+			);
 		await ctx.db.insert('mcpApprovals', {
 			owner: args.owner,
 			tokenHash: args.tokenHash,
