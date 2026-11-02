@@ -14,9 +14,10 @@ with its own lockfile and dependencies, then checks its types and production bui
 
 Copy `slices/workspace-shell/` and `shared/` together, preserving their relative
 paths. Import the shell through `slices/workspace-shell/index.ts`, and shared
-sub-slices through their own `index.ts` barrels. Include
-`shared/workspace-styles/base.css` once and override its semantic CSS variables
-for a different theme. Laya's extra view and chat styles remain in `src/app.css`.
+sub-slices through their own `index.ts` barrels. The shell's semantic CSS
+variables and element defaults live in `src/app-laya.css`, imported once from
+`src/routes/layout.css`; override those variables for a different theme. Laya's
+extra view and chat styles remain in `src/app-laya.css`.
 
 Use the frontend dependency versions pinned by this repository's lockfile:
 Svelte, bits-ui, Vite/Svelte tooling, Tailwind, tw-animate-css, shadcn-svelte and
@@ -44,7 +45,7 @@ Optional contributions include a hosted connection gate, runtime controls,
 settings window, canvas header, launcher and an integration lifecycle callback.
 Omitted contributions are not mounted. `chatPanels`, `settingsMenu`,
 `fileMenuViews` and `canvasPresentation` describe the consumer's own routes;
-Laya's mappings live in `src/lib/laya_workspace_routes.ts`. Labels can be
+Laya's mappings live in `src/lib/workspace_routes.ts`. Labels can be
 overridden without editing shell source. Feature metadata describes availability;
 the backend must enforce capabilities and approvals independently.
 

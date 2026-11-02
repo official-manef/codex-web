@@ -153,7 +153,6 @@ export default defineConfig(
 			'src/lib/RecoveryNotice.svelte',
 			'src/lib/RichText.svelte',
 			'src/lib/RuntimeControls.svelte',
-			'src/lib/SectionNav.svelte',
 			'src/lib/SettingsWindow.svelte',
 			'src/lib/SiteHeader.svelte',
 			'src/lib/SnakeHistory.svelte',

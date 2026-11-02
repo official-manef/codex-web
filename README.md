@@ -140,18 +140,23 @@ bun run test:dev         # dev hydration smoke
 DEPLOY_TARGET=node node scripts/smoke-node.mjs
 ```
 
-`bunx playwright test` currently runs only `tests/dev-smoke.e2e.ts`. The AC01–AC18
-acceptance suites named in the PRD do not exist in this tree; see
-[progress](docs/progress.md#correction--the-ac-test-suites-do-not-exist).
+`bunx playwright test` runs ten suites across three viewports — 178 cases, 534 registered
+with the projects. `bun run test:dev` is the fast subset (`tests/dev-smoke.e2e.ts`). The
+`tests/workspace.e2e.ts` suite the PRD named is still absent; `tests/acceptance.e2e.ts` came
+back in `5cdf2a9` but does not cover all of AC01–AC18. See
+[ac-coverage-2026-11-02.md](docs/ac-coverage-2026-11-02.md).
 
 ## How it works
 
-One SvelteKit page, one shell. `src/routes/+page.svelte` mounts a composition root and
-nothing else — the shell owns navigation, tabs and overlays as state, so a feature is a
-`src/lib/registry.ts` entry with a lazy `loadScreen`, not its own route.
+One SvelteKit page for the app, plus three public pages. `src/routes/+page.svelte` mounts a
+composition root and nothing else — the shell owns navigation, tabs and overlays as state, so a
+feature is a `src/lib/registry.ts` entry with a lazy `loadScreen`, not its own route. `/home`,
+`/privacy` and `/terms` are the exception: static pages that render without auth or the
+workspace bundle, for OAuth brand registration.
 
 ```text
 /                                → workspace shell: rail, sidebar, chat, tabbed output
+/home /privacy /terms            → public pages (no auth, no workspace bundle)
 src/lib/http.ts                  → re-exports src/lib/http.local.ts  ← the one swap point
 src/lib/registry.ts              → feature catalogue: id, label, icon, group, loadScreen
 slices/workspace-shell/**        → navigation, region layout, tabs, overlays (vendored)
@@ -223,10 +228,17 @@ and [AI/MCP](docs/ai-mcp.md).
 
 ## Routes
 
-| Route         | What renders                                                       |
-| ------------- | ------------------------------------------------------------------ |
-| `/`           | the workspace shell (single page; the shell owns navigation state) |
-| anything else | 404 boundary                                                       |
+| Route         | What renders                                                              |
+| ------------- | ------------------------------------------------------------------------- |
+| `/`           | the workspace shell (single app page; the shell owns navigation state)    |
+| `/home`       | public landing: what the service is, links to both policies, no workspace |
+| `/privacy`    | privacy policy, written against this build                                |
+| `/terms`      | terms of service                                                          |
+| anything else | 404 boundary                                                              |
+
+The three public pages are the OAuth brand-registration surface, added in `98549c9`; they
+render without auth and without loading the workspace bundle. `/home` is a separate route, not
+`/` — the root stays the app.
 
 The shell renders its own areas — chat, lazily loaded feature screens, the output region —
 through state, not routes. There is deliberately no `/workspace`, `/capabilities` or
@@ -247,10 +259,13 @@ through state, not routes. There is deliberately no `/workspace`, `/capabilities
 | `bun run assets:check`            | Validate asset outputs                               |
 
 `bun run test:dev` runs `tests/dev-smoke.e2e.ts` — hydration, a local send, the settings
-window, and rail navigation over three viewports. That is the only browser suite in the
-tree. The AC01–AC18 suites the PRD names were removed by `6ed1f3e` and never replaced; see
-[progress](docs/progress.md#correction--the-ac-test-suites-do-not-exist) before claiming
-any acceptance coverage.
+window, and rail navigation over three viewports. The full browser suite is ten files
+(`a11y`, `acceptance`, `bridge`, `csp`, `dev-smoke`, `edge-cases`, `empty-states`,
+`parity-surfaces`, `responsive`, `surfaces`), 178 cases registered across three projects.
+`tests/acceptance.e2e.ts` came back in `5cdf2a9` with 14 criteria driving the current shell;
+the deleted `tests/workspace.e2e.ts` has **not** returned. Which criterion is actually met —
+and which four are product gaps rather than test gaps — is
+[ac-coverage-2026-11-02.md](docs/ac-coverage-2026-11-02.md), not this file.
 
 Optional Convex commands (`bun run convex:dev`, `bun run convex:codegen`) stay available
 but are unused by the MVP shell.
@@ -260,7 +275,7 @@ but are unused by the MVP shell.
 ```text
 ├── slices/                      # workspace-shell (vendored) + workspace-surface
 ├── src/routes/                  # thin adapters: page, auth, API, crawler documents
-├── src/lib/components/          # shadcn/ui + app-ui primitives
+├── src/lib/components/          # shadcn/ui primitives
 ├── src/lib/config/              # public identity, locale, metadata
 ├── src/convex/                  # backend (wired, unused by the MVP shell)
 ├── docs/                        # PRD, plan, spec, state model, copy, handoff

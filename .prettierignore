@@ -36,7 +36,6 @@ src/lib/Recorder.svelte
 src/lib/RecoveryNotice.svelte
 src/lib/RichText.svelte
 src/lib/RuntimeControls.svelte
-src/lib/SectionNav.svelte
 src/lib/SettingsWindow.svelte
 src/lib/SiteHeader.svelte
 src/lib/SnakeHistory.svelte
@@ -54,10 +53,8 @@ src/lib/file_canvas_tabs.ts
 src/lib/laya_chat_panel.ts
 src/lib/laya_chat_presentation.ts
 src/lib/laya_runtime_adapter.ts
-src/lib/laya_workspace_integration.ts
 src/lib/laya_workspace_layout.ts
 src/lib/laya_workspace_persistence.ts
-src/lib/laya_workspace_routes.ts
 src/lib/markdown.ts
 src/lib/recording.ts
 src/lib/recovery.ts

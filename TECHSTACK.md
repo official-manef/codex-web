@@ -75,7 +75,7 @@ Payment/email transports are disabled building blocks verified with mocked HTTP,
 not complete business flows. Auth and BYOK AI/MCP are implemented opt-ins; additional
 cloud services remain recipes with explicit unsupported resolver states. See [integrations](docs/integrations.md).
 
-shadcn-svelte/Bits UI own accessible controls; shared `app-ui` components own layout;
+shadcn-svelte/Bits UI own accessible controls; shared shell sub-slices own layout;
 feature slices compose them; routes adapt SvelteKit. Public app config and the asset
 catalog drive branding. Private integration config never belongs in browser data.
 See [architecture](docs/architecture.md) and [design](DESIGN.md).

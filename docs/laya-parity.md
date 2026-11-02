@@ -53,7 +53,7 @@ template's transport swap point (see §4).
 
 ```text
 slices/workspace-shell/       shell (2098 lines) + 10 sub-slices
-shared/                       icons, workspace-layout math, base.css token source
+shared/                       icons, workspace-layout math
 src/lib/views/                21 views: Chat, Apps, Transcribe, Files, Browser,
                               Models, Overview, Voice, Playground, Snake,
                               Embeddings, Performance, Setup, Compute,

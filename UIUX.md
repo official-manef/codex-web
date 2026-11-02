@@ -4,7 +4,8 @@ The shell is vendored from `rahmanef63/laya-npu` @ `9a893b2`. Its visual and int
 contract is the shell's own:
 
 - `slices/workspace-shell/README.md` — consumer contract, source boundaries, composition
-- `shared/workspace-styles/base.css` — token source (merged into `src/routes/layout.css`)
+- `src/routes/layout.css` — token source; it imports `../app-laya.css` for the shell's
+  `--color-*` variables and element defaults
 - [docs/laya-parity.md](docs/laya-parity.md) — what shipped, what deviates, how to re-sync
 
 [DESIGN.md](DESIGN.md) remains the starter's generic design doctrine for anything written

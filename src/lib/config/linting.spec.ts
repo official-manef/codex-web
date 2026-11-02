@@ -131,7 +131,7 @@ test('actual project config detects floating promises, async callbacks and incom
 });
 
 test('authored Svelte scripts receive typed async checks and raw HTML is rejected', async () => {
-	const file = 'src/lib/components/app-ui/disclosure-card.svelte';
+	const file = 'src/lib/ArtifactFrame.svelte';
 	expect(
 		await lint('<script lang="ts">Promise.resolve(1);</script><p>Example</p>', file)
 	).toContain('@typescript-eslint/no-floating-promises');
@@ -150,7 +150,7 @@ test('authored Svelte scripts receive typed async checks and raw HTML is rejecte
 });
 
 test('Svelte snippets allow explicit unused arguments without ignoring unused local variables', async () => {
-	const file = 'src/lib/components/app-ui/disclosure-card.svelte';
+	const file = 'src/lib/ArtifactFrame.svelte';
 	expect(
 		await lint(
 			'<svelte:boundary><p>Example</p>{#snippet failed(_error, reset)}<button onclick={reset}>Retry</button>{/snippet}</svelte:boundary>',
