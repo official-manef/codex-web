@@ -8,12 +8,16 @@ import {
 	requireCapabilityAccess
 } from './access';
 
-const state = vi.hoisted(() => ({ env: { CAPABILITY_ACCESS_TOKEN: '' }, session: vi.fn() }));
+const state = vi.hoisted(() => ({
+	env: { CAPABILITY_ACCESS_TOKEN: '', AUTH_ENABLED: 'true' },
+	session: vi.fn()
+}));
 vi.mock('$env/dynamic/private', () => ({ env: state.env }));
 vi.mock('$env/dynamic/public', () => ({ env: { PUBLIC_SITE_URL: 'https://app.example' } }));
 vi.mock('$lib/server/auth/session', () => ({ readSession: state.session }));
 beforeEach(() => {
 	state.env.CAPABILITY_ACCESS_TOKEN = '';
+	state.env.AUTH_ENABLED = 'true';
 	state.session.mockReset().mockResolvedValue(null);
 });
 
@@ -62,6 +66,22 @@ test('capability access requires a session or configured operator token and same
 	).rejects.toMatchObject({ status: 403 });
 	state.session.mockResolvedValue({ tokenIdentifier: 'https://issuer.example|one' });
 	await expect(requireCapabilityAccess(event())).resolves.toBeUndefined();
+});
+
+test('when auth is disabled and no operator token is set, anonymous same-origin access is permitted', async () => {
+	state.env.AUTH_ENABLED = 'false';
+	const event = (origin = 'https://app.example') =>
+		({
+			request: new Request('https://app.example/api', {
+				method: 'POST',
+				headers: { origin }
+			}),
+			getClientAddress: () => '127.0.0.1'
+		}) as unknown as RequestEvent;
+	await expect(requireCapabilityAccess(event())).resolves.toBeUndefined();
+	await expect(requireCapabilityAccess(event('https://evil.example'))).rejects.toMatchObject({
+		status: 403
+	});
 });
 
 test('burst protection is isolated by identity and expires', () => {

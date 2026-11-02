@@ -52,6 +52,13 @@ export async function requireCapabilityAccess(event: RequestEvent): Promise<void
 		consumeBurst(`operator:${configured}`);
 		return;
 	}
+	if (env.AUTH_ENABLED !== 'true' && !configured) {
+		// When auth is not enabled on this deployment, BYOK requests from this application's
+		// own origin are permitted without a sign-in session, burst-protected by client address.
+		const ip = (event.getClientAddress?.() ?? 'anonymous') || 'anonymous';
+		consumeBurst(`anon:${ip}`);
+		return;
+	}
 	const session = await readSession(event);
 	if (!session) error(401, 'Sign in or provide the application access token.');
 	consumeBurst(`session:${session.tokenIdentifier}`);
