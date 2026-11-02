@@ -1,9 +1,16 @@
 # The gate
 
-`bin/gate` is the single command that decides whether this branch is shippable. There is no CI
-**that runs it** — `.github/workflows/ci.yml` exists and runs `bun run verify`, the browser
-suites and a Node smoke on every push and PR, but it cannot run this gate because the `vitest`
-step needs a real Convex deployment. So `bin/gate` is the only thing that decides what CI cannot.
+`bin/gate` is the single command that decides whether this branch is shippable. `.github/workflows/ci.yml`
+runs **the same script** (`bin/gate --ci`) on every push and PR, so there is one definition of
+"verified" rather than two. See [ci-parity-2026-11-02.md](ci-parity-2026-11-02.md) for the
+step-by-step comparison, the drift that existed before, and what a runner still has to prove.
+
+`--ci` differs from a local run in exactly one way: it annotates the Actions log and tolerates
+one UNPROVEN step — the `vitest` Convex auth boundary — because a runner has no deployment. It
+prints `UNPROVEN IN CI (accepted) — vitest` and a `::warning` on the run, and exits 0. Every
+other UNPROVEN (missing browser, silent skip, zero-test `--grep`, missing tool) still exits 2.
+A local `bin/gate` has no such tolerance: any UNPROVEN is exit 2.
+
 It replaces a habit of running `bun run check && bun run lint && bun run test` by hand and
 reading a green tail as proof.
 
@@ -63,20 +70,27 @@ it is, which is a missing proof.
 
 ## What each step proves, and what it does not
 
-| Step           | Passes when                                    | Proves                                                                                                   | Does **not** prove                                                                                                      |
-| -------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `prettier`     | `prettier --check .` exits 0                   | The tree matches the committed formatting, so diffs stay reviewable.                                     | Anything about behaviour. Formatting is not correctness.                                                                |
-| `eslint`       | `eslint .` exits 0                             | Async handling, Svelte a11y rules, slice boundaries, browser-safe imports and Convex query limits hold.  | Auth, tenancy, secret handling, rate limits, provider correctness. A typed rule is not a runtime guarantee.             |
-| `svelte-check` | `svelte-check` exits 0 after `svelte-kit sync` | Template types and component diagnostics agree with the generated route types.                           | That the page renders, or that a rendered page is usable.                                                               |
-| `convex-types` | `tsc --noEmit -p src/convex` exits 0           | The backend type-checks against the generated API, so client and server still agree on argument shapes.  | That the functions are deployed, or that they behave as their signatures claim.                                         |
-| `vitest`       | 0 failures **and** 0 skips                     | Unit and integration behaviour, including `convex-test` runs against an in-memory deployment.            | Anything requiring a deployed backend — that is exactly what the skipped tests would have covered.                      |
-| `build`        | `vite build` exits 0                           | The production bundle compiles and SvelteKit's server-only import graph resolves.                        | That the built app boots, serves, or hydrates.                                                                          |
-| `playwright`   | `playwright test` exits 0                      | The built app boots in a real Chromium, hydrates, and the acceptance flows work at three viewport sizes. | Behaviour under real auth, real Convex data, real AI providers or real MCP servers: the config boots with all disabled. |
-| `environment`  | —                                              | Reports the Convex deployment state and the browser binary before any step runs.                         | Nothing on its own; it is there so the rest of the output is interpretable.                                             |
+| Step            | Passes when                                                               | Proves                                                                                                                            | Does **not** prove                                                                                                      |
+| --------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `secret-scan`   | `scripts/secret-scan.sh` exits 0                                          | No tracked file looks like it contains a credential (keys, bearer values, PATs, PEM blocks).                                      | That a secret was never leaked in history, or that an untracked scratch file is clean.                                  |
+| `prettier`      | `prettier --check .` exits 0                                              | The tree matches the committed formatting, so diffs stay reviewable.                                                              | Anything about behaviour. Formatting is not correctness.                                                                |
+| `eslint`        | `eslint .` exits 0                                                        | Async handling, Svelte a11y rules, slice boundaries, browser-safe imports and Convex query limits hold.                           | Auth, tenancy, secret handling, rate limits, provider correctness. A typed rule is not a runtime guarantee.             |
+| `svelte-check`  | `svelte-check` exits 0 after `svelte-kit sync`                            | Template types and component diagnostics agree with the generated route types.                                                    | That the page renders, or that a rendered page is usable.                                                               |
+| `convex-types`  | `tsc --noEmit -p src/convex` exits 0                                      | The backend type-checks against the generated API, so client and server still agree on argument shapes.                           | That the functions are deployed, or that they behave as their signatures claim.                                         |
+| `version`       | `node scripts/version.mjs --check` exits 0                                | `package.json` and `version.json` agree, and the version is a stable `MAJOR.MINOR.PATCH`.                                         | That the changelog was updated.                                                                                         |
+| `svelte5-guard` | `node scripts/check-svelte5.mjs` exits 0                                  | No `$:`, `export let`, `on:event`, `createEventDispatcher` or `<slot>` under `src/` or `slices/`.                                 | That a component is correct — only that it is written in the runes idiom.                                               |
+| `assets`        | `bun scripts/assets.ts check` exits 0                                     | The generated icon manifest matches `assets.config.ts`.                                                                           | That the icons look right.                                                                                              |
+| `vitest`        | 0 failures **and** 0 skips                                                | Unit and integration behaviour, including `convex-test` runs against an in-memory deployment.                                     | Anything requiring a deployed backend — that is exactly what the skipped tests would have covered.                      |
+| `bridge`        | `node --test bridge/…` exits 0                                            | The bridge process refuses an unauthenticated call and a foreign `Origin`, bounds its body, and confines `fs` to its roots.       | Anything the app does with the bridge — the auth, policy and UI path is not exercised.                                  |
+| `build`         | `vite build` exits 0                                                      | The production bundle compiles and SvelteKit's server-only import graph resolves.                                                 | That the built app boots, serves, or hydrates.                                                                          |
+| `playwright`    | `playwright test` exits 0, ran >0 tests, every skip states a reason       | The built app boots in a real Chromium, hydrates, and the acceptance flows work at three viewport sizes.                          | Behaviour under real auth, real Convex data, real AI providers or real MCP servers: the config boots with all disabled. |
+| `dev-smoke`     | `playwright test --config playwright.dev.config.ts` exits 0 with >0 tests | `vite dev` — not just the production preview — boots, hydrates and serves the four smoke flows.                                   | Anything the preview suite covers beyond those four greps.                                                              |
+| `node-smoke`    | `DEPLOY_TARGET=node build` + `scripts/smoke-node.mjs` exit 0              | The Node adapter's output boots on `:4199`, serves `/`, the client entry, the disabled-capability API with `no-store`, and a 404. | The Vercel adapter's behaviour, or SSR under auth/AI/MCP enabled.                                                       |
+| `environment`   | —                                                                         | Reports the Convex deployment state and the browser binary before any step runs.                                                  | Nothing on its own; it is there so the rest of the output is interpretable.                                             |
 
-Steps run in a fixed order — formatting, lint, types, unit, build, browser — because the cheap
-checks catch the common mistakes first. The gate **never stops early**. A gate that halts at the
-first failure reports one problem per run and hides every problem behind it.
+Steps run in a fixed order — secrets, formatting, lint, types, unit, build, browser — because the
+cheap checks catch the common mistakes first. The gate **never stops early**. A gate that halts at
+the first failure reports one problem per run and hides every problem behind it.
 
 ## How skips are surfaced
 
@@ -221,28 +235,44 @@ assignment survives a concurrent render, not a broken feature. The gate reports 
 when it happens and does not retry: **`retries` is deliberately left at `0`** in
 `playwright.config.ts`. Retrying until green is the same dishonesty as skipping, just slower.
 
+**Measured again 2026-11-02 with the worker count pinned in the config.** `workers` is now `2` in
+`playwright.config.ts`, so `bin/gate` and CI run the same number without a flag. On a host where
+three sibling worktrees were also running full gates (load average 17–51 on 16 cores), the suite
+gave `360 passed / 4 failed / 62 skipped` — the four failures being `AC17`, `a chat with 500
+turns` and `past 50 chats the oldest` at `mobile`/`narrow-mobile`, all load-sensitive. The same
+nine tests re-run isolated at `--workers=1` passed **9/9**. So the bound prevents the
+`ERR_CONNECTION_REFUSED` webServer teardown, but it does not make a 16-core box running four
+suites behave like an idle one: **concurrent gates are their own flake source**, and a red
+`playwright` step while other work shares the machine is not yet evidence about the app.
+
 `ponytail:` two honest fixes, neither in a docs change: make the AC17 assertion wait on the
-scroll settle instead of reading `scrollTop` immediately, and give the `webServer` a longer
-`timeout`/`reuseExistingServer` policy so the preview is not reaped mid-run. The first changes a
-test's semantics; the second belongs with whoever owns `playwright.config.ts`. Add them when the
-default-worker run is next used as a gate.
+scroll settle instead of reading `scrollTop` immediately, and give the two `edge-cases` load tests
+a bounded wait on the same settle. The first changes a test's semantics; both belong with whoever
+owns those specs. The `webServer` half is done (the timeout is overridable and the worker count is
+pinned in the config), so what remains is the assertion itself.
 
-## Adding CI
+## CI runs this gate
 
-There is deliberately no `.github/workflows/gate.yml`. **A workflow for the other gates does
-exist** — `.github/workflows/ci.yml` since `f184e49` runs `bun run verify`, `bun run test:e2e`,
-`bun run test:dev` and a Node smoke, and it is green. What is absent is a workflow that runs
-`bin/gate`, because the gate's `vitest` step needs a Convex deployment. Getting a meaningful
-`vitest` step in Actions means supplying `CONVEX_URL` plus credentials to reach one as secrets. A
-workflow without them would run the gate in the `absent` state and publish an `UNPROVEN` result
-— or, worse, someone would "fix" it by pinning a port and turn the auth tests into the permanent
-silent skip this gate exists to prevent. A gate that has to lie to be green in CI is worse than
-no CI: it manufactures the exact false confidence being removed here.
+`.github/workflows/ci.yml` runs `bin/gate --ci`; there is no second workflow and no duplicated
+step list. Before 2026-11-02 it ran `bun run verify`, `bun run test:e2e`, `bun run test:dev` and a
+Node smoke by hand, which was a second definition that disagreed in both directions: CI never ran
+the bridge contract test, and the gate never ran the Svelte 5 guard, `version --check`,
+`assets:check`, the dev-server smoke or the Node-adapter smoke. The full comparison is
+[ci-parity-2026-11-02.md](ci-parity-2026-11-02.md).
 
-If a gate workflow is wanted later, the honest shape is: provision a real deployment per run (or
-use `convex dev --once` against a throwaway deployment id), pass it as `CONVEX_URL`, and let the
-gate exit `2` when it is not there. The gate already fails closed, so the workflow needs no
-special-casing — only a real backend.
+The one thing a runner cannot prove is the Convex auth boundary: `vitest` has three tests that
+skip unless a deployment answers, and CI has none. `--ci` therefore tolerates **that hole and
+nothing else** — it announces it (`UNPROVEN IN CI (accepted)`, plus a `::warning` on the run) and
+still exits 0. Everything else that did not run still fails the job.
+
+The alternative was rejected on purpose: pinning a `CONVEX_URL` in the workflow so the run looks
+green. A dead port turns the auth tests into the permanent silent skip this gate exists to
+prevent, and a gate that has to lie to be green in CI manufactures the exact false confidence
+being removed here.
+
+If the auth boundary should be proven in CI later, the honest shape is: provision a real
+deployment per run (or a throwaway deployment id), pass it as `CONVEX_URL`, and drop the `--ci`
+tolerance. The gate already fails closed, so no other step needs changing — only a real backend.
 
 ## Limits worth stating plainly
 
