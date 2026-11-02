@@ -25,6 +25,17 @@ its own history. Notable changes follow [Semantic Versioning](https://semver.org
 
 ### Fixed
 
+- **The documented 4 MB image budget was unreachable.** `/api/ai/chat` read its body with the
+  shared `readJsonBody` default of 64 KiB, so a single realistic screenshot was `413` before
+  `acceptImage` ever ran, and `docs/parity-checklist-2026-11-02.md` §3.2 promised "2 images, 4 MB
+  each". The chat route now passes `MAX_CHAT_BODY_BYTES` (11 446 960 bytes, derived in
+  `src/lib/uploads.ts` from `MAX_IMAGES_PER_TURN × ceil(MAX_IMAGE_BYTES / 3) × 4` plus 256 KiB of
+  envelope). No other route's limit moved. `src/lib/server/ai/config.ts` imports the constants
+  instead of repeating `4 * 1024 * 1024`, so the schema and the doc cannot drift again. An image
+  one byte over 4 MiB is now `413 Each image must be 4 MB or smaller.` instead of being answered
+  with the per-turn count, which pointed the caller at the wrong remedy. Measured cost of the
+  larger buffer: ~48 MB RSS peak per request at the ceiling; pinned by
+  `src/routes/api/ai/chat/budget.spec.ts` (7 tests) including a 50 MB body refused during the read.
 - **The SvelteKit BYOK chat path was unreachable.** `Chat.svelte` read a provider key from
   `localStorage.getItem("byok-key")`, which nothing ever wrote and which contradicted
   `docs/byok.md` §1, so `parseChat` rejected every turn. A missing key is now named in the

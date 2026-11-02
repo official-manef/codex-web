@@ -203,12 +203,47 @@ Cost: **M**. Risk: medium — write verbs on the user's repo.
 
 ### Phase 3 — Multimodal input (closes 2 rows, prevents a known silent failure)
 
-| Step | Change                                                                                                                                                                       |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1  | `ChatMessage.content` becomes `string \| Array<{ type: 'text' \| 'image'; ... }>` at the route boundary, normalised to text for providers that take text                     |
-| 3.2  | `/api/ai/chat` accepts images with a hard cap: 2 images, 4 MB each, `image/png\|jpeg\|webp` only, dimensions read and bounded                                                |
-| 3.3  | Never silently downgrade: a provider without image support returns a typed error, matching the desktop lesson that a fallback to a vision-less upstream fails silently       |
-| 3.4  | Artifact surface: a sandboxed `<iframe srcdoc>` with no network, capped size, rendered from markdown fences — the desktop equivalent is the `visualize` skill's own rule set |
+| Step | Change                                                                                                                                                                                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1  | `ChatMessage.content` becomes `string \| Array<{ type: 'text' \| 'image'; ... }>` at the route boundary, normalised to text for providers that take text                                                                                                                                                                                                 |
+| 3.2  | `/api/ai/chat` accepts images with a hard cap: 2 images, 4 MB each (4 194 304 bytes, inclusive), `image/png\|jpeg\|webp` proven by **magic bytes** rather than the declared type. The body limit is derived from that cap — `MAX_CHAT_BODY_BYTES` in `src/lib/uploads.ts` — so the promise is reachable. Dimensions are **not** read: see the note below |
+| 3.3  | Never silently downgrade: a provider without image support returns a typed error, matching the desktop lesson that a fallback to a vision-less upstream fails silently                                                                                                                                                                                   |
+| 3.4  | Artifact surface: a sandboxed `<iframe srcdoc>` with no network, capped size, rendered from markdown fences — the desktop equivalent is the `visualize` skill's own rule set                                                                                                                                                                             |
+
+**The §3.2 numbers, and why they are now wired together.** Base64 inflates 4/3, so a 4 MiB image
+is 5 592 408 characters on the wire. The exact derivation of the body limit is
+`2 × ceil(4 194 304 / 3) × 4 + 262 144 = 11 446 960 bytes`, where the 256 KiB slack is far more
+than the whole text budget `parseChat` allows (32 000 characters of messages plus 2 000 of memory).
+`POST /api/ai/chat` passes that number to `readJsonBody`, and no other route's limit moves — the
+chat route is the only one that carries images. `src/lib/server/ai/config.ts` imports
+`MAX_IMAGE_BYTES`/`MAX_IMAGES_PER_TURN` from `src/lib/uploads.ts` instead of repeating `4 * 1024 *
+1024` and `2`, so a future edit cannot leave the schema and the doc quoting different numbers.
+
+**Memory cost, stated rather than removed.** `readJsonBody` buffers the body. Measured on this host
+for a body at the ceiling (11 185 067 bytes, two images at the cap): read phase **+37 MB RSS**
+(11 MB of stream chunks plus a 22 MB UTF-16 string), `JSON.parse` a further **+12 MB in 13 ms**,
+peak **~48 MB RSS** per request. Not stream-parsed on purpose: a hand-written incremental JSON
+parser would save ~12 MB of the 48 and add a parser to audit. What limits it is that
+`requireCapabilityAccess` runs _before_ the read, so only a credentialed caller can allocate.
+What does **not** limit it: the burst limiter counts request _starts_ per minute, not bodies in
+flight, and the read deadline bounds each body's lifetime to 10 s rather than capping how many
+overlap. So N concurrent credentialed requests cost N × 48 MB; a per-identity in-flight counter
+is the cheap guard if this ever faces traffic that matters.
+`docs/security-review-2026-11-02.md` §`/api/ai/chat` carries the same numbers.
+
+Proof: `src/routes/api/ai/chat/budget.spec.ts` — two images at the cap accepted end to end through
+the real reader; one byte over answered `413 Each image must be 4 MB or smaller.`; a 50 MB stream
+refused **during** the read (the stream is cancelled and less than half of it is pulled, so this
+is not "parse first, complain after"); a lying `content-length` refused before a single byte is
+delivered; three small images still answered `400 At most 2 images per turn.`
+
+**Dimensions are not read, and the §3.2 row no longer says they are.** It used to promise
+"dimensions read and bounded", but nothing in `src/lib/uploads.ts` parses an image header beyond
+the 16 magic bytes, so a 40 000 × 40 000 PNG passes at 4 MB and is bounded by byte size alone.
+Corrected in the row above rather than implemented: decompressing a header to bound pixel count
+means parsing PNG/JPEG/WebP container metadata, which is a new parser for a threat the upstream
+provider also enforces on its own side. If a pixel ceiling is ever wanted, cap it here — do not
+restate it in a doc first.
 
 Exit gate: an image turn reaches a provider and the reply references a detail only visible in the
 image (marker-drawn fixture, same technique as `scripts/mk-probe-image.ps1`); an unsupported
