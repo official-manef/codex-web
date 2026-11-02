@@ -5,9 +5,15 @@ reproduced in a real browser (or against the real module, for the pure cases) be
 was changed. Where a row says **fixed**, the test named in the last column fails if the defect
 comes back.
 
-Gate at the end of this pass, all green: `npx playwright test` (180 passed, 3 projects),
-`npx vitest run` (473 tests), `npx prettier --check .`, `npx eslint .`,
-`npx svelte-check --threshold error` (0 errors, 0 warnings).
+Gate at the end of this pass, all green, on the branch this work landed on: `npx playwright test`
+(180 passed, 3 projects), `npx vitest run` (473 tests), `npx prettier --check .`, `npx eslint .`,
+`npx svelte-check --threshold error` (0 errors, 0 warnings). Those are that branch's snapshot;
+current totals are in [progress.md](progress.md) §Gates.
+
+The 46 rows below carry **19 `fixed`** verdicts produced by **12 root causes** — several inputs
+share a cause, which is why the row count and the defect count differ. The other **27 rows are
+`acceptable`** (two of them qualified: one `by design`, one `cosmetic`): real behaviour,
+measured, and deliberately unchanged.
 
 Tests: `tests/edge-cases.e2e.ts` (browser), `src/lib/session_storage.spec.ts`,
 `src/lib/chat_dispatch.spec.ts`, `src/lib/reference_workspace.spec.ts`,

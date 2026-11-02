@@ -185,9 +185,12 @@ is a separate task and not part of this one.
 
 ## Gate
 
+Measured on the branch this work landed on; current totals are in
+[progress.md](progress.md) §Gates.
+
 ```
-PLAYWRIGHT_PORT=4708 npx playwright test   # 102 passed
-npx vitest run                            # 441 passed, 3 skipped (50 files)
+PLAYWRIGHT_PORT=4708 npx playwright test   # 102 passed at the time
+npx vitest run                            # 441 passed, 3 skipped (50 files, at the time)
 npx prettier --check .                    # clean
 npx eslint .                              # clean
 npx svelte-check --threshold error        # 0 errors, 0 warnings

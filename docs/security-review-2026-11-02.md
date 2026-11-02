@@ -13,7 +13,9 @@ opinion.
 
 Gate at the time of writing: `npx vitest run` 205 passed / 3 skipped, `npx prettier --check .`
 clean, `npx eslint .` clean, `npx svelte-check --threshold error` 0 errors, `npx tsc -p
-src/convex --noEmit` clean.
+src/convex --noEmit` clean. Those are the mid-session snapshot from this review; current totals
+are in [progress.md](progress.md) §Gates. The security verdicts below are not numbers and do not
+expire with them.
 
 ## Summary
 

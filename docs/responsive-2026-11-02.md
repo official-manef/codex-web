@@ -195,13 +195,21 @@ host, independent of any test content.
 
 ## Verification
 
+Measured on the branch this work landed on; current totals are in
+[progress.md](progress.md) §Gates.
+
 ```sh
-PLAYWRIGHT_PORT=4518 npx playwright test tests/responsive.e2e.ts   # 23 passed
+PLAYWRIGHT_PORT=4518 npx playwright test tests/responsive.e2e.ts   # 23 passed (9 cases x 3 projects)
 npx vitest run                                                    # 441 passed, 3 skipped
 npx prettier --check .                                            # clean
 npx eslint .                                                      # clean
 npx svelte-check --threshold error                                # 0 errors, 0 warnings
 ```
+
+The webServer `timeout` is now `300_000` in `playwright.config.ts` (defect 4 above), which is the
+same fix `edge-cases-2026-11-02.md` §11 landed independently. It does not stop the remaining
+flake: at more than one worker the preview can still be reaped while other workers navigate, and
+every failure reports `net::ERR_CONNECTION_REFUSED`. `--workers=1` is green.
 
 Known flake, **pre-existing and not caused by this work**: `AC17 an append while reading keeps
 the position and marks new content` (`tests/acceptance.e2e.ts:395`) fails intermittently when

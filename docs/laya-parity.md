@@ -1,12 +1,13 @@
 # Laya parity — shipped template shape
 
 > **§2 is provenance, not a claim about this tree.** The block lists the 21 views Laya shipped
-> at `84c1823`. This tree holds 24 view files with a **different membership** (`6ed1f3e`
-> deleted them all; `d52e006` restored a subset; `fa5aa54` deleted two more; `memories`, `git`
-> and `automations` were added after). Do not infer today's view set from this block — measure
-> it with `ls src/lib/views/*.svelte`. The coincidence that both counts were once 21 is exactly
-> why the mismatch went unnoticed for two rebuilds, and it is recorded as unresolved in
-> [README.md](README.md) §Unresolved contradictions.
+> at `84c1823`. This tree holds 25 view files with a **different membership** (`6ed1f3e`
+> deleted them all; `d52e006` restored a subset; `fa5aa54` deleted two more; `memories`, `git`,
+> `automations` and `McpApps` were added after). Do not infer today's view set from this block —
+> measure it with `ls src/lib/views/*.svelte`; the count and the set are kept in one place,
+> [view-audit-2026-11-01.md](view-audit-2026-11-01.md). The coincidence that both counts were
+> once 21 is exactly why the mismatch went unnoticed for two rebuilds, and it is recorded as
+> unresolved in [README.md](README.md) §Unresolved contradictions.
 
 This repository is the shared workspace template. Its UI is `rahmanef63/laya-npu`, copied,
 not reimplemented — copied, then repaired where the copy was broken. See §1 for exactly which

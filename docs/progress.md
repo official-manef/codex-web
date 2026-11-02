@@ -95,29 +95,37 @@ visible as a key sent to the wrong origin. Change one, change the other, and run
 
 ## Gates, measured on this commit
 
-Run 2026-11-02 on `test/convex` (`bin/gate`, exit 0):
+Run 2026-11-02 on `597fdaf` (`bin/gate`, exit 2 — see below):
 
 ```
-
 prettier --check    clean
 eslint .            clean
 svelte-check        0 errors, 0 warnings
 tsc -p src/convex   clean
-vitest run          57 files / 596 passed / 3 skipped
+vitest run          81 files / 939 passed / 3 skipped
 vite build          ok
-playwright          114 passed   (--workers=2; the default count is host-dependent, see below)
-convex              READY (schema + functions pushed to this checkout's local backend)
+node --test bridge  ok
+playwright          426 tests over 8 files × 3 projects; 355 passed / 9 failed / 62 skipped
+convex              ABSENT (nothing answered: no local deployment on this checkout)
 ```
 
-The earlier numbers (`36 files / 197 passed / 3 skipped`) were measured before the Convex push
-and before the route contract suites landed; the 3 skips are the anonymous-refusal assertions,
-which now execute. See "The auth boundary is PROVEN" below.
+`npx vitest run` alone, verified the same day: **81 files / 939 passed / 3 skipped (942)**.
+The 3 skips are still the anonymous-refusal assertions in
+`src/convex/deployment.spec.ts` — no Convex deployment is recorded for this checkout, so they
+skip with the reason the spec attaches. 62 of the 426 Playwright cases are also skips: the
+28-id surface walk and three window-level assertions run once, in `desktop` only
+(`testInfo.project.name`), so 2 of every 3 projects skip them by design.
 
-`playwright` is host-sensitive. At an unbounded worker count Playwright's own webServer lifetime
-can end before the last files run, producing `net::ERR_CONNECTION_REFUSED` against a server that
-was already torn down — 77 failures with nothing wrong in the app. `--workers=2` is green here
-(114 passed); `--workers=1` is green too and slower. Treat the browser number as "with a bounded
-worker count".
+The 9 Playwright failures are the **webServer-lifetime flake**, not the app: all 9 are
+`narrow-mobile` and every trace says `net::ERR_CONNECTION_REFUSED`, i.e. the preview was torn
+down under a still-navigating worker. `bin/gate` therefore reports `FAIL — playwright` and exits
+2 here. This is the same failure `gate.md` §Known flake documents; it is a property of this host
+at more than one worker, not of the tests.
+
+The earlier numbers in this block's own history: `36 files / 197 passed / 3 skipped` before the
+Convex push and the route contract suites, then `50 / 441 / 3` on `337850c`, then
+`57 files / 596 passed / 3 skipped` on `test/convex`. They are listed here once so the drift is
+visible, not repeated in four documents.
 
 This block is the only place gate numbers belong. Other documents link here instead of
 copying them; a count repeated in three files is how `138 passed (27 files)` survived two
