@@ -2373,8 +2373,8 @@
 
 <Dialog.Root bind:open={contextSummaryOpen}
   ><Dialog.Portal
-    ><Dialog.Overlay class="chat-summary-overlay" /><Dialog.Content
-      class="chat-context-summary chat-summary-dialog"
+    ><Dialog.Overlay class="dialog-overlay chat-summary-overlay" /><Dialog.Content
+      class="dialog-shell chat-context-summary chat-summary-dialog"
       onCloseAutoFocus={(event) => {
         event.preventDefault();
         void tick().then(() =>
@@ -3386,24 +3386,13 @@
     margin: 5px 0;
   }
   :global(.chat-summary-overlay) {
-    position: fixed;
-    inset: 0;
-    background: rgb(0 0 0 / 0.45);
     z-index: 120;
   }
   :global(.chat-summary-dialog) {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
     z-index: 121;
     width: min(400px, calc(100vw - 32px));
     max-height: 85vh;
-    overflow: auto;
     padding: 20px;
-    border: 1px solid var(--color-line);
-    border-radius: 12px;
-    background: var(--color-panel);
   }
 
   .shared-chat-panel {
@@ -3706,7 +3695,7 @@
   }
   .reference-chat .session-sidebar {
     padding: 10px 10px 16px;
-    background: var(--color-nav, var(--color-panel));
+    background: var(--color-panel);
   }
   .reference-chat .workspace-navigation {
     padding: 0;
@@ -3878,8 +3867,8 @@
     height: 122px;
     padding: 8px;
     border-radius: 7px;
-    background: var(--color-nav, var(--color-panel));
-    border: 1px solid var(--color-line-strong);
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
     overflow: hidden;
   }
   .reference-chat .composer-attachments > div > span {

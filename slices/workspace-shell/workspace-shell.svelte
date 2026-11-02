@@ -1577,8 +1577,8 @@
     </div>{/if}
   <Dialog.Root bind:open={shortcutsOpen}>
     <Dialog.Portal
-      ><Dialog.Overlay class="shortcut-overlay" /><Dialog.Content
-        class="shortcut-dialog"
+      ><Dialog.Overlay class="dialog-overlay shortcut-overlay" /><Dialog.Content
+        class="dialog-shell shortcut-dialog"
         onCloseAutoFocus={restoreOverlayFocusNow}
       >
         <Dialog.Title>{labels.keyboardShortcuts}</Dialog.Title><Dialog.Description
@@ -1646,24 +1646,12 @@
     border-bottom: 2px solid var(--output-origin-color);
   }
   :global(.shortcut-overlay) {
-    position: fixed;
-    inset: 0;
-    background: rgb(0 0 0 / 0.45);
     z-index: 120;
   }
   :global(.shortcut-dialog) {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     width: min(520px, calc(100vw - 24px));
     max-height: calc(100dvh - 32px);
-    overflow: auto;
     padding: 24px;
-    background: var(--color-panel);
-    color: var(--color-ink);
-    border: 1px solid var(--color-line);
-    border-radius: 12px;
     z-index: 121;
   }
   :global(.shortcut-dialog h2) {
@@ -2080,7 +2068,7 @@
     place-items: center;
     width: 32px;
     height: 30px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
   }
   .workspace-titlebar button:disabled {
     opacity: 0.35;
@@ -2095,7 +2083,7 @@
     height: auto;
     margin-left: auto;
     font-size: 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     padding: 5px 8px;
   }
   .titlebar-status {
@@ -2167,7 +2155,7 @@
     height: 29px;
     display: grid;
     place-items: center;
-    border-radius: 6px;
+    border-radius: var(--radius-card);
     color: var(--color-ink-2);
   }
   .output-content-stack {
@@ -2208,7 +2196,7 @@
     .titlebar-connection {
       margin-left: auto;
       font-size: 12px;
-      border-radius: 6px;
+      border-radius: var(--radius-card);
       padding: 5px 8px;
     }
     .titlebar-status {

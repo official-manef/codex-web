@@ -168,9 +168,9 @@
 
 <style>
   .deps {
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line);
     border-radius: 10px;
-    background: var(--panel);
+    background: var(--color-panel);
     margin-bottom: 14px;
     overflow: hidden;
   }
@@ -189,7 +189,7 @@
     min-width: 0;
     background: none;
     border: 0;
-    color: var(--ink);
+    color: var(--color-ink);
     font: inherit;
     font-size: 12px;
     cursor: pointer;
@@ -208,7 +208,7 @@
     background: #e9c93a;
   }
   .deps-chev {
-    color: var(--ink-3);
+    color: var(--color-ink-3);
     display: flex;
     transition: transform 0.12s;
   }
@@ -222,29 +222,29 @@
   .deps-msg {
     padding: 0 13px 10px;
     font-size: 11.5px;
-    color: var(--ink-2);
+    color: var(--color-ink-2);
   }
   .deps-sub {
     padding: 0 13px 10px;
     font-size: 11px;
     line-height: 1.6;
-    color: var(--ink-3);
+    color: var(--color-ink-3);
   }
   .deps-list {
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--color-line);
   }
   .deps-row {
     display: flex;
     align-items: flex-start;
     gap: 9px;
     padding: 9px 13px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--color-line);
   }
   .deps-row:last-child {
     border-bottom: 0;
   }
   .deps-mark {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 9.5px;
     padding: 1px 4px;
     border-radius: 3px;
@@ -271,33 +271,33 @@
     font-size: 11.5px;
   }
   .deps-ver {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 9.5px;
-    color: var(--ink-3);
+    color: var(--color-ink-3);
   }
   .deps-tag {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 9px;
-    color: var(--ink-3);
-    border: 1px solid var(--line);
+    color: var(--color-ink-3);
+    border: 1px solid var(--color-line);
     border-radius: 3px;
     padding: 0 4px;
   }
   .deps-why {
     font-size: 11px;
-    color: var(--ink-2);
+    color: var(--color-ink-2);
     line-height: 1.5;
     margin-top: 2px;
   }
   .deps-meta {
     font-size: 10px;
-    color: var(--ink-3);
+    color: var(--color-ink-3);
     margin-top: 2px;
   }
   .deps-note {
     padding: 9px 13px;
     font-size: 10.5px;
-    color: var(--ink-3);
-    border-top: 1px solid var(--line);
+    color: var(--color-ink-3);
+    border-top: 1px solid var(--color-line);
   }
 </style>

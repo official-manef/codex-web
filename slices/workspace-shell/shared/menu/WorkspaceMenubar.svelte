@@ -180,7 +180,7 @@
     padding: 4px;
     border: 1px solid var(--color-line-strong, #343434);
     border-radius: 4px;
-    background: var(--color-frame, #202020);
+    background: var(--color-frame);
     color: var(--color-ink);
     box-shadow: 0 8px 22px rgb(0 0 0 / 0.28);
   }

@@ -983,7 +983,7 @@
     color: var(--color-ink);
   }
   .flow-node.failed .node-state {
-    color: var(--color-error, #e78585);
+    color: var(--color-destructive, #e78585);
   }
   .node-grip {
     display: grid;

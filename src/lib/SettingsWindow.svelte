@@ -41,8 +41,8 @@
 
 <Dialog.Root bind:open>
   <Dialog.Portal>
-    <Dialog.Overlay class="settings-overlay" />
-    <Dialog.Content class="settings-window" aria-describedby={undefined}>
+    <Dialog.Overlay class="dialog-overlay settings-overlay" />
+    <Dialog.Content class="dialog-shell settings-window" aria-describedby={undefined}>
       <div class="settings-header">
         <Dialog.Title class="settings-title">Settings</Dialog.Title>
         <Dialog.Close class="settings-close" aria-label="Close settings" title="Close settings">
@@ -81,26 +81,16 @@
 
 <style>
   :global(.settings-overlay) {
-    position: fixed;
-    inset: 0;
     z-index: 100;
-    background: rgb(0 0 0 / 0.58);
   }
   :global(.settings-window) {
-    position: fixed;
-    inset: 50% auto auto 50%;
     z-index: 101;
-    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     width: min(980px, calc(100vw - 32px));
     height: min(720px, calc(100dvh - 32px));
     min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--color-line);
-    border-radius: 12px;
-    background: var(--color-panel);
-    color: var(--color-ink);
     box-shadow: 0 18px 48px rgb(0 0 0 / 0.4);
   }
   .settings-header {

@@ -317,6 +317,29 @@
 	}
 }
 
+/* Modal shell. Three dialogs (settings, keyboard shortcuts, chat context summary) each
+   carried their own copy of the same overlay + centred panel. One definition, so a change
+   to the scrim or the panel surface lands in all of them. Sizing stays with each dialog. */
+@layer components {
+	.dialog-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgb(0 0 0 / 0.45);
+	}
+
+	.dialog-shell {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		overflow: auto;
+		border: 1px solid var(--color-line);
+		border-radius: 12px;
+		background: var(--color-panel);
+		color: var(--color-ink);
+	}
+}
+
 @media (min-width: 48rem) {
 	.app-horizontal-rail[data-desktop-grid='true'] {
 		display: grid;
@@ -664,7 +687,7 @@ body {
 		background: transparent;
 	}
 	::-webkit-scrollbar-thumb {
-		background: #262626;
+		background: var(--color-panel-2);
 		border-radius: 4px;
 	}
 	::-webkit-scrollbar-thumb:hover {
@@ -742,7 +765,7 @@ body {
 	}
 	.btn:hover {
 		background: var(--color-hover);
-		border-color: #2a2a2a;
+		border-color: var(--color-line-2);
 	}
 	.btn:disabled {
 		opacity: 0.4;
