@@ -1,0 +1,123 @@
+{
+  "contractVersion": "1.0.0",
+  "id": "models",
+  "name": "Models",
+  "version": "0.1.0",
+  "kind": "library",
+  "runtime": {
+    "language": "javascript",
+    "minimumVersion": "22.6",
+    "manager": "node"
+  },
+  "source": {
+    "repository": "rahmanef63/models-rahmanef-com",
+    "revision": "d4d74fd84e7f1b1486a512914292e937e25f4a25",
+    "channel": "review-candidate"
+  },
+  "layout": {
+    "source": [
+      "src",
+      "adapters/convex",
+      "bin"
+    ],
+    "tests": [
+      "test.mjs",
+      "api.test.mjs",
+      "api.security.test.mjs",
+      "store.security.test.mjs",
+      "call.security.test.mjs"
+    ],
+    "docs": [
+      "README.md",
+      "CLAUDE.md",
+      "docs"
+    ]
+  },
+  "commands": {
+    "check": [
+      [
+        "pnpm",
+        "--dir",
+        "web",
+        "typecheck"
+      ]
+    ],
+    "test": [
+      [
+        "npm",
+        "test"
+      ],
+      [
+        "npm",
+        "run",
+        "test:security"
+      ]
+    ],
+    "build": [
+      [
+        "pnpm",
+        "--dir",
+        "web",
+        "build"
+      ]
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "models.resolve",
+      "summary": "Resolve a provider/model reference through the owning product credential store. The native result includes an API key; adapters must keep it private. Hub preview never resolves credentials or invokes this function.",
+      "input": {
+        "format": "none",
+        "ref": null
+      },
+      "output": {
+        "format": "none",
+        "ref": null
+      },
+      "effects": [
+        "read"
+      ],
+      "requiredScopes": [
+        "models:resolve"
+      ],
+      "mode": "product-authorized",
+      "risk": "read"
+    }
+  ],
+  "trust": {
+    "identityAuthority": "host",
+    "tenantBoundary": "consumer-owned",
+    "secretOwner": "product",
+    "sandbox": "none"
+  },
+  "config": {
+    "profile": "library",
+    "secrets": "references-only",
+    "defaultMode": "preview",
+    "network": "explicit-adapter"
+  },
+  "health": {
+    "kind": "not-a-service",
+    "path": null
+  },
+  "extensions": {
+    "manef:native-contracts": {
+      "models.resolve": {
+        "source": "src/resolve.js#resolveModel",
+        "input": "Native JSDoc: model ref and options with injected CredentialStore and trusted tenantId",
+        "output": "src/resolve.js#ResolvedModel",
+        "formatNote": "JSDoc reference only; no JSON Schema or TypeScript declaration is claimed.",
+        "projection": "Any future public adapter must omit apiKey and bind tenant identity outside invocation JSON."
+      }
+    },
+    "manef:boundaries": [
+      "Portable library identity and tenant binding belong to the embedding host; web auth and encrypted Convex credentials remain product-owned.",
+      "Resolution is offline by default; an adapter enabling info:true may fetch catalog metadata and must declare that separate network behavior."
+    ],
+    "manef:runtime-notes": {
+      "dashboard": "Next 16.3.8, React 19.2.3; separate web/pnpm-lock.yaml",
+      "rootDependencies": "none",
+      "checks": "Security module-mock tests use Node experimental flags; minimum library runtime is distinct from the tested toolchain."
+    }
+  }
+}

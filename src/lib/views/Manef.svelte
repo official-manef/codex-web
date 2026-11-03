@@ -6,13 +6,18 @@
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { onMount } from 'svelte';
 	import { hub, hubMessage, type Module, type Plan, type Readiness } from '#lib/manef_hub.js';
+	import { validateModuleProjection } from '#lib/manef_descriptor.js';
 
 	/**
 	 * MANEF AI modules.
 	 *
-	 * Read-only by construction: the bridge behind it exposes three hub paths, the hub itself
-	 * has no execution endpoint, and every capability the registry declares is `read` or
-	 * `none`. This view states that plainly instead of implying a live connection.
+	 * Read-only by construction: the bridge exposes the hub's own read paths, the hub itself has no
+	 * execution endpoint, and every capability the registry declares is `read` or `none`. This view
+	 * states that plainly instead of implying a live connection.
+	 *
+	 * The descriptor validator is a local port of `manef-ai/packages/foundation`. It runs against
+	 * what the hub reports, so a module that the CLI would reject shows up here as broken-and-why
+	 * rather than as a card that merely looks odd. See `src/lib/manef_descriptor.ts`.
 	 */
 
 	type Props = { onReload?: () => void };
@@ -31,6 +36,10 @@
 	let workflow = $state('{"version":"1.0.0","mode":"preview","steps":[]}');
 	let plan = $state<Plan | null>(null);
 	let planning = $state(false);
+	let alive = $state<boolean | null>(null);
+	let validation = $state<{ id: string; ok: boolean; errors: string[] }[]>([]);
+
+	const invalid = $derived(validation.filter((entry) => !entry.ok));
 
 	const current = $derived(modules.find((module) => module.id === moduleId) ?? null);
 	const capabilities = $derived(current?.capabilities ?? []);
@@ -52,21 +61,58 @@
 	async function refresh() {
 		loading = true;
 		try {
-			const [registry, ready] = await Promise.all([hub.modules(), hub.ready().catch((e) => e as Error)]);
+			const [registry, ready, health] = await Promise.all([
+				hub.modules(),
+				hub.ready().catch((e) => e as Error),
+				hub.health().catch(() => null)
+			]);
 			modules = registry.modules;
 			foundationVersion = registry.foundationVersion;
 			readiness = ready instanceof Error ? null : ready;
+			alive = health?.status === 'alive';
+			// Validate what the hub actually reported, not what we hoped it reported. The hub sends a
+			// projection, so this is the projection schema, not the full descriptor schema. A module
+			// whose projection does not match is one this build cannot render faithfully.
+			validation = (modules as unknown[]).map((entry) => {
+				const result = validateModuleProjection(entry);
+				const id =
+					typeof entry === 'object' && entry !== null && 'id' in entry
+						? String((entry as { id: unknown }).id)
+						: 'unknown';
+				return { id, ok: result.ok, errors: result.errors };
+			});
 			moduleId = modules[0]?.id ?? '';
 			capabilityId = modules[0]?.capabilities[0]?.id ?? '';
-			status(`${modules.length} module declarations loaded. No live adapter is configured.`);
+			status(
+				modules.length === 0
+					? 'The hub answered with an empty registry.'
+					: invalid.length === 0
+						? `${modules.length} module declarations loaded, all well-formed. No live adapter is configured.`
+						: `${modules.length} module declarations loaded; ${invalid.length} failed descriptor validation. See the marked cards.`,
+				invalid.length > 0
+			);
 			onReload();
 		} catch (e) {
 			modules = [];
 			foundationVersion = null;
 			readiness = null;
+			alive = null;
+			validation = [];
 			status(e instanceof Error ? e.message : hubMessage('unknown'), true);
 		} finally {
 			loading = false;
+		}
+	}
+
+	/** Seed the planner with the hub's own example instead of hand-written JSON. */
+	async function loadExample() {
+		try {
+			const example = await hub.example();
+			workflow = JSON.stringify(example, null, 2);
+			plan = null;
+			status('Example workflow loaded from the hub. Generate a preview to check it.');
+		} catch (e) {
+			status(e instanceof Error ? e.message : hubMessage('unknown'), true);
 		}
 	}
 
@@ -120,6 +166,9 @@
 		<Button size="sm" variant="outline" onclick={refresh} disabled={loading}>
 			<Icon name="chevron" size={13} />Refresh declarations
 		</Button>
+		<Button size="sm" variant="ghost" onclick={loadExample} disabled={loading}>
+			Load example workflow
+		</Button>
 		<span class="text-[11.5px] text-ink-3">
 			{loading && !foundationVersion
 				? 'Reading the contract…'
@@ -139,7 +188,19 @@
 		>{notice}</p>
 	{/if}
 
-	<dl class="mb-5 grid gap-x-6 gap-y-2 text-[12px] sm:grid-cols-3">
+	<dl class="mb-5 grid gap-x-6 gap-y-2 text-[12px] sm:grid-cols-4">
+		<div>
+			<dt class="text-ink-3">Hub liveness</dt>
+			<dd class="font-medium">
+				{#if alive === null}
+					Not answering
+				{:else if alive}
+					alive
+				{:else}
+					answered, not alive
+				{/if}
+			</dd>
+		</div>
 		<div>
 			<dt class="text-ink-3">Live adapters</dt>
 			<dd class="font-medium">
@@ -197,15 +258,26 @@
 			</div>
 		{/if}
 		{#each modules as module, index (module.id)}
-			<article class="rounded-lg border border-line p-4">
+			{@const checked = validation.find((entry) => entry.id === module.id)}
+			<article
+				class="rounded-lg border border-line p-4"
+				class:border-destructive={checked && !checked.ok}
+			>
 				<div class="mb-2 flex items-start justify-between gap-3">
 					<h3 class="text-[13.5px] font-semibold">
 						<span class="mr-2 text-ink-3">{String(index + 1).padStart(2, '0')}</span>{module.name}
 					</h3>
 					<span class="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10.5px] text-ink-3"
-						>declared</span
+						>{checked && !checked.ok ? 'invalid descriptor' : 'declared'}</span
 					>
 				</div>
+				{#if checked && !checked.ok}
+					<ul class="mb-3 list-disc pl-5 text-[11.5px] leading-relaxed text-destructive">
+						{#each checked.errors as problem (problem)}
+							<li><code>{problem}</code></li>
+						{/each}
+					</ul>
+				{/if}
 				<p class="mb-3 text-[12px] leading-relaxed text-ink-2">
 					{module.capabilities[0]?.summary ?? 'No capabilities declared.'}
 				</p>

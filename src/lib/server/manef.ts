@@ -41,7 +41,7 @@ export function hubConfigured(value: string | undefined): boolean {
  * absolute URL or authority cannot be smuggled in.
  */
 /** Paths the bridge may request. Everything else is refused before a socket is opened. */
-const FORWARDABLE = new Set(['/api/modules', '/api/plan', '/ready']);
+const FORWARDABLE = new Set(['/api/modules', '/api/plan', '/ready', '/health', '/api/example']);
 export { FORWARDABLE };
 
 export async function hubRequest(

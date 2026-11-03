@@ -42,10 +42,11 @@ beforeEach(() => {
 });
 
 describe('MANEF bridge path allowlist', () => {
-	test('GET 404 for any path outside the three published routes', async () => {
+	test('GET 404 for any path outside the five published routes', async () => {
 		for (const path of [
 			'/api/manef',
-			'/api/manef/health',
+			'/api/manef/api/plan',
+			'/api/manef/examples',
 			'/api/manef/api/modules',
 			'/api/manef/../etc/passwd',
 			'//api/manef/modules'
@@ -134,8 +135,13 @@ describe('MANEF bridge replies', () => {
 
 describe('MANEF bridge method/path matrix', () => {
 	test('POST 404 for a path outside the allowlist, before the body is read', async () => {
-		for (const path of ['/api/manef', '/api/manef/health', '/api/manef/api/plan']) {
+		// `/api/manef/health` and `/api/manef/example` are GET-only reads, so POST to them is a 405
+		// from the route's own method check rather than a 404 — the path exists, the verb does not.
+		for (const path of ['/api/manef', '/api/manef/api/modules', '/api/manef/api/plan']) {
 			await expect(POST(event(path))).rejects.toMatchObject({ status: 404 });
+		}
+		for (const path of ['/api/manef/health', '/api/manef/example']) {
+			await expect(POST(event(path))).rejects.toMatchObject({ status: 405 });
 		}
 		expect(hubMock.hubRequest).not.toHaveBeenCalled();
 	});

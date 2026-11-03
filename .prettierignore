@@ -65,3 +65,7 @@ src/lib/workflow_graph.ts
 # Copied Laya CSS bundle and the checkbox primitive that came with it (aliased import).
 src/app-laya.css
 src/lib/components/ui/checkbox/
+
+# Verbatim copies of `manef-ai/modules/*.json`. Formatting them would defeat the point: the
+# parity suite asserts the descriptors the CLI accepts are accepted here, byte for byte.
+src/lib/manef-ai-fixtures/

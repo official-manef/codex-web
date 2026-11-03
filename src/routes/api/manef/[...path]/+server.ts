@@ -12,6 +12,12 @@ const ROUTES = {
 	'/api/manef/modules': { path: '/api/modules', method: 'GET', accept: [] },
 	// `/ready` answers 503 with `{status:"unconfigured"}` by design; that is a real answer.
 	'/api/manef/ready': { path: '/ready', method: 'GET', accept: [503] },
+	// Liveness only. The hub answers `{status:"alive"}` and touches nothing else, which is what
+	// `Devices`-style "test connection" needs before trusting the rest of the bridge.
+	'/api/manef/health': { path: '/health', method: 'GET', accept: [] },
+	// The hub's own example workflow, so the console can seed the planner without the operator
+	// hand-writing 40 lines of JSON that must match four module descriptors exactly.
+	'/api/manef/example': { path: '/api/example', method: 'GET', accept: [503] },
 	'/api/manef/plan': { path: '/api/plan', method: 'POST', accept: [] }
 } as const;
 

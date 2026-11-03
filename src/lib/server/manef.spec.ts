@@ -41,13 +41,15 @@ test('configured is exactly "parseable loopback base"', () => {
 });
 
 test('the forwardable path list is closed', () => {
-	// The three hub routes the bridge exists for; `/ready` answers 503 by design.
+	// The five hub routes the bridge exists for; `/ready` and `/api/example` answer 503 by design.
 	expect(FORWARDABLE.has('/api/modules')).toBe(true);
 	expect(FORWARDABLE.has('/ready')).toBe(true);
+	expect(FORWARDABLE.has('/health')).toBe(true);
+	expect(FORWARDABLE.has('/api/example')).toBe(true);
 	expect(FORWARDABLE.has('/api/plan')).toBe(true);
 	for (const path of [
-		'/health',
-		'/api/example',
+		'/api/plan/preview',
+		'/api/modules/extra',
 		'/api/modules/../../etc/passwd',
 		'/api/plan/extra',
 		'/',
@@ -87,7 +89,13 @@ test('an unset or unparseable hub url short-circuits before any socket is opened
 
 test('a path outside the allowlist is refused even when the caller is trusted code', async () => {
 	const { fetchMock } = stubHub(new Response('{}'));
-	for (const path of ['/health', '/api/modules/../secrets', '/api\\modules', '/unknown']) {
+	for (const path of [
+		'/health/../ready',
+		'/api/modules/../secrets',
+		'/api\\modules',
+		'/api/example/../plan',
+		'/unknown'
+	]) {
 		await expect(hubRequest(path)).resolves.toEqual({
 			ok: false,
 			status: 500,

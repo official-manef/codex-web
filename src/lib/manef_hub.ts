@@ -103,6 +103,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const hub = {
 	modules: () => call<Registry>('/api/manef/modules'),
 	ready: () => call<Readiness>('/api/manef/ready'),
+	health: () => call<{ status: string }>('/api/manef/health'),
+	example: () => call<{ version: string; mode?: string; steps: unknown[] }>('/api/manef/example'),
 	plan: (request: unknown) =>
 		call<Plan>('/api/manef/plan', {
 			method: 'POST',

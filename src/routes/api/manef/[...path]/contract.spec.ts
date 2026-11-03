@@ -158,7 +158,7 @@ describe('path traversal and invented paths', () => {
 		['plain parent traversal', '/api/manef/../../etc/passwd'],
 		['encoded dots', '/api/manef/%2e%2e/%2e%2e/etc/passwd'],
 		['encoded slash', '/api/manef/..%2f..%2fetc/passwd'],
-		['invented sibling', '/api/manef/health'],
+		['invented sibling', '/api/manef/status'],
 		['nested allowed name', '/api/manef/api/modules'],
 		['trailing slash', '/api/manef/ready/'],
 		['absolute URL as path', '/api/manef/https://evil.example/api/modules'],
@@ -178,6 +178,27 @@ describe('path traversal and invented paths', () => {
 		expect(calls[0].url).toBe(`${HUB}/api/modules`);
 		expect(calls[0].init?.redirect).toBe('error');
 		expect(calls[0].init?.cache).toBe('no-store');
+	});
+
+	test('the liveness and example reads forward their own pinned paths', async () => {
+		privateEnv.MANEF_HUB_URL = HUB;
+		nextToken();
+		const calls = stubbedFetch(() => hubResponse('{}'));
+		await route.GET(event('/api/manef/health'));
+		await route.GET(event('/api/manef/example'));
+		expect(calls.map((entry) => entry.url)).toEqual([`${HUB}/health`, `${HUB}/api/example`]);
+	});
+
+	test('the example read accepts the hub 503 as an answer, not a failure', async () => {
+		privateEnv.MANEF_HUB_URL = HUB;
+		nextToken();
+		stubbedFetch(() => hubResponse('{"error":{"code":"example_unavailable"}}', 503));
+		// `/api/example` is listed in `accept`, so a hub that has no example answers through with its
+		// own body and a 200 envelope, rather than becoming a 502 the console would read as "the
+		// bridge is broken". The body still carries the hub's `example_unavailable` code.
+		const response = await route.GET(event('/api/manef/example'));
+		expect(response.status).toBe(200);
+		expect(JSON.parse(await response.text())).toEqual({ error: { code: 'example_unavailable' } });
 	});
 });
 
